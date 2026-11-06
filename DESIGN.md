@@ -1,0 +1,11 @@
+# Floco — sistema visual Android
+
+Finanças pessoais acolhedoras, legíveis e diretas. Nome e mascote definidos pelo usuário; layout novo. Skill aplicada: ui-ux-pro-max.
+
+Buscas verificadas: Personal Finance Tracker em products.csv e Minimalism & Swiss Style como alternativa secundária. O resultado agregado de landing page/glassmorphism não foi adotado. Hierarquia simples, contraste e cores derivadas do ícone, componentes e alvos nativos.
+
+Claro: fundo #F8F6EF, superfície #FFFFFF, texto #26382E, secundário #58665D, verde #285943, destaque #FFCB45. Escuro: fundo #14231B, superfície #203127, texto #F3F4E9, secundário #B6C8B8, verde claro #B9DAAA, destaque #EAC15B. Texto sobre amarelo #26382E. Estados monetários têm texto e ícone, além de cor.
+
+Sora 400/600/700, números tabulares e moeda pt-BR. Cabeçalho com mascote em proporção quadrada. Saldo amarelo, entradas/saídas separadas, atalhos de entrada, saída e transferência. Planejamento alterna orçamentos e metas. Seu Floco reúne preferências, dados, recursos livres e atualizações.
+
+Cinco destinos inferiores em celular e rail em telas amplas. Alvos >=48dp, feedback pressionado sem deslocamento, áreas seguras, formulários integrais, retorno nativo e rolagem reiniciada por aba. Tema escuro independente. Atualizações com token mascarado, progresso real, erros e confirmação do instalador. Marca PNG preservada; controles Feather. Sem animações decorativas contínuas ou gráficos fictícios.

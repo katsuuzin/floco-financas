@@ -1,0 +1,31 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+
+buildscript {
+  repositories {
+    google()
+    mavenCentral()
+  }
+  dependencies {
+    classpath('com.android.tools.build:gradle')
+    classpath('com.facebook.react:react-native-gradle-plugin')
+    def kotlinVersion = findProperty('android.kotlinVersion')
+    classpath(kotlinVersion ? "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion" : 'org.jetbrains.kotlin:kotlin-gradle-plugin')
+  }
+}
+
+allprojects {
+  repositories {
+    google()
+    mavenCentral()
+    maven { url 'https://www.jitpack.io' }
+  }
+}
+
+apply plugin: "expo-root-project"
+apply plugin: "com.facebook.react.rootproject"
+if (System.getenv("FLOCO_CODEGEN_DIR")) {
+ subprojects { p -> p.plugins.withId("com.facebook.react") {
+  def reactConfig = p.extensions.findByName("react")
+  if (p.path != ":app" && reactConfig != null) { reactConfig.codegenDir.set(file(System.getenv("FLOCO_CODEGEN_DIR"))); reactConfig.reactNativeDir.set(new File(file(System.getenv("FLOCO_CODEGEN_DIR")).parentFile.parentFile, "react-native")) }
+ } }
+}

@@ -1,0 +1,57 @@
+name: APK Android privado
+on:
+  push:
+    tags: ['v*.*.*']
+permissions:
+  contents: write
+jobs:
+  release:
+    if: github.ref_name != 'v1.0.0'
+    runs-on: ubuntu-latest
+    env:
+      FLOCO_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - run: npm ci
+      - run: npm test && npm run check
+      - name: Preparar versão e assinatura
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          test -n "$KEYSTORE_BASE64" && test -n "$FLOCO_KEYSTORE_PASSWORD"
+          mkdir -p .signing
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > .signing/floco-release.keystore
+          echo "FLOCO_KEYSTORE_FILE=$GITHUB_WORKSPACE/.signing/floco-release.keystore" >> "$GITHUB_ENV"
+          export RELEASE_BUILD_NUMBER=$((GITHUB_RUN_NUMBER + 100))
+          node scripts/prepare-release.mjs
+          npx expo prebuild --platform android --no-install
+      - name: Compilar APK assinado
+        run: |
+          set +o pipefail
+          yes | sdkmanager 'platforms;android-37.0' 'build-tools;37.0.0' 'ndk;27.1.12297006' 'cmake;3.22.1'
+          set -o pipefail
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a -Pandroid.compileSdkVersion=37 -Pandroid.buildToolsVersion=37.0.0 -Porg.gradle.java.installations.paths="$JAVA_HOME_17_X64" --max-workers=3 --console=plain
+      - name: Publicar release no mesmo repositório privado
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk Floco-Financas.apk
+          sha256sum Floco-Financas.apk > Floco-Financas.apk.sha256
+          gh release create "$RELEASE_TAG" Floco-Financas.apk Floco-Financas.apk.sha256 --verify-tag --generate-notes --title "Floco Finanças $RELEASE_TAG"

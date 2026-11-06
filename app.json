@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "Floco Finanças",
+    "slug": "floco-financas",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#F8F6EF",
+    "android": {
+      "package": "br.com.kat.flocofinancas",
+      "versionCode": 1,
+      "permissions": [
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "android.permission.REQUEST_INSTALL_PACKAGES"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_PHONE_STATE",
+        "com.google.android.gms.permission.AD_ID",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
+    },
+    "plugins": [
+      "expo-font",
+      "expo-document-picker",
+      "expo-local-authentication",
+      "./plugins/withShortCmakePaths",
+      "expo-secure-store",
+      "./plugins/withAndroidUpdater"
+    ],
+    "platforms": [
+      "android"
+    ]
+  }
+}
