@@ -28,8 +28,8 @@ try {
   & '.\android\gradlew.bat' -p android assembleRelease "-PreactNativeArchitectures=$Architecture" '-Pandroid.compileSdkVersion=37' '-Pandroid.buildToolsVersion=37.0.0' "-Porg.gradle.java.installations.paths=$taskJava17" '-Porg.gradle.java.installations.auto-download=false' '-Pkotlin.incremental=false' '-Pkotlin.compiler.execution.strategy=in-process' --max-workers=4 --console=plain
   if ($LASTEXITCODE -ne 0) { throw 'A compilação falhou. Leia a mensagem do Gradle acima.' }
   New-Item -ItemType Directory -Force -Path '.\entrega' | Out-Null
-  Copy-Item -LiteralPath '.\android\app\build\outputs\apk\release\app-release.apk' -Destination ".\entrega\Kontto-Clone-$Architecture.apk" -Force
-  Write-Host "APK gerado em entrega\Kontto-Clone-$Architecture.apk"
+  Copy-Item -LiteralPath '.\android\app\build\outputs\apk\release\app-release.apk' -Destination ".\entrega\Floco-Financas-$Architecture.apk" -Force
+  Write-Host "APK gerado em entrega\Floco-Financas-$Architecture.apk"
 } finally {
   Set-Location -LiteralPath $previousLocation.Path
   & subst "${taskDrive}:" /D

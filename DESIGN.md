@@ -4,7 +4,7 @@ Finanças pessoais acolhedoras, legíveis e diretas. Nome e mascote definidos pe
 
 Buscas verificadas: Personal Finance Tracker em products.csv e Minimalism & Swiss Style como alternativa secundária. O resultado agregado de landing page/glassmorphism não foi adotado. Hierarquia simples, contraste e cores derivadas do ícone, componentes e alvos nativos.
 
-Claro: fundo #F8F6EF, superfície #FFFFFF, texto #26382E, secundário #58665D, verde #285943, destaque #FFCB45. Escuro: fundo #14231B, superfície #203127, texto #F3F4E9, secundário #B6C8B8, verde claro #B9DAAA, destaque #EAC15B. Texto sobre amarelo #26382E. Estados monetários têm texto e ícone, além de cor.
+Claro: fundo #FAF5EF, superfície #FFFFFF, texto #311E0D, secundário #705C4B, marrom #311E0D, destaque #FFCB45. Escuro: fundo #311E0D, superfície #402A17, texto #FFF5E8, secundário #D8C0A8, caramelo #F0C998, destaque #EAC15B. Texto sobre amarelo #311E0D. Estados monetários têm texto e ícone, além de cor.
 
 Sora 400/600/700, números tabulares e moeda pt-BR. Cabeçalho com mascote em proporção quadrada. Saldo amarelo, entradas/saídas separadas, atalhos de entrada, saída e transferência. Planejamento alterna orçamentos e metas. Seu Floco reúne preferências, dados, recursos livres e atualizações.
 

@@ -55,32 +55,32 @@ type Screen = "home" | "transactions" | "cards" | "planning" | "more";
 const STORAGE = "@kat/floco-financas/v1";
 const palette = {
   light: {
-    bg: "#F8F6EF",
+    bg: "#FAF5EF",
     surface: "#FFFFFF",
-    text: "#26382E",
-    muted: "#58665D",
-    line: "#DCE3D7",
-    soft: "#E8EEDF",
-    primary: "#285943",
+    text: "#311E0D",
+    muted: "#705C4B",
+    line: "#E4D6C8",
+    soft: "#F0E3D4",
+    primary: "#311E0D",
     onPrimary: "#FFFFFF",
     accent: "#FFCB45",
-    heroText: "#26382E",
-    green: "#18704E",
+    heroText: "#311E0D",
+    green: "#704723",
     red: "#B53846",
     amber: "#94621C",
   },
   dark: {
-    bg: "#14231B",
-    surface: "#203127",
-    text: "#F3F4E9",
-    muted: "#B6C8B8",
-    line: "#3A5141",
-    soft: "#304B36",
-    primary: "#B9DAAA",
-    onPrimary: "#183321",
+    bg: "#311E0D",
+    surface: "#402A17",
+    text: "#FFF5E8",
+    muted: "#D8C0A8",
+    line: "#735840",
+    soft: "#553B25",
+    primary: "#F0C998",
+    onPrimary: "#311E0D",
     accent: "#EAC15B",
-    heroText: "#26382E",
-    green: "#86D6B0",
+    heroText: "#311E0D",
+    green: "#E8BD8F",
     red: "#FFADB3",
     amber: "#E3BE7F",
   },
@@ -280,7 +280,7 @@ function FinanceApp() {
             name: f.name.trim(),
             institution: f.institution.trim() || "Carteira",
             initial,
-            color: f.color || "#285943",
+            color: f.color || "#311E0D",
           };
           return {
             ...s,
@@ -308,7 +308,7 @@ function FinanceApp() {
             closingDay,
             dueDay,
             lastFour: f.lastFour,
-            color: f.color || "#285943",
+            color: f.color || "#311E0D",
             accountId: f.accountId,
           };
           return {
@@ -532,7 +532,7 @@ function FinanceApp() {
               secondary
                 ? c.primary
                 : state.settings.dark
-                  ? "#183321"
+                  ? "#311E0D"
                   : "#FFFFFF"
             }
           />
@@ -542,7 +542,7 @@ function FinanceApp() {
             color: secondary
               ? c.primary
               : state.settings.dark
-                ? "#183321"
+                ? "#311E0D"
                 : "#FFFFFF",
             fontFamily: "SoraSemi",
             fontSize: 14,
@@ -1237,7 +1237,7 @@ function FinanceApp() {
                           color:
                             filter === key
                               ? state.settings.dark
-                                ? "#183321"
+                                ? "#311E0D"
                                 : "#FFFFFF"
                               : c.muted,
                         }}
@@ -1314,7 +1314,7 @@ function FinanceApp() {
                             color:
                               card.id === currentCard.id
                                 ? state.settings.dark
-                                  ? "#183321"
+                                  ? "#311E0D"
                                   : "#FFFFFF"
                                 : c.text,
                             fontSize: 12,
@@ -1331,7 +1331,7 @@ function FinanceApp() {
                     />
                   </ScrollView>
                   <View
-                    style={[styles.creditCard, { backgroundColor: "#285943" }]}
+                    style={[styles.creditCard, { backgroundColor: "#311E0D" }]}
                   >
                     <View style={styles.row}>
                       <I name="credit-card" color="#FFFFFF" size={28} />
@@ -1363,7 +1363,7 @@ function FinanceApp() {
                     >
                       {currentCard.name}
                     </T>
-                    <T style={{ color: "#DFEDD8", marginTop: 8 }}>
+                    <T style={{ color: "#F5E4D1", marginTop: 8 }}>
                       •••• {currentCard.lastFour || "••••"}
                     </T>
                     <View
@@ -1372,10 +1372,10 @@ function FinanceApp() {
                         { marginTop: 25, justifyContent: "space-between" },
                       ]}
                     >
-                      <T style={{ color: "#DFEDD8", fontSize: 11 }}>
+                      <T style={{ color: "#F5E4D1", fontSize: 11 }}>
                         Fecha dia {currentCard.closingDay}
                       </T>
-                      <T style={{ color: "#DFEDD8", fontSize: 11 }}>
+                      <T style={{ color: "#F5E4D1", fontSize: 11 }}>
                         Vence dia {currentCard.dueDay}
                       </T>
                     </View>
@@ -1472,7 +1472,7 @@ function FinanceApp() {
                           color:
                             planning === key
                               ? state.settings.dark
-                                ? "#183321"
+                                ? "#311E0D"
                                 : "#FFFFFF"
                               : c.text,
                         }}
@@ -1680,13 +1680,14 @@ function FinanceApp() {
                     <Switch
                       accessibilityLabel="Tema escuro"
                       value={state.settings.dark}
+                      thumbColor={state.settings.dark ? c.accent : c.muted}
                       onValueChange={(value) => {
                         perform((s: any) => ({
                           ...s,
                           settings: { ...s.settings, dark: value },
                         }));
                       }}
-                      trackColor={{ true: "#285943" }}
+                      trackColor={{ false: c.line, true: c.primary }}
                     />
                   </View>
                   <View style={styles.setting}>
@@ -1697,8 +1698,9 @@ function FinanceApp() {
                     <Switch
                       accessibilityLabel="Bloqueio biométrico"
                       value={state.settings.biometric}
+                      thumbColor={state.settings.biometric ? c.accent : c.muted}
                       onValueChange={toggleBiometric}
-                      trackColor={{ true: "#285943" }}
+                      trackColor={{ false: c.line, true: c.primary }}
                     />
                   </View>
                 </Box>
@@ -2022,8 +2024,9 @@ function FinanceApp() {
                           <Switch
                             accessibilityLabel="Lançamento confirmado"
                             value={form.confirmed}
+                            thumbColor={form.confirmed ? c.accent : c.muted}
                             onValueChange={(v) => update("confirmed", v)}
-                            trackColor={{ true: "#285943" }}
+                            trackColor={{ false: c.line, true: c.primary }}
                           />
                         </View>
                       )}
@@ -2061,15 +2064,15 @@ function FinanceApp() {
                       <Choice
                         label="Cor da conta"
                         values={[
-                          "#285943",
+                          "#311E0D",
                           "#820AD1",
                           "#E67E22",
                           "#335E9A",
                           "#B53846",
                         ].map((x) => [
                           x,
-                          x === "#285943"
-                            ? "Petróleo"
+                          x === "#311E0D"
+                            ? "Marrom"
                             : x === "#820AD1"
                               ? "Roxo"
                               : x === "#E67E22"
@@ -2078,7 +2081,7 @@ function FinanceApp() {
                                   ? "Azul"
                                   : "Vermelho",
                         ])}
-                        value={form.color || "#285943"}
+                        value={form.color || "#311E0D"}
                         onChange={(v: string) => update("color", v)}
                         c={c}
                       />
@@ -2382,8 +2385,8 @@ function Choice({ label, values, value, onChange, c }: any) {
                   fontSize: 12,
                   color:
                     value === key
-                      ? c.bg === "#14231B"
-                        ? "#183321"
+                      ? c.bg === "#311E0D"
+                        ? "#311E0D"
                         : "#FFFFFF"
                       : c.text,
                 }}

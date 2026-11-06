@@ -1,6 +1,6 @@
 # Floco Finanças — Android
 
-Finanças pessoais offline, com o mascote enviado pelo usuário e identidade própria em amarelo e verde. **Sem assinatura, plano PRO, anúncios ou limites comerciais** de contas, cartões, orçamentos e metas. Somente Android.
+Finanças pessoais offline, com o mascote enviado pelo usuário e identidade própria em amarelo e marrom. **Sem assinatura, plano PRO, anúncios ou limites comerciais** de contas, cartões, orçamentos e metas. Somente Android.
 
 ## Recursos
 
@@ -22,7 +22,7 @@ npm run check
 
 O atualizador tem módulo nativo; use o APK ou um development build, não o Expo Go. Compilação local: Node compatível com Expo 58, Java 21, Java 17, Android SDK 37.0, Build Tools 37.0.0, NDK 27.1.12297006 e CMake 3.22.1. O script `build-android.ps1` aceita `-JavaHome`, `-Java17Home`, `-AndroidSdk` e gera APK ARM64 com caminho curto temporário no Windows.
 
-Repositório privado: https://github.com/katsuuzin/floco-financas. **Guarde em local privado `.signing/floco-release.keystore` e `.signing/local-signing.json`.** A mesma chave será necessária para atualizar instalações existentes. Esses arquivos não entram no código do GitHub; a assinatura para CI usa os Secrets descritos em ATUALIZACOES.md. O workflow cria as próximas releases privadas por tags.
+Repositório privado: https://github.com/katsuuzin/floco-financas. **Guarde em local privado `.signing/floco-release.keystore` e `.signing/local-signing.json`.** A mesma chave é necessária para atualizar instalações existentes. Por decisão do usuário, a chave permanece somente no computador. As versões são assinadas localmente e publicadas como releases privadas; o GitHub Actions executa apenas as verificações, sem segredos de assinatura. Consulte ATUALIZACOES.md.
 
 ## Limites funcionais atuais
 

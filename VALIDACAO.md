@@ -7,3 +7,9 @@
 - As três opções visuais são prévias com valores ilustrativos; a prévia interativa foi aberta em navegador de teste, sem overflow horizontal. Alternância de variantes e formulário local de exemplo funcionaram.
 - Consulta/download/instalação de uma release privada real ainda não foram executados: dependem do futuro repositório, token e versão assinada. Não se declara atualização real concluída.
 - Destino autorizado: repositório privado https://github.com/katsuuzin/floco-financas. Release inicial v1.0.0 com APK validado localmente; o workflow compila tags posteriores com Secrets de assinatura. v1.0.0 é excluída do job para preservar o APK inicial validado.
+
+## v1.0.1 — Solar marrom
+
+Marrom #311E0D extraído da imagem fornecida pelo usuário. Substituídos os verdes em textos, ícones, controles e superfícies dos dois temas. Treze testes e TypeScript passaram. Assinatura local com a mesma chave; nenhuma credencial é enviada ao GitHub. O workflow agora apenas valida código, conforme a decisão de manter a chave no computador.
+
+APK 1.0.1 (versionCode 2) instalado com sucesso sobre 1.0.0 no emulador Android 15. Preferência de tema preservada. Temas marrom claro e escuro capturados e inspecionados; nenhum erro ReactNativeJS ou AndroidRuntime no lançamento. Pares de texto verificados com contraste mínimo de 6,32:1, acima de 4,5:1.
