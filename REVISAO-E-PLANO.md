@@ -55,6 +55,8 @@ Cada fase termina com testes passando, build Android instalado **por cima** da v
 - Fechar as dúvidas abertas: o rótulo cortado do menu, Empréstimos × Quem me deve, variantes de relatório.
 - **Aceite:** inventário fechado em `analysis/fichas/` (local), com cada item ligado a um teste de aceitação.
 
+**Resultado da F1 (7/11/2026):** concluída em [INVENTARIO-FUNCIONAL.md](INVENTARIO-FUNCIONAL.md). Kontto 1.0.83; 87 telas percorridas; 79 funções com ID, comportamento e status no Floco. As três dúvidas abertas foram fechadas. Telas atrás do paywall foram descritas pela apresentação e estão marcadas como *deduzido*. Widgets não foram abertos. As capturas e os scripts (`analysis/f1*.py`) ficam só no computador.
+
 ### F2 — Fundação (corrige R1, R2, R3, R5)
 - Migrar para **Expo Router** com abas e pilhas; o botão voltar passa a ser nativo.
 - Quebrar `App.tsx` em `app/` (telas), `components/`, `domain/` (TypeScript) e `data/` (repositórios).
