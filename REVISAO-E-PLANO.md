@@ -63,6 +63,14 @@ Cada fase termina com testes passando, build Android instalado **por cima** da v
 - Migrar o armazenamento para **expo-sqlite**, com migrações versionadas. Na primeira abertura, importar o JSON antigo, conferir os saldos e só depois apagá-lo.
 - **Aceite:** atualizar sobre a v1.1.1 preserva saldos, faturas, metas e reservas, centavo por centavo; migração repetida não duplica.
 
+**Resultado da F2 (7/11/2026), v1.2.0:**
+- **Armazenamento:** SQLite (`expo-sqlite`), com uma linha por registro e gravação só do que mudou, numa transação. Na primeira abertura o JSON antigo do AsyncStorage é importado e conferido campo a campo antes de o banco novo ser usado. O JSON original fica intacto como cópia. Validado no emulador: atualização da 1.1.1 com dados de demonstração preservou saldo total, saldos por conta, disponível, pendências e faturas, centavo por centavo, e uma despesa nova sobreviveu ao reinício.
+- **Estrutura:** `App.tsx` passou de 3.175 para cerca de 400 linhas. Componentes de interface em escopo de módulo (`src/ui/kit.tsx`), o que corrige a perda de foco ao digitar. Contexto de tema (`src/ui/theme.tsx`), store (`src/app/store.tsx`), regras de formulário (`src/app/forms.ts`) e telas em `src/screens/`.
+- **Navegação:** pilha própria (`src/app/nav.tsx`) em vez do Expo Router, para não adicionar módulos nativos com a pasta `android/` commitada. Barra inferior Início · Transações · **+** · Análise · Mais (N1); menu de adicionar com Receita, Despesa, Despesa no cartão e Transferir (N3); Mais agrupado como no inventário (N2). O botão voltar do Android desempilha.
+- **Modelo:** horário, observações, estorno (L5), ignorar na análise (L9), descrição opcional, repetição única/parcelada/recorrente no próprio formulário (L4), salvar e continuar (L10). Cartões com dias 1–31, compra no fechamento indo para a próxima fatura e vencimento em dia útil (O2). Contas com tipo e arquivamento (O1); cartões arquiváveis. Nova aba Análise (R1, versão inicial).
+- **Testes:** 47, entre eles 5 de armazenamento contra SQLite real (`node:sqlite`) e 8 do modelo novo.
+- **Pendente da F2:** os painéis antigos (`PlanningPanel` e os de importação, notificações, comprovante, segurança e atualizações) ainda recebem a paleta por props e têm cabeçalho próprio. Eles serão migrados para o kit novo à medida que cada área for refeita (F3–F6).
+
 ### F3 — Compromissos (Etapa 2 do plano de paridade)
 Recorrências, parcelas, financiamentos (SAC/Price, amortização extra), empréstimos e Quem me deve, com estorno e histórico.
 

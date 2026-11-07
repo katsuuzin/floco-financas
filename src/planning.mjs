@@ -2,6 +2,8 @@ import {
   uid,
   today,
   isDate,
+  analysisAmount,
+  signedAmount,
   addMonths,
   addTransaction,
   balance,
@@ -418,9 +420,7 @@ export function projection(
         t.type === "transfer"
           ? (included.has(t.destinationId) ? t.amount : 0) -
             (included.has(t.accountId) ? t.amount : 0)
-          : t.type === "income"
-            ? t.amount
-            : -t.amount,
+          : signedAmount(t),
     }))
     .filter((e) => e.amount !== 0);
   for (const e of recurrenceEvents(s, through, from).filter((e) =>
@@ -499,6 +499,7 @@ export function report(
       t.type !== "transfer" &&
       !t.invoicePayment &&
       !t.loanSettlement &&
+      !t.ignored &&
       (status === "all" || t.confirmed === (status === "confirmed")) &&
       (type === "all" || t.type === type) &&
       (!accountId || t.accountId === accountId || t.cardId === accountId) &&
@@ -530,7 +531,7 @@ export function report(
           ? "Fixas / recorrentes"
           : "Variáveis / avulsas";
     const g = groups.get(key) || { name: key, income: 0, expense: 0, count: 0 };
-    g[t.type] += t.amount;
+    g[t.type] += analysisAmount(t);
     g.count++;
     groups.set(key, g);
   }
@@ -541,9 +542,9 @@ export function report(
     ),
     income: rows
       .filter((t) => t.type === "income")
-      .reduce((n, t) => n + t.amount, 0),
+      .reduce((n, t) => n + analysisAmount(t), 0),
     expense: rows
       .filter((t) => t.type === "expense")
-      .reduce((n, t) => n + t.amount, 0),
+      .reduce((n, t) => n + analysisAmount(t), 0),
   };
 }

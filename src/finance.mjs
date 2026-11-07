@@ -57,6 +57,12 @@ export const emptyState = () => ({
   tags: [],
   settings: { dark: false, biometric: false, hide: false },
 });
+// Sinal do lançamento no saldo da conta de origem. Estorno de despesa devolve dinheiro.
+export const signedAmount = (t) =>
+  t.type === "income" || (t.type === "expense" && t.refund) ? t.amount : -t.amount;
+// Valor que conta como gasto/receita em totais e relatórios (estorno abate o gasto).
+export const analysisAmount = (t) =>
+  t.ignored ? 0 : t.type === "expense" && t.refund ? -t.amount : t.amount;
 export function balance(state, id) {
   return (
     state.accounts.find((a) => a.id === id)?.initial +
@@ -65,16 +71,20 @@ export function balance(state, id) {
       .reduce(
         (n, t) =>
           n +
-          (t.accountId === id
-            ? t.type === "income"
-              ? t.amount
-              : -t.amount
-            : 0) +
+          (t.accountId === id ? signedAmount(t) : 0) +
           (t.type === "transfer" && t.destinationId === id ? t.amount : 0),
         0,
       )
   );
 }
+export const ACCOUNT_TYPES = [
+  ["checking", "Corrente"],
+  ["savings", "Poupança"],
+  ["wallet", "Carteira"],
+  ["investment", "Investimento"],
+  ["benefit", "Benefício (VR/VA)"],
+  ["other", "Outra"],
+];
 export const includedAccounts = (state) =>
   state.accounts.filter((a) => a.includeInTotal !== false);
 export const totalBalance = (state) =>
@@ -91,27 +101,37 @@ export function totals(state, month) {
       !t.invoicePayment &&
       !t.loanSettlement,
   );
+  const sum = (rows) => rows.reduce((a, t) => a + analysisAmount(t), 0);
   return {
-    income: tx
-      .filter((t) => t.type === "income" && t.confirmed)
-      .reduce((a, t) => a + t.amount, 0),
-    expense: tx
-      .filter((t) => t.type === "expense" && t.confirmed)
-      .reduce((a, t) => a + t.amount, 0),
+    income: sum(tx.filter((t) => t.type === "income" && t.confirmed)),
+    expense: sum(tx.filter((t) => t.type === "expense" && t.confirmed)),
+    // Pendências são compromissos de caixa: entram mesmo se ignoradas na análise.
     pay: tx
-      .filter((t) => t.type === "expense" && !t.confirmed)
+      .filter((t) => t.type === "expense" && !t.confirmed && !t.refund)
       .reduce((a, t) => a + t.amount, 0),
     receive: tx
-      .filter((t) => t.type === "income" && !t.confirmed)
+      .filter((t) => (t.type === "income" || t.refund) && !t.confirmed)
       .reduce((a, t) => a + t.amount, 0),
   };
 }
 export function invoiceMonth(date, card) {
-  // A purchase on the closing day remains in that cycle; after it goes to the next.
-  const [, , day] = date.split("-").map(Number);
-  let offset = day > card.closingDay ? 1 : 0;
+  // Por padrão a compra no dia do fechamento ainda entra no ciclo corrente; com
+  // closingDayNext ela vai para a próxima fatura (como alguns bancos fazem).
+  // Dias 29–31 valem como o último dia em meses mais curtos.
+  const [y, m, day] = date.split("-").map(Number);
+  const closing = Math.min(card.closingDay, new Date(y, m, 0).getDate());
+  let offset = day > closing || (card.closingDayNext && day === closing) ? 1 : 0;
   if (card.dueDay <= card.closingDay) offset++;
-  return monthKey(addMonths(date, offset));
+  return monthKey(addMonths(`${date.slice(0, 7)}-01`, offset));
+}
+// Data de vencimento da fatura de um mês; com businessDayDue, sábado/domingo
+// passam para a segunda-feira seguinte (feriados não são considerados).
+export function invoiceDueDate(card, month) {
+  const [y, m] = month.split("-").map(Number);
+  const day = Math.min(card.dueDay, new Date(y, m, 0).getDate());
+  const d = new Date(y, m - 1, day, 12);
+  if (card.businessDayDue) while ([0, 6].includes(d.getDay())) d.setDate(d.getDate() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 export function invoice(state, cardId, month) {
   const purchases = state.transactions.filter(
@@ -130,10 +150,16 @@ export function addTransaction(state, input) {
     !["income", "expense", "transfer"].includes(type) ||
     !Number.isSafeInteger(amount) ||
     amount <= 0 ||
-    !isDate(date) ||
-    !description?.trim()
+    !isDate(date)
   )
-    throw Error("Confira descrição, valor e data.");
+    throw Error("Confira o valor e a data.");
+  if (input.time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(input.time))
+    throw Error("Informe o horário como HH:MM.");
+  if (input.refund && type !== "expense")
+    throw Error("Só despesas podem ser marcadas como estorno.");
+  const label =
+    description?.trim() ||
+    (type === "transfer" ? "Transferência" : input.category || "Outros");
   if (
     cardId &&
     (type !== "expense" || !state.cards.some((c) => c.id === cardId))
@@ -166,8 +192,12 @@ export function addTransaction(state, input) {
     groupId,
     type,
     amount: base + (i < remainder ? 1 : 0),
-    description: description.trim(),
+    description: label,
     date: addMonths(date, i),
+    ...(input.time ? { time: input.time } : {}),
+    ...(input.notes?.trim() ? { notes: input.notes.trim().slice(0, 2000) } : {}),
+    ...(input.refund ? { refund: true } : {}),
+    ...(input.ignored ? { ignored: true } : {}),
     accountId: cardId ? null : accountId,
     destinationId: type === "transfer" ? destinationId : null,
     cardId: cardId || null,
@@ -260,7 +290,7 @@ export function spent(state, category, month) {
         t.category === category &&
         monthKey(t.date) === month,
     )
-    .reduce((n, t) => n + t.amount, 0);
+    .reduce((n, t) => n + analysisAmount(t), 0);
 }
 export function contribute(state, goalId, amount, accountId, date = today()) {
   const goal = state.goals.find((g) => g.id === goalId);
@@ -509,10 +539,10 @@ export function validateBackup(value) {
       c.limit <= 0 ||
       !Number.isInteger(c.closingDay) ||
       c.closingDay < 1 ||
-      c.closingDay > 28 ||
+      c.closingDay > 31 ||
       !Number.isInteger(c.dueDay) ||
       c.dueDay < 1 ||
-      c.dueDay > 28
+      c.dueDay > 31
     )
       throw Error("Cartão inválido.");
   for (const t of value.transactions) {

@@ -2,14 +2,14 @@
   "expo": {
     "name": "Floco Finanças",
     "slug": "floco-financas",
-    "version": "1.1.1",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#FAF5EF",
     "android": {
       "package": "br.com.kat.flocofinancas",
-      "versionCode": 4,
+      "versionCode": 5,
       "permissions": [
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",
@@ -28,7 +28,8 @@
       "expo-local-authentication",
       "./plugins/withShortCmakePaths",
       "expo-secure-store",
-      "./plugins/withAndroidUpdater"
+      "./plugins/withAndroidUpdater",
+      "expo-sqlite"
     ],
     "platforms": [
       "android"
