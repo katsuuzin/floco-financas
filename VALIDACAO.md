@@ -10,6 +10,8 @@ Repositório tornado público por solicitação do usuário. Revisão local do h
 
 Consulta pública real, sem Authorization, retornou a release disponível. Novo atualizador remove a credencial antiga, mantém verificação automática com intervalo de 15 minutos em primeiro plano, aviso de nova versão e botões de verificar/atualizar. Não promete instalação silenciosa ou detecção enquanto o app está fechado. APK 1.1.1/code 4 compilado com sucesso e certificado igual às versões anteriores.
 
+Teste completo de atualização pública executado no Android 15: base local/code 3 com o novo atualizador consultou a release 1.1.1 sem token, baixou 40.873.912 bytes, verificou SHA-256 20fa86ef81dd9e46f4f4a5815a58ce7be7a4c84fe9ca62571e0d1398380acf11 e abriu o instalador. Permissão desta fonte concedida apenas no emulador; Play Protect fez a análise padrão e permitiu continuar. A confirmação instalou versionName 1.1.1/versionCode 4. Após reabrir, saldo geral fictício de R$38.411,10 preservado, conta PJ de R$500 ainda oculta e fora do total, conta PF visível. O workflow público com os 29 testes e TypeScript também passou.
+
 - Floco Finanças Android 1.0.0, pacote br.com.kat.flocofinancas, compilado em release com assinatura própria. APK ARM64 + x86_64 gerado com sucesso.
 - 13 testes passaram: regras financeiras, datas, parcelas, transferências, pagamentos, reservas, backup e validação de releases. TypeScript passou.
 - Implementação anterior dos fluxos financeiros foi executada em emulador Android 15: navegação, digitação, salvamento, busca e persistência após force-stop/reabertura. A rolagem entre abas foi corrigida e conferida.
