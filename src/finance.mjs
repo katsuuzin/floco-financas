@@ -50,6 +50,11 @@ export const emptyState = () => ({
   transactions: [],
   budgets: [],
   goals: [],
+  recurrences: [],
+  receivables: [],
+  financings: [],
+  customCategories: [],
+  tags: [],
   settings: { dark: false, biometric: false, hide: false },
 });
 export function balance(state, id) {
@@ -73,7 +78,10 @@ export function balance(state, id) {
 export function totals(state, month) {
   const tx = state.transactions.filter(
     (t) =>
-      monthKey(t.date) === month && t.type !== "transfer" && !t.invoicePayment,
+      monthKey(t.date) === month &&
+      t.type !== "transfer" &&
+      !t.invoicePayment &&
+      !t.loanSettlement,
   );
   return {
     income: tx
@@ -160,12 +168,20 @@ export function addTransaction(state, input) {
     confirmed: cardId ? true : Boolean(input.confirmed),
     installment: i + 1,
     installments: count,
+    tags: [...new Set(input.tags || [])],
+    ...(input.recurrenceId
+      ? { recurrenceId: input.recurrenceId, occurrenceKey: input.occurrenceKey }
+      : {}),
   }));
   return { ...state, transactions: [...state.transactions, ...rows] };
 }
 export function deleteTransaction(state, id) {
   const target = state.transactions.find((t) => t.id === id);
   if (!target) throw Error("Lançamento não encontrado.");
+  if (target.loanSettlement)
+    throw Error(
+      "Desfaça este recebimento em Quem me deve para manter o histórico da dívida correto.",
+    );
   const removed = state.transactions.filter((t) =>
     target.groupId ? t.groupId === target.groupId : t.id === id,
   );
@@ -184,9 +200,26 @@ export function deleteTransaction(state, id) {
     transactions: state.transactions.filter((t) => !ids.has(t.id)),
   };
 }
-export function payInvoice(state, cardId, month, accountId, date = today()) {
+export function payInvoice(
+  state,
+  cardId,
+  month,
+  accountId,
+  date = today(),
+  amount,
+) {
   const due = invoice(state, cardId, month).due;
   if (!due) throw Error("Esta fatura não tem saldo a pagar.");
+  const payment = amount ?? due;
+  if (
+    !isDate(date) ||
+    !Number.isSafeInteger(payment) ||
+    payment <= 0 ||
+    payment > due
+  )
+    throw Error(
+      "Informe uma data e um valor entre um centavo e o saldo da fatura.",
+    );
   if (!state.accounts.some((a) => a.id === accountId))
     throw Error("Cadastre uma conta para pagar a fatura.");
   return {
@@ -196,7 +229,7 @@ export function payInvoice(state, cardId, month, accountId, date = today()) {
       {
         id: uid(),
         type: "expense",
-        amount: due,
+        amount: payment,
         description: `Pagamento de fatura · ${state.cards.find((c) => c.id === cardId).name}`,
         date,
         accountId,
@@ -358,6 +391,24 @@ export function demoState() {
 export function validateBackup(value) {
   if (!value || value.version !== 1)
     throw Error("Formato de backup incompatível.");
+  value = { ...value };
+  for (const key of [
+    "recurrences",
+    "receivables",
+    "financings",
+    "customCategories",
+    "tags",
+  ]) {
+    if (value[key] === undefined) value[key] = [];
+    if (!Array.isArray(value[key]) || value[key].length > 100000)
+      throw Error("Backup inválido: " + key);
+    const ids = new Set();
+    for (const row of value[key]) {
+      if (!row || typeof row.id !== "string" || ids.has(row.id))
+        throw Error("Identificadores inválidos: " + key);
+      ids.add(row.id);
+    }
+  }
   for (const key of ["accounts", "cards", "transactions", "budgets", "goals"])
     if (!Array.isArray(value[key]) || value[key].length > 100000)
       throw Error("Backup inválido: " + key);
@@ -411,7 +462,13 @@ export function validateBackup(value) {
       throw Error("Transferência inválida.");
   }
   for (const b of value.budgets)
-    if (!categories.includes(b.category) || !integer(b.amount) || b.amount <= 0)
+    if (
+      ![...categories, ...value.customCategories.map((c) => c.name)].includes(
+        b.category,
+      ) ||
+      !integer(b.amount) ||
+      b.amount <= 0
+    )
       throw Error("Orçamento inválido.");
   for (const g of value.goals)
     if (
@@ -431,6 +488,125 @@ export function validateBackup(value) {
       g.saved !== g.deposits.reduce((n, d) => n + d.amount, 0)
     )
       throw Error("Meta inválida.");
+  const positive = (n) => integer(n) && n > 0 && n <= 99999999999;
+  const account = (id) => value.accounts.some((a) => a.id === id);
+  for (const key of ["tags", "customCategories"]) {
+    const names = new Set();
+    for (const row of value[key]) {
+      if (
+        typeof row.name !== "string" ||
+        !row.name.trim() ||
+        row.name.length > 80 ||
+        names.has(row.name.toLocaleLowerCase("pt-BR"))
+      )
+        throw Error("Nome inválido: " + key);
+      names.add(row.name.toLocaleLowerCase("pt-BR"));
+      if (
+        key === "customCategories" &&
+        row.parent &&
+        (row.parent === row.name ||
+          ![
+            ...categories,
+            ...value.customCategories
+              .filter((c) => !c.parent)
+              .map((c) => c.name),
+          ].includes(row.parent))
+      )
+        throw Error("Subcategoria inválida.");
+    }
+  }
+  for (const t of value.transactions) {
+    if (
+      t.tags &&
+      (!Array.isArray(t.tags) ||
+        t.tags.some((id) => !value.tags.some((tag) => tag.id === id)))
+    )
+      throw Error("Tag de lançamento inválida.");
+    if (
+      t.recurrenceId &&
+      (!value.recurrences.some((r) => r.id === t.recurrenceId) ||
+        typeof t.occurrenceKey !== "string")
+    )
+      throw Error("Recorrência de lançamento inválida.");
+  }
+  const occurrenceKeys = value.transactions
+    .map((t) => t.occurrenceKey)
+    .filter(Boolean);
+  if (new Set(occurrenceKeys).size !== occurrenceKeys.length)
+    throw Error("Ocorrências duplicadas.");
+  for (const r of value.recurrences) {
+    if (
+      !positive(r.amount) ||
+      typeof r.description !== "string" ||
+      !r.description.trim() ||
+      !isDate(r.date) ||
+      (r.endDate && (!isDate(r.endDate) || r.endDate < r.date)) ||
+      !account(r.accountId) ||
+      typeof r.active !== "boolean" ||
+      !["income", "expense"].includes(r.type) ||
+      !["daily", "weekly", "fortnightly", "monthly", "yearly"].includes(
+        r.frequency,
+      )
+    )
+      throw Error("Recorrência inválida.");
+  }
+  for (const f of value.financings) {
+    if (
+      !positive(f.amount) ||
+      typeof f.name !== "string" ||
+      !f.name.trim() ||
+      !account(f.accountId) ||
+      !isDate(f.date) ||
+      !Number.isInteger(f.count) ||
+      f.count < 1 ||
+      f.count > 360 ||
+      !Number.isInteger(f.paid) ||
+      f.paid < 0 ||
+      f.paid >= f.count
+    )
+      throw Error("Contrato inválido.");
+  }
+  const linked = new Set();
+  for (const r of value.receivables) {
+    if (
+      !positive(r.amount) ||
+      typeof r.person !== "string" ||
+      !r.person.trim() ||
+      typeof r.description !== "string" ||
+      !isDate(r.date) ||
+      (r.dueDate && (!isDate(r.dueDate) || r.dueDate < r.date)) ||
+      !Array.isArray(r.payments)
+    )
+      throw Error("Valor a receber inválido.");
+    const ids = new Set();
+    let paid = 0;
+    for (const p of r.payments) {
+      const t = value.transactions.find((t) => t.id === p.transactionId);
+      if (
+        typeof p.id !== "string" ||
+        ids.has(p.id) ||
+        linked.has(p.transactionId) ||
+        !positive(p.amount) ||
+        !isDate(p.date) ||
+        p.date < r.date ||
+        !account(p.accountId) ||
+        !t ||
+        t.loanSettlement !== r.id ||
+        t.amount !== p.amount ||
+        t.accountId !== p.accountId ||
+        t.date !== p.date ||
+        t.type !== "income" ||
+        !t.confirmed
+      )
+        throw Error("Recebimento de dívida inválido.");
+      ids.add(p.id);
+      linked.add(p.transactionId);
+      paid += p.amount;
+    }
+    if (paid > r.amount) throw Error("Recebimentos acima da dívida.");
+  }
+  if (value.transactions.some((t) => t.loanSettlement && !linked.has(t.id)))
+    throw Error("Recebimento sem histórico da dívida.");
   return {
     ...value,
     settings: {

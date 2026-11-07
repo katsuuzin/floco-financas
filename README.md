@@ -4,7 +4,9 @@ Finanças pessoais offline, com o mascote enviado pelo usuário e identidade pr�
 
 ## Recursos
 
-Contas, carteiras, receitas, despesas, transferências, pendências, busca, filtros e edição. Cartões, limite, fechamento, vencimento, parcelas em centavos e pagamento de fatura sem duplicar despesas. Orçamentos, metas com reservas, tema claro/escuro, ocultação de valores, biometria, backup JSON e CSV. Demonstração opcional com valores fictícios.
+Contas, carteiras, receitas, despesas, transferências, pendências, busca, filtros e edição. Perfis independentes Nubank PF/PJ e Inter PF/PJ, além de outros bancos. Cartões, limite, fechamento, vencimento, parcelas em centavos e pagamentos totais ou parciais de fatura sem duplicar despesas. Orçamentos, metas com reservas, tema claro/escuro, ocultação de valores, biometria, backup JSON e CSV. Demonstração opcional com valores fictícios.
+
+A versão 1.1.0 acrescenta categorias/subcategorias e tags, recorrências com geração explícita de pendentes sem duplicatas, central de parcelas, simulador Price, contratos com parcela fixa, Quem me deve com recebimentos parciais e estorno, projeções com cenário mensal e relatórios filtráveis/exportáveis em CSV. Veja PLANO-PARIDADE-KONTTO.md para o inventário de diferenças e as etapas ainda pendentes; a versão não representa equivalência completa com o Kontto.
 
 Atualizações pelo próprio app via GitHub privado, com token de leitura protegido pelo Android. Consulte [ATUALIZACOES.md](ATUALIZACOES.md). O ícone foi fornecido pelo usuário; a skill ui-ux-pro-max orientou o novo layout. A referência inicial foi analisada com REA. O Floco não depende dos serviços do aplicativo original.
 
@@ -26,7 +28,7 @@ Repositório privado: https://github.com/katsuuzin/floco-financas. **Guarde em l
 
 ## Limites funcionais atuais
 
-Leitura de notificações bancárias, OCR, PDF/OFX, sincronização financeira na nuvem, widgets e recorrências automáticas ainda não foram implementados. Não são recursos bloqueados por PRO. Não há desbloqueio de assinatura do app original.
+Leitura de notificações bancárias, OCR, importação PDF/OFX/CSV/Excel, sincronização financeira na nuvem, widgets, amortização extraordinária, SAC e comparação dedicada entre períodos ainda não foram implementados. As recorrências são geradas pelo usuário dentro do app, sem execução automática em segundo plano. Não são recursos bloqueados por PRO. Não há desbloqueio de assinatura do app original.
 
 O backup tem formato próprio, sem compatibilidade declarada com outros apps. JSON/CSV exportados não são criptografados. A biometria protege a abertura; o armazenamento financeiro não implementa criptografia adicional. O token GitHub fica separado no SecureStore e não entra no backup.
 

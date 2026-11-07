@@ -22,7 +22,10 @@ import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
 import Feather from "@expo/vector-icons/Feather";
 import UpdatesPanel from "./src/UpdatesPanel";
+import PlanningPanel, { planningOptions } from "./src/PlanningPanel";
+import { categoryNames } from "./src/planning.mjs";
 import * as Application from "expo-application";
+import { bankProfiles, bankProfile } from "./src/banks.mjs";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
@@ -51,7 +54,8 @@ import {
 } from "./src/finance.mjs";
 
 type Icon = React.ComponentProps<typeof Feather>["name"];
-type Screen = "home" | "transactions" | "cards" | "planning" | "more";
+type Screen =
+  "home" | "transactions" | "cards" | "planning" | "more" | "accounts";
 const STORAGE = "@kat/floco-financas/v1";
 const palette = {
   light: {
@@ -104,6 +108,7 @@ function FinanceApp() {
   const ref = useRef<any>(state);
   const queue = useRef(Promise.resolve());
   const [showUpdates, setShowUpdates] = useState(false);
+  const [tool, setTool] = useState("");
   const [loaded, setLoaded] = useState(false),
     [storageError, setStorageError] = useState(""),
     [screen, setScreen] = useState<Screen>("home");
@@ -278,7 +283,13 @@ function FinanceApp() {
           const row = {
             id: f.id || uid(),
             name: f.name.trim(),
-            institution: f.institution.trim() || "Carteira",
+            institution:
+              bankProfile(f.profileId)?.institution ||
+              f.institution.trim() ||
+              "Carteira",
+            profileId: bankProfile(f.profileId)?.id || "custom",
+            holderType:
+              bankProfile(f.profileId)?.holderType || f.holderType || "PF",
             initial,
             color: f.color || "#311E0D",
           };
@@ -355,7 +366,14 @@ function FinanceApp() {
             f.date,
           );
         if (f.kind === "payment")
-          return payInvoice(s, f.cardId, month, f.accountId, f.date);
+          return payInvoice(
+            s,
+            f.cardId,
+            month,
+            f.accountId,
+            f.date,
+            f.amount.trim() ? parseMoney(f.amount) : undefined,
+          );
         throw Error("Operação não reconhecida.");
       });
       setForm(null);
@@ -685,7 +703,39 @@ function FinanceApp() {
             `${money(t.amount)} · ${t.date.split("-").reverse().join("/")}\n${t.category || "Outros"}${t.installments > 1 ? ` · ${t.installment}/${t.installments}` : ""}`,
             [
               { text: "Fechar", style: "cancel" },
-              ...(!t.invoicePayment
+              ...(t.loanSettlement
+                ? [
+                    {
+                      text: "Ver dívida e recebimentos",
+                      onPress: () => setTool("receivables"),
+                    },
+                  ]
+                : []),
+              ...(t.financingId
+                ? [
+                    {
+                      text: t.confirmed
+                        ? "Desfazer pagamento"
+                        : "Confirmar pagamento",
+                      onPress: () =>
+                        confirm(
+                          "Alterar pagamento?",
+                          "O saldo da conta será recalculado.",
+                          () => {
+                            perform((s: any) => ({
+                              ...s,
+                              transactions: s.transactions.map((x: any) =>
+                                x.id === t.id
+                                  ? { ...x, confirmed: !x.confirmed }
+                                  : x,
+                              ),
+                            }));
+                          },
+                        ),
+                    },
+                  ]
+                : []),
+              ...(!t.invoicePayment && !t.loanSettlement && !t.financingId
                 ? [
                     {
                       text: t.confirmed ? "Editar" : "Revisar / confirmar",
@@ -693,23 +743,27 @@ function FinanceApp() {
                     },
                   ]
                 : []),
-              {
-                text: "Excluir",
-                style: "destructive",
-                onPress: () =>
-                  confirm(
-                    "Excluir lançamento?",
-                    t.installments > 1
-                      ? "Todas as parcelas desta compra serão excluídas."
-                      : "Esta ação remove o lançamento e recalcula o saldo.",
-                    () => {
-                      perform(
-                        (s: any) => deleteTransaction(s, t.id),
-                        "Lançamento excluído",
-                      );
+              ...(!t.loanSettlement && !t.financingId
+                ? [
+                    {
+                      text: "Excluir",
+                      style: "destructive" as const,
+                      onPress: () =>
+                        confirm(
+                          "Excluir lançamento?",
+                          t.installments > 1
+                            ? "Todas as parcelas desta compra serão excluídas."
+                            : "Esta ação remove o lançamento e recalcula o saldo.",
+                          () => {
+                            perform(
+                              (s: any) => deleteTransaction(s, t.id),
+                              "Lançamento excluído",
+                            );
+                          },
+                        ),
                     },
-                  ),
-              },
+                  ]
+                : []),
             ],
           )
         }
@@ -775,7 +829,62 @@ function FinanceApp() {
   const currentCard =
     state.cards.find((card: any) => card.id === cardId) || state.cards[0];
   const bill = currentCard ? invoice(state, currentCard.id, month) : null;
+  const accountsContent = (
+    <>
+      <Section
+        title="Contas"
+        action="Adicionar"
+        onPress={() => open("account")}
+      />
+      {!state.accounts.length ? (
+        <Empty
+          icon="credit-card"
+          title="Seu dinheiro, no seu controle"
+          body="Cadastre uma conta ou carteira para começar. Nenhuma conexão com seu banco é necessária."
+          action="Adicionar conta"
+          onPress={() => open("account")}
+        />
+      ) : (
+        <Box style={{ paddingVertical: 0 }}>
+          {state.accounts.map((a: any) => (
+            <Pressable
+              key={a.id}
+              accessibilityRole="button"
+              accessibilityLabel={`Editar ${a.name}`}
+              onPress={() =>
+                open("account", {
+                  ...a,
+                  initial: (a.initial / 100).toFixed(2).replace(".", ","),
+                })
+              }
+              style={[styles.accountRow, { borderBottomColor: c.line }]}
+            >
+              <View style={[styles.bank, { backgroundColor: a.color }]}>
+                <I name="briefcase" color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1, gap: 4 }}>
+                <T style={{ fontFamily: "SoraSemi", fontSize: 13 }}>{a.name}</T>
+                <T style={{ fontSize: 11, color: c.muted }}>
+                  {a.institution || "Carteira"}
+                </T>
+              </View>
+              <View style={{ alignItems: "flex-end", gap: 5 }}>
+                <T style={{ fontFamily: "SoraSemi", fontSize: 14 }}>
+                  {showMoney(balance(state, a.id))}
+                </T>
+                <T style={{ fontSize: 10, color: c.muted }}>
+                  Disponível{" "}
+                  {showMoney(balance(state, a.id) - reserved(state, a.id))}
+                </T>
+              </View>
+            </Pressable>
+          ))}
+        </Box>
+      )}
+    </>
+  );
   const titles: Record<Screen, string> = {
+    accounts: "Contas",
     home: "Visão geral",
     transactions: "Transações",
     cards: "Cartões",
@@ -1091,67 +1200,7 @@ function FinanceApp() {
                     </View>
                   </View>
                 </Box>
-                <Section
-                  title="Contas"
-                  action="Adicionar"
-                  onPress={() => open("account")}
-                />
-                {!state.accounts.length ? (
-                  <Empty
-                    icon="credit-card"
-                    title="Seu dinheiro, no seu controle"
-                    body="Cadastre uma conta ou carteira para começar. Nenhuma conexão com seu banco é necessária."
-                    action="Adicionar conta"
-                    onPress={() => open("account")}
-                  />
-                ) : (
-                  <Box style={{ paddingVertical: 0 }}>
-                    {state.accounts.map((a: any) => (
-                      <Pressable
-                        key={a.id}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Editar ${a.name}`}
-                        onPress={() =>
-                          open("account", {
-                            ...a,
-                            initial: (a.initial / 100)
-                              .toFixed(2)
-                              .replace(".", ","),
-                          })
-                        }
-                        style={[
-                          styles.accountRow,
-                          { borderBottomColor: c.line },
-                        ]}
-                      >
-                        <View
-                          style={[styles.bank, { backgroundColor: a.color }]}
-                        >
-                          <I name="briefcase" color="#FFFFFF" />
-                        </View>
-                        <View style={{ flex: 1, gap: 4 }}>
-                          <T style={{ fontFamily: "SoraSemi", fontSize: 13 }}>
-                            {a.name}
-                          </T>
-                          <T style={{ fontSize: 11, color: c.muted }}>
-                            {a.institution || "Carteira"}
-                          </T>
-                        </View>
-                        <View style={{ alignItems: "flex-end", gap: 5 }}>
-                          <T style={{ fontFamily: "SoraSemi", fontSize: 14 }}>
-                            {showMoney(balance(state, a.id))}
-                          </T>
-                          <T style={{ fontSize: 10, color: c.muted }}>
-                            Disponível{" "}
-                            {showMoney(
-                              balance(state, a.id) - reserved(state, a.id),
-                            )}
-                          </T>
-                        </View>
-                      </Pressable>
-                    ))}
-                  </Box>
-                )}
+                {accountsContent}
                 <Section
                   title="Últimos lançamentos"
                   action="Ver todos"
@@ -1668,8 +1717,79 @@ function FinanceApp() {
                 )}
               </>
             )}
+            {screen === "accounts" && accountsContent}
             {screen === "more" && (
               <>
+                {["Organizar", "Planejar", "Acompanhar", "Analisar"].map(
+                  (group) => (
+                    <View key={group}>
+                      <Section title={group} />
+                      {[
+                        {
+                          id: "accounts",
+                          label: "Contas",
+                          icon: "briefcase",
+                          group: "Organizar",
+                        },
+                        {
+                          id: "cards",
+                          label: "Cartões de crédito",
+                          icon: "credit-card",
+                          group: "Organizar",
+                        },
+                        {
+                          id: "budgets",
+                          label: "Orçamento",
+                          icon: "pie-chart",
+                          group: "Planejar",
+                        },
+                        {
+                          id: "goals",
+                          label: "Metas e caixinhas",
+                          icon: "target",
+                          group: "Planejar",
+                        },
+                        ...planningOptions,
+                      ]
+                        .filter((option) => option.group === group)
+                        .map((option) => (
+                          <Pressable
+                            key={option.id}
+                            accessibilityRole="button"
+                            onPress={() => {
+                              if (
+                                option.id === "accounts" ||
+                                option.id === "cards"
+                              )
+                                setScreen(option.id);
+                              else if (
+                                option.id === "budgets" ||
+                                option.id === "goals"
+                              ) {
+                                setPlanning(option.id);
+                                setScreen("planning");
+                              } else setTool(option.id);
+                            }}
+                            style={({ pressed }) => ({
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 14,
+                              minHeight: 60,
+                              padding: 16,
+                              borderRadius: 16,
+                              backgroundColor: c.surface,
+                              marginBottom: 8,
+                              opacity: pressed ? 0.75 : 1,
+                            })}
+                          >
+                            <I name={option.icon as Icon} />
+                            <T style={{ flex: 1 }}>{option.label}</T>
+                            <I name="chevron-right" size={18} />
+                          </Pressable>
+                        ))}
+                    </View>
+                  ),
+                )}
                 <Section title="Preferências" />
                 <Box>
                   <View style={styles.setting}>
@@ -1854,6 +1974,15 @@ function FinanceApp() {
           )}
         </View>
       </View>
+      {!!tool && !locked && (
+        <PlanningPanel
+          state={state}
+          c={c}
+          initial={tool}
+          onClose={() => setTool("")}
+          onChange={perform}
+        />
+      )}
       <Modal
         visible={showUpdates}
         animationType="slide"
@@ -1985,11 +2114,66 @@ function FinanceApp() {
                       ) : (
                         <Choice
                           label="Categoria"
-                          values={categories.map((x) => [x, x])}
+                          values={categoryNames(state).map((x) => [x, x])}
                           value={form.category}
                           onChange={(v: string) => update("category", v)}
                           c={c}
                         />
+                      )}
+                      {form.type !== "transfer" && !!state.tags?.length && (
+                        <View style={{ marginVertical: 12 }}>
+                          <T
+                            style={{ fontFamily: "SoraSemi", marginBottom: 8 }}
+                          >
+                            Tags (opcional)
+                          </T>
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              flexWrap: "wrap",
+                              gap: 8,
+                            }}
+                          >
+                            {state.tags.map((tag: any) => {
+                              const selected = (form.tags || []).includes(
+                                tag.id,
+                              );
+                              return (
+                                <Pressable
+                                  key={tag.id}
+                                  accessibilityRole="checkbox"
+                                  accessibilityState={{ checked: selected }}
+                                  onPress={() =>
+                                    update(
+                                      "tags",
+                                      selected
+                                        ? (form.tags || []).filter(
+                                            (id: string) => id !== tag.id,
+                                          )
+                                        : [...(form.tags || []), tag.id],
+                                    )
+                                  }
+                                  style={({ pressed }) => ({
+                                    minHeight: 48,
+                                    padding: 12,
+                                    borderRadius: 12,
+                                    backgroundColor: selected
+                                      ? c.soft
+                                      : c.surface,
+                                    borderWidth: 1,
+                                    borderColor: c.line,
+                                    opacity: pressed ? 0.7 : 1,
+                                  })}
+                                >
+                                  <T>
+                                    {selected ? "✓ " : ""}
+                                    {tag.name}
+                                  </T>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                        </View>
                       )}
                       <Field
                         label="Data (AAAA-MM-DD)"
@@ -2034,6 +2218,31 @@ function FinanceApp() {
                   )}
                   {form.kind === "account" && (
                     <>
+                      <Choice
+                        label="Banco e perfil"
+                        values={[
+                          ...bankProfiles.map((p) => [p.id, p.label]),
+                          ["custom", "Outro banco / carteira"],
+                        ]}
+                        value={form.profileId || "custom"}
+                        onChange={(id: string) => {
+                          const profile = bankProfile(id);
+                          setForm((f: any) => ({
+                            ...f,
+                            profileId: id,
+                            holderType:
+                              profile?.holderType || f.holderType || "PF",
+                            institution: profile?.institution || f.institution,
+                            name:
+                              !f.name ||
+                              f.name === bankProfile(f.profileId)?.label
+                                ? profile?.label || f.name
+                                : f.name,
+                            color: profile?.color || f.color,
+                          }));
+                        }}
+                        c={c}
+                      />
                       <Field
                         label="Nome da conta"
                         value={form.name}
@@ -2041,13 +2250,24 @@ function FinanceApp() {
                         c={c}
                         autoFocus
                       />
-                      <Field
-                        label="Instituição"
-                        value={form.institution}
-                        onChange={(v: string) => update("institution", v)}
-                        c={c}
-                        placeholder="Nubank, Itaú, Dinheiro…"
-                      />
+                      {bankProfile(form.profileId) ? (
+                        <T style={styles.muted}>
+                          {bankProfile(form.profileId)?.institution} ·{" "}
+                          {bankProfile(form.profileId)?.holderType === "PJ"
+                            ? "Pessoa jurídica"
+                            : "Pessoa física"}
+                          . Conta independente, sem conexão automática com o
+                          banco.
+                        </T>
+                      ) : (
+                        <Field
+                          label="Instituição"
+                          value={form.institution}
+                          onChange={(v: string) => update("institution", v)}
+                          c={c}
+                          placeholder="Nubank, Itaú, Dinheiro…"
+                        />
+                      )}
                       <Field
                         label="Saldo inicial (R$)"
                         value={form.initial}
@@ -2100,6 +2320,12 @@ function FinanceApp() {
                                 g.deposits.some(
                                   (d: any) => d.accountId === form.id,
                                 ),
+                              ) ||
+                              (state.recurrences || []).some(
+                                (r: any) => r.accountId === form.id,
+                              ) ||
+                              (state.financings || []).some(
+                                (r: any) => r.accountId === form.id,
                               ) ||
                               state.cards.some(
                                 (card: any) => card.accountId === form.id,
@@ -2205,7 +2431,7 @@ function FinanceApp() {
                     <>
                       <Choice
                         label="Categoria"
-                        values={categories
+                        values={categoryNames(state)
                           .filter((x) => x !== "Salário")
                           .map((x) => [x, x])}
                         value={form.category}
@@ -2277,9 +2503,20 @@ function FinanceApp() {
                         {showMoney(invoice(state, form.cardId, month).due)}
                       </T>
                       <T style={styles.muted}>
-                        O pagamento reduz o saldo da conta e quita o saldo
-                        aberto da fatura selecionada. Não duplica a despesa nos
-                        totais do mês.
+                        O pagamento reduz o saldo da conta e abate o valor da
+                        fatura selecionada. Não duplica a despesa nos totais do
+                        mês.
+                      </T>
+                      <Field
+                        label="Valor a pagar (R$)"
+                        value={form.amount}
+                        onChange={(v: string) => update("amount", v)}
+                        c={c}
+                        numeric
+                      />
+                      <T style={styles.muted}>
+                        Deixe vazio para pagar todo o saldo aberto. Informe um
+                        valor para pagamento parcial.
                       </T>
                       <Choice
                         label="Pagar usando"
