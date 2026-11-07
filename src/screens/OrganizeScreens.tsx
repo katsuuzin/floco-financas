@@ -5,7 +5,8 @@ import { T, Muted, I, Box, Section, Button, Empty, IconButton, Progress, styles 
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
-import { invoice, invoiceDueDate, spent, totalBalance } from "../finance.mjs";
+import { invoice, invoiceDueDate, totalBalance, today, monthKey } from "../finance.mjs";
+import { normalizeBudget, budgetUsage, budgetHistory } from "../analysis.mjs";
 import { toInput } from "../app/forms";
 import TransactionRow from "./TransactionRow";
 import MonthBar from "./MonthBar";
@@ -174,45 +175,69 @@ export function BudgetsScreen() {
   const { state, show, perform, confirm } = useStore();
   const nav = useNav();
   const { month } = nav;
+  const ref = month === monthKey(today()) ? today() : `${month}-15`;
+  const cycleName: Record<string, string> = { monthly: "Mensal", fortnightly: "Quinzenal", weekly: "Semanal" };
   return (
     <>
       <MonthBar />
-      <Section title="Orçamento por categoria" action="Adicionar" onPress={() => nav.push({ name: "form", kind: "budget" })} />
+      <Section title="Orçamentos" action="Adicionar" onPress={() => nav.push({ name: "form", kind: "budget" })} />
       {state.budgets.length ? (
-        state.budgets.map((b: any) => {
-          const used = spent(state, b.category, month);
+        state.budgets.map((raw: any) => {
+          const b = normalizeBudget(raw);
+          const u = budgetUsage(state, b, ref);
+          const h = budgetHistory(state, b, 6, ref);
+          const income = b.type === "income";
+          const bad = income ? false : u.used > u.limit;
+          const label = b.name || b.categories.join(", ");
           return (
             <Box key={b.id}>
               <View style={[k.row, { justifyContent: "space-between" }]}>
-                <T style={{ fontFamily: "SoraSemi", flex: 1 }}>{b.category}</T>
+                <View style={{ flex: 1 }}>
+                  <T style={{ fontFamily: "SoraSemi" }}>{label}</T>
+                  <Muted style={{ fontSize: 11 }}>
+                    {income ? "Meta de receita" : "Teto de despesa"} · {cycleName[b.cycle]} · {u.start.split("-").reverse().join("/").slice(0, 5)}–
+                    {u.end.split("-").reverse().join("/").slice(0, 5)}
+                  </Muted>
+                </View>
                 <IconButton
                   name="edit-2"
-                  label={`Editar orçamento de ${b.category}`}
+                  label={`Editar orçamento ${label}`}
                   onPress={() =>
-                    nav.push({ name: "form", kind: "budget", initial: { category: b.category, amount: toInput(b.amount) } })
+                    nav.push({
+                      name: "form",
+                      kind: "budget",
+                      initial: { ...b, budgetType: b.type, amount: toInput(b.amount), startDay: String(b.startDay) },
+                    })
                   }
                 />
                 <IconButton
                   name="trash-2"
-                  label={`Excluir orçamento de ${b.category}`}
+                  label={`Excluir orçamento ${label}`}
                   onPress={() =>
-                    confirm("Excluir orçamento?", b.category, () =>
+                    confirm("Excluir orçamento?", label, () =>
                       perform((s: any) => ({ ...s, budgets: s.budgets.filter((x: any) => x.id !== b.id) })),
                     )
                   }
                 />
               </View>
               <Muted style={{ marginBottom: 12 }}>
-                {show(used)} de {show(b.amount)}
+                {show(u.used)} de {show(b.amount)}
               </Muted>
               <Progress
-                value={used}
+                value={u.used}
                 max={b.amount}
-                color={used > b.amount ? c.red : used / b.amount >= 0.8 ? c.amber : c.primary}
+                color={income ? c.green : bad ? c.red : u.ratio >= 0.8 ? c.amber : c.primary}
               />
-              <T style={{ color: used > b.amount ? c.red : c.green, fontSize: 12, marginTop: 8 }}>
-                {show(Math.abs(b.amount - used))} {used > b.amount ? "acima do limite" : "restante"}
+              <T style={{ color: bad ? c.red : c.green, fontSize: 12, marginTop: 8 }}>
+                {income
+                  ? u.used >= u.limit
+                    ? "Meta atingida"
+                    : `Faltam ${show(u.limit - u.used)}`
+                  : `${show(Math.abs(u.left))} ${bad ? "acima do limite" : "restante"}`}
               </T>
+              <Muted style={{ fontSize: 11, marginTop: 4 }}>
+                {h.within} de {h.cycles.length} ciclos recentes {income ? "atingiram a meta" : "fecharam dentro do teto"}
+              </Muted>
             </Box>
           );
         })

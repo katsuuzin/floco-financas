@@ -107,8 +107,8 @@ export default function AnalysisScreen() {
         </View>
       </Box>
       <Section title="Relatórios" />
-      <ListItem icon="bar-chart-2" label="Relatório personalizado" onPress={() => nav.push({ name: "tool", id: "reports" })} />
-      <ListItem icon="trending-up" label="Projeções" onPress={() => nav.push({ name: "tool", id: "projections" })} />
+      <ListItem icon="bar-chart-2" label="Relatórios avançados" detail="Fluxo de caixa, comparações, faturas, PDF" onPress={() => nav.push({ name: "reports" })} />
+      <ListItem icon="trending-up" label="Projeções" detail="Curto, médio prazo e simulador" onPress={() => nav.push({ name: "projections" })} />
     </>
   );
 }

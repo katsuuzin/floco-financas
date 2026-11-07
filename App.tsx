@@ -31,6 +31,9 @@ import MoreScreen from "./src/screens/MoreScreen";
 import SettingsScreen from "./src/screens/SettingsScreen";
 import FormScreen from "./src/screens/FormScreen";
 import { AccountsScreen, CardsScreen, BudgetsScreen, GoalsScreen } from "./src/screens/OrganizeScreens";
+import { ContractsScreen, RecurrencesScreen, InstallmentsScreen } from "./src/screens/CommitmentScreens";
+import { ReportsScreen, ReportScreen, ProjectionsScreen } from "./src/screens/ReportScreens";
+import { RulesScreen, ReconcileScreen } from "./src/screens/ToolScreens";
 import PlanningPanel from "./src/PlanningPanel";
 import ImportsPanel from "./src/ImportsPanel";
 import ReceiptPanel from "./src/ReceiptPanel";
@@ -205,7 +208,30 @@ const TITLES: Record<string, string> = {
   budgets: "Orçamento",
   goals: "Metas e caixinhas",
   settings: "Configurações",
+  recurrences: "Recorrências",
+  installments: "Parcelamentos",
+  reports: "Relatórios",
+  projections: "Projeções",
+  rules: "Categorização automática",
+  reconcile: "Conferir fatura",
 };
+const REPORT_TITLES: Record<string, string> = {
+  cashflow: "Fluxo de caixa",
+  categories: "Resultado por categoria",
+  compare: "Comparar períodos",
+  invoices: "Relatório de faturas",
+  budget: "Previsto × realizado",
+  patterns: "Padrões de gasto",
+  export: "Exportar",
+};
+const routeTitle = (r: Route) =>
+  r.name === "contracts"
+    ? r.type === "loan"
+      ? "Empréstimos"
+      : "Financiamentos"
+    : r.name === "report"
+      ? REPORT_TITLES[r.id] || "Relatório"
+      : TITLES[r.name] || "";
 
 function Shell({ onPinChange, unlocked }: { onPinChange: () => void; unlocked: boolean }) {
   const { c } = useTheme();
@@ -232,7 +258,7 @@ function Shell({ onPinChange, unlocked }: { onPinChange: () => void; unlocked: b
   }
 
   const content = top ? renderRoute(top) : renderTab(nav.tab);
-  const title = top ? (top.name === "form" ? "" : TITLES[top.name]) : TITLES[nav.tab];
+  const title = top ? routeTitle(top) : TITLES[nav.tab];
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }} edges={["top", "bottom"]}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -316,6 +342,22 @@ function renderRoute(r: Route) {
       return <GoalsScreen />;
     case "settings":
       return <SettingsScreen />;
+    case "contracts":
+      return <ContractsScreen type={r.type} />;
+    case "recurrences":
+      return <RecurrencesScreen />;
+    case "installments":
+      return <InstallmentsScreen />;
+    case "reports":
+      return <ReportsScreen />;
+    case "report":
+      return <ReportScreen id={r.id} />;
+    case "projections":
+      return <ProjectionsScreen />;
+    case "rules":
+      return <RulesScreen />;
+    case "reconcile":
+      return <ReconcileScreen />;
     case "form":
       return <FormScreen kind={r.kind} initial={r.initial} />;
   }

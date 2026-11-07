@@ -1,4 +1,5 @@
 import { isDate, parseMoney, addTransaction } from "./finance.mjs";
+import { categorize } from "./rules.mjs";
 const normalize = (s) =>
   String(s)
     .normalize("NFD")
@@ -142,7 +143,8 @@ export function importRows(state, rows, accountId) {
     const key = row.externalId ? `${accountId}:ofx:${row.externalId}` : null;
     if (key && s.transactions.some((t) => t.importKey === key)) continue;
     const old = new Set(s.transactions.map((t) => t.id));
-    s = addTransaction(s, { ...row, accountId, confirmed: true });
+    const rule = !row.category || row.category === "Outros" ? categorize(s, row.description, row.type) : null;
+    s = addTransaction(s, { ...row, ...(rule ? { category: rule.category } : {}), accountId, confirmed: true });
     s = {
       ...s,
       transactions: s.transactions.map((t) =>

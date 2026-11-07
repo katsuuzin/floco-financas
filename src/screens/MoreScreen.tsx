@@ -19,27 +19,33 @@ const groups: [string, Item[]][] = [
     [
       { label: "Orçamento", icon: "pie-chart", route: { name: "budgets" } },
       { label: "Metas e caixinhas", icon: "target", route: { name: "goals" } },
-      { label: "Projeções", icon: "trending-up", route: { name: "tool", id: "projections" } },
+      { label: "Projeções", icon: "trending-up", route: { name: "projections" } },
     ],
   ],
   [
     "Acompanhar",
     [
-      { label: "Recorrências", icon: "repeat", route: { name: "tool", id: "recurrences" } },
-      { label: "Parcelamentos", icon: "calendar", route: { name: "tool", id: "installments" } },
-      { label: "Financiamentos e empréstimos", icon: "home", route: { name: "tool", id: "financings" } },
+      { label: "Recorrências", icon: "repeat", route: { name: "recurrences" } },
+      { label: "Parcelamentos", icon: "calendar", route: { name: "installments" } },
+      { label: "Financiamentos", icon: "home", route: { name: "contracts", type: "financing" } },
+      { label: "Empréstimos", icon: "dollar-sign", route: { name: "contracts", type: "loan" } },
       { label: "Quem me deve", icon: "users", route: { name: "tool", id: "receivables" } },
     ],
   ],
   [
     "Analisar",
-    [{ label: "Relatório personalizado", icon: "bar-chart-2", route: { name: "tool", id: "reports" } }],
+    [
+      { label: "Relatório personalizado", icon: "sliders", route: { name: "tool", id: "reports" } },
+      { label: "Relatórios avançados", icon: "bar-chart-2", route: { name: "reports" } },
+    ],
   ],
   [
     "Ferramentas",
     [
       { label: "Importar comprovante", icon: "camera", route: { name: "receipt" } },
       { label: "Importar extrato", icon: "file-text", route: { name: "imports" } },
+      { label: "Conferir fatura", icon: "check-square", route: { name: "reconcile" } },
+      { label: "Categorização automática", icon: "zap", route: { name: "rules" } },
       { label: "Notificações bancárias", icon: "bell", route: { name: "notifications" } },
     ],
   ],

@@ -15,6 +15,8 @@ import {
   importNotification,
 } from "./notification-import.mjs";
 import { categoryNames } from "./planning.mjs";
+import { BANK_APPS, notifySettings, nativeConfig } from "./bankCatalog.mjs";
+import { categorize } from "./rules.mjs";
 const native = NativeModules.FlocoBankNotifications;
 export default function NotificationsPanel({
   state,
@@ -39,6 +41,19 @@ export default function NotificationsPanel({
       setError(e.message);
     }
   };
+  const notify = notifySettings(state);
+  const [ignoredText, setIgnoredText] = useState(notify.ignored.join(", "));
+  // Envia ao serviço nativo os bancos escolhidos, as palavras ignoradas e a opção de SMS.
+  useEffect(() => {
+    if (!native?.configure) return;
+    const cfg = nativeConfig(state);
+    native.configure(cfg.packages, cfg.ignored, cfg.sms, cfg.smsSenders).catch((e: any) => setError(e.message));
+  }, [state.settings?.notify]);
+  const setNotify = (patch: any) =>
+    onChange(
+      (s: any) => ({ ...s, settings: { ...s.settings, notify: { ...notifySettings(s), ...patch } } }),
+      "Preferência salva",
+    );
   useEffect(() => {
     void refresh();
     const sub = AppState.addEventListener("change", (s) => {
@@ -190,7 +205,7 @@ export default function NotificationsPanel({
         ) : (
           <>
             {text(
-              "O Android exige acesso especial às notificações. O Floco guarda localmente apenas sugestões de movimentações do Nubank e Inter com valor em reais; não lê sua caixa de SMS e não guarda códigos de acesso. Outros bancos serão adicionados após validar seus formatos.",
+              "O Android exige acesso especial às notificações. O Floco guarda localmente só sugestões de movimentações com valor em reais dos bancos que você ligar abaixo. Códigos de acesso são descartados. Cada sugestão precisa da sua confirmação.",
             )}
             {text(
               status?.permission
@@ -205,7 +220,7 @@ export default function NotificationsPanel({
               style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
             >
               <View style={{ flex: 1 }}>
-                {text("Capturar Nubank e Inter", true)}
+                {text("Ler notificações dos bancos", true)}
               </View>
               <Switch
                 accessibilityLabel="Capturar notificações bancárias"
@@ -229,6 +244,42 @@ export default function NotificationsPanel({
               text(
                 "Houve uma falha de armazenamento na captura. Confira os registros com o extrato do banco.",
               )}
+            {text(`Bancos monitorados (${notify.banks.length} de ${BANK_APPS.length})`, true)}
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {BANK_APPS.map(([pkg, label]: string[]) => {
+                const on = notify.banks.includes(pkg);
+                return (
+                  <Pressable
+                    key={pkg}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: on }}
+                    onPress={() => setNotify({ banks: on ? notify.banks.filter((x: string) => x !== pkg) : [...notify.banks, pkg] })}
+                    style={{ minHeight: 44, paddingHorizontal: 12, justifyContent: "center", borderRadius: 22, borderWidth: 1, borderColor: on ? c.primary : c.line, backgroundColor: on ? c.soft : c.surface }}
+                  >
+                    {text((on ? "✓ " : "") + label)}
+                  </Pressable>
+                );
+              })}
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                {text("Ler SMS de compra dos bancos", true)}
+                {text("Lê a notificação do app de mensagens, nunca a caixa de SMS, e só de remetentes dos bancos ligados acima.")}
+              </View>
+              <Switch accessibilityLabel="Ler SMS de compra" value={!!notify.sms} onValueChange={(v) => setNotify({ sms: v })} />
+            </View>
+            <View style={{ marginVertical: 8 }}>
+              {text("Palavras ignoradas (separe por vírgula)", true)}
+              <TextInput
+                accessibilityLabel="Palavras ignoradas"
+                value={ignoredText}
+                onChangeText={setIgnoredText}
+                onEndEditing={() => setNotify({ ignored: ignoredText.split(",").map((x: string) => x.trim()).filter(Boolean) })}
+                placeholder="Ex.: cashback, fatura fechada"
+                placeholderTextColor={c.muted}
+                style={{ minHeight: 50, padding: 12, color: c.text, fontFamily: "Sora", backgroundColor: c.surface, borderRadius: 12, borderWidth: 1, borderColor: c.line }}
+              />
+            </View>
             {button("Atualizar lista", refresh)}
             {text(`${rows.length} sugestões pendentes`, true)}
             {rows.map((row) => (
@@ -266,12 +317,13 @@ export default function NotificationsPanel({
                       });
                       return;
                     }
+                    const suggestion = suggestNotification(row);
                     setForm({
-                      ...suggestNotification(row),
+                      ...suggestion,
                       row,
                       accountId: "",
                       cardId: "",
-                      category: "Outros",
+                      category: categorize(state, suggestion.description || row.text, suggestion.type)?.category || "Outros",
                     });
                   },
                 )}

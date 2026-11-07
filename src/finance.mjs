@@ -108,7 +108,7 @@ export function totals(state, month) {
     // Pendências são compromissos de caixa: entram mesmo se ignoradas na análise.
     pay: tx
       .filter((t) => t.type === "expense" && !t.confirmed && !t.refund)
-      .reduce((a, t) => a + t.amount, 0),
+      .reduce((a, t) => a + t.amount - (t.paidPart || 0), 0),
     receive: tx
       .filter((t) => (t.type === "income" || t.refund) && !t.confirmed)
       .reduce((a, t) => a + t.amount, 0),

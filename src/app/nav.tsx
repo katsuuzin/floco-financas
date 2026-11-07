@@ -10,6 +10,14 @@ export type Route =
   | { name: "budgets" }
   | { name: "goals" }
   | { name: "settings" }
+  | { name: "contracts"; type: "financing" | "loan" }
+  | { name: "recurrences" }
+  | { name: "installments" }
+  | { name: "reports" }
+  | { name: "report"; id: string }
+  | { name: "projections" }
+  | { name: "rules" }
+  | { name: "reconcile" }
   | { name: "tool"; id: string }
   | { name: "imports" }
   | { name: "receipt" }

@@ -8,6 +8,7 @@ import { buildChange, defaults, formTitles } from "../app/forms";
 import { categoryNames } from "../planning.mjs";
 import { bankProfiles, bankProfile } from "../banks.mjs";
 import { invoice, balance, reserved, today, addMonths, ACCOUNT_TYPES } from "../finance.mjs";
+import { categorize } from "../rules.mjs";
 
 const COLORS: [string, string][] = [
   ["#311E0D", "Marrom"],
@@ -129,15 +130,20 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
           <Field
             label="Descrição (opcional)"
             value={form.description}
-            onChange={(v) => set("description", v)}
-            hint="Sem descrição, o lançamento usa o nome da categoria."
+            onChange={(v) =>
+              setForm((f: any) => {
+                const rule = !f.categoryTouched && form.type !== "transfer" ? categorize(state, v, f.type) : null;
+                return { ...f, description: v, ...(rule ? { category: rule.category } : {}) };
+              })
+            }
+            hint="Sem descrição, o lançamento usa o nome da categoria. As regras de categorização sugerem a categoria."
           />
           {form.type !== "transfer" && (
             <Choice
               label="Categoria"
               values={categoryNames(state).map((x: string) => [x, x])}
               value={form.category}
-              onChange={(v) => set("category", v)}
+              onChange={(v) => setForm((f: any) => ({ ...f, category: v, categoryTouched: true }))}
             />
           )}
           {form.cardId ? (
@@ -203,7 +209,37 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
                   onChange={(v) => set("frequency", v)}
                 />
               )}
-              {form.type === "expense" && (
+              {form.type === "expense" && !form.cardId && !form.editId && (
+                <>
+                  <Toggle
+                    label="Alguém me deve isso"
+                    value={!!form.owed}
+                    onChange={(v) => setForm((f: any) => ({ ...f, owed: v, refund: false, repeat: "single" }))}
+                    hint="O dinheiro sai da conta e vira valor a receber em Quem me deve, fora dos relatórios de gasto."
+                  />
+                  {form.owed && <Field label="Quem deve" value={form.person} onChange={(v) => set("person", v)} />}
+                  <Button
+                    title="É um contrato parcelado (financiamento ou empréstimo)"
+                    secondary
+                    icon="file-text"
+                    onPress={() =>
+                      nav.replace({
+                        name: "form",
+                        kind: "contract",
+                        initial: {
+                          amount: form.amount,
+                          name: form.description,
+                          category: form.category,
+                          accountId: form.accountId,
+                          date: form.date,
+                          type: "financing",
+                        },
+                      })
+                    }
+                  />
+                </>
+              )}
+              {form.type === "expense" && !form.owed && (
                 <Toggle
                   label="É uma devolução / estorno"
                   value={form.refund}
@@ -323,13 +359,84 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
       {form.kind === "budget" && (
         <>
           <Choice
-            label="Categoria"
-            values={categoryNames(state).filter((x: string) => x !== "Salário").map((x: string) => [x, x])}
-            value={form.category}
-            onChange={(v) => set("category", v)}
+            label="Tipo"
+            values={[
+              ["expense", "Teto de despesa"],
+              ["income", "Meta de receita"],
+            ]}
+            value={form.budgetType || "expense"}
+            onChange={(v) => set("budgetType", v)}
           />
-          <Field label="Limite mensal (R$)" value={form.amount} onChange={(v) => set("amount", v)} numeric />
-          <Muted>Se a categoria já tiver orçamento, o limite é atualizado. O mesmo limite vale para todos os meses.</Muted>
+          <Field label="Valor (R$)" value={form.amount} onChange={(v) => set("amount", v)} numeric autoFocus={!form.id} />
+          <Field label="Nome (opcional)" value={form.name} onChange={(v) => set("name", v)} placeholder="Ex.: Essenciais" />
+          <View style={{ gap: 8 }}>
+            <T style={k.label}>Categorias</T>
+            <View style={k.chips}>
+              {categoryNames(state).map((name: string) => {
+                const list: string[] = form.categories?.length ? form.categories : form.category && form.id ? [form.category] : [];
+                const on = list.includes(name);
+                return (
+                  <Pressable
+                    key={name}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: on }}
+                    onPress={() => set("categories", on ? list.filter((x) => x !== name) : [...list, name])}
+                    style={[k.chip, { backgroundColor: on ? c.primary : c.surface, borderWidth: 1, borderColor: on ? c.primary : c.line }]}
+                  >
+                    <T style={{ fontSize: 12, color: on ? c.onPrimary : c.text }}>{name}</T>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+          <View style={{ gap: 8 }}>
+            <T style={k.label}>Onde (vazio = todas as contas e cartões)</T>
+            <View style={k.chips}>
+              {[...accounts, ...cards].map((x: any) => {
+                const list: string[] = form.where || [];
+                const on = list.includes(x.id);
+                return (
+                  <Pressable
+                    key={x.id}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: on }}
+                    onPress={() => set("where", on ? list.filter((y) => y !== x.id) : [...list, x.id])}
+                    style={[k.chip, { backgroundColor: on ? c.soft : c.surface, borderWidth: 1, borderColor: on ? c.primary : c.line }]}
+                  >
+                    <T style={{ fontSize: 12 }}>{x.name}</T>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+          <Choice
+            label="Ciclo"
+            values={[
+              ["monthly", "Mensal"],
+              ["fortnightly", "Quinzenal"],
+              ["weekly", "Semanal"],
+            ]}
+            value={form.cycle || "monthly"}
+            onChange={(v) => setForm((f: any) => ({ ...f, cycle: v, startDay: v === "monthly" ? 1 : 1 }))}
+          />
+          {(form.cycle || "monthly") === "monthly" ? (
+            <Field label="Começa no dia (1 a 28)" value={String(form.startDay ?? 1)} onChange={(v) => set("startDay", v)} numeric maxLength={2} />
+          ) : (
+            <Choice
+              label="Começa na"
+              values={[
+                ["1", "Segunda"],
+                ["2", "Terça"],
+                ["3", "Quarta"],
+                ["4", "Quinta"],
+                ["5", "Sexta"],
+                ["6", "Sábado"],
+                ["0", "Domingo"],
+              ]}
+              value={String(form.startDay ?? 1)}
+              onChange={(v) => set("startDay", v)}
+            />
+          )}
         </>
       )}
 
@@ -375,6 +482,155 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
           />
           <Choice label="Pagar usando" values={accounts.map((a: any) => [a.id, a.name])} value={form.accountId} onChange={(v) => set("accountId", v)} />
           <Field label="Data (AAAA-MM-DD)" value={form.date} onChange={(v) => set("date", v)} />
+        </>
+      )}
+
+      {(form.kind === "contract" || form.kind === "changeMethod") && (
+        <>
+          {form.kind === "contract" && (
+            <>
+              <Choice
+                label="Tipo de contrato"
+                values={[
+                  ["financing", "Financiamento"],
+                  ["loan", "Empréstimo"],
+                ]}
+                value={form.type === "loan" ? "loan" : "financing"}
+                onChange={(v) => set("type", v)}
+              />
+              <Muted>
+                {form.type === "loan"
+                  ? "Dinheiro tomado de banco ou fintech. As parcelas aceitam pagamento em partes e juros por atraso."
+                  : "Um bem financiado — imóvel, carro, moto — com parcelas definidas."}
+              </Muted>
+              <Field label="Nome do contrato" value={form.name} onChange={(v) => set("name", v)} placeholder="Ex.: Carro, Apartamento" />
+              <Field label="Instituição (opcional)" value={form.institution} onChange={(v) => set("institution", v)} />
+            </>
+          )}
+          <Choice
+            label="Como a parcela se comporta"
+            values={[
+              ["fixed", "Parcela fixa"],
+              ["price", "Price"],
+              ["sac", "SAC"],
+            ]}
+            value={form.method}
+            onChange={(v) => set("method", v)}
+          />
+          <Muted>
+            {form.method === "fixed"
+              ? "Todas as parcelas iguais. Use quando não souber o sistema do contrato; não pede taxa. Dá para trocar depois sem perder o histórico."
+              : form.method === "price"
+                ? "Parcela constante, separando juros e amortização. Informe a taxa e a parcela, ou a taxa e o saldo devedor."
+                : "A parcela cai um pouco a cada mês; comum em imóveis. Informe a taxa e o saldo devedor."}
+          </Muted>
+          {form.method !== "sac" && (
+            <Field
+              label="Valor da parcela mensal (R$)"
+              value={form.amount}
+              onChange={(v) => set("amount", v)}
+              numeric
+              hint="Quanto você paga por mês, sem seguros — não o total do contrato."
+            />
+          )}
+          {form.method !== "fixed" && (
+            <>
+              <Field label="Taxa de juros (% ao mês)" value={form.rate} onChange={(v) => set("rate", v)} numeric placeholder="1,2" />
+              <Field
+                label={form.method === "sac" ? "Saldo devedor (R$)" : "Saldo devedor (opcional, R$)"}
+                value={form.principal}
+                onChange={(v) => set("principal", v)}
+                numeric
+                hint={form.method === "price" ? "Se informar, a parcela é calculada a partir dele." : undefined}
+              />
+            </>
+          )}
+          <Field label="Seguros e tarifas por mês (opcional, R$)" value={form.insurance} onChange={(v) => set("insurance", v)} numeric />
+          {form.kind === "contract" && (
+            <>
+              <View style={[k.row, { alignItems: "flex-start" }]}>
+                <View style={{ flex: 1 }}>
+                  <Field label="Total de parcelas" value={form.count} onChange={(v) => set("count", v)} numeric maxLength={3} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Field label="Já pagas" value={form.paid} onChange={(v) => set("paid", v)} numeric maxLength={3} />
+                </View>
+              </View>
+              <Field label="Próxima parcela (AAAA-MM-DD)" value={form.date} onChange={(v) => set("date", v)} />
+              <Choice label="Categoria" values={categoryNames(state).map((x: string) => [x, x])} value={form.category} onChange={(v) => set("category", v)} />
+              <Choice label="Conta de pagamento" values={accounts.map((a: any) => [a.id, a.name])} value={form.accountId} onChange={(v) => set("accountId", v)} />
+            </>
+          )}
+        </>
+      )}
+
+      {form.kind === "recurrence" && (
+        <>
+          <Choice
+            label="Tipo"
+            values={[
+              ["expense", "Despesa"],
+              ["income", "Receita"],
+            ]}
+            value={form.type === "income" ? "income" : "expense"}
+            onChange={(v) => set("type", v)}
+          />
+          <Field label="Valor (R$)" value={form.amount} onChange={(v) => set("amount", v)} numeric autoFocus={!form.id} />
+          <Field label="Descrição" value={form.description} onChange={(v) => set("description", v)} placeholder="Ex.: Aluguel, Salário, Streaming" />
+          <Choice
+            label="Frequência"
+            values={[
+              ["daily", "Diária"],
+              ["weekly", "Semanal"],
+              ["fortnightly", "A cada 14 dias"],
+              ["monthly", "Mensal"],
+              ["yearly", "Anual"],
+            ]}
+            value={form.frequency}
+            onChange={(v) => set("frequency", v)}
+          />
+          <Field label="Primeira data (AAAA-MM-DD)" value={form.date} onChange={(v) => set("date", v)} />
+          <Field label="Término (opcional)" value={form.endDate} onChange={(v) => set("endDate", v)} placeholder="AAAA-MM-DD" />
+          <Choice label="Categoria" values={categoryNames(state).map((x: string) => [x, x])} value={form.category} onChange={(v) => set("category", v)} />
+          <Choice label="Conta" values={accounts.map((a: any) => [a.id, a.name])} value={form.accountId} onChange={(v) => set("accountId", v)} />
+          <Muted>As ocorrências até hoje entram como pendentes para você confirmar. As futuras aparecem nas projeções.</Muted>
+        </>
+      )}
+
+      {["contractPay", "lateFee", "extraAmort", "settle"].includes(form.kind) && (
+        <>
+          {!!form.info && <Muted>{form.info}</Muted>}
+          {form.kind === "extraAmort" && (
+            <Choice
+              label="O que reduzir"
+              values={[
+                ["term", "Prazo (menos parcelas)"],
+                ["payment", "Valor da parcela"],
+              ]}
+              value={form.mode}
+              onChange={(v) => set("mode", v)}
+            />
+          )}
+          <Field
+            label={form.kind === "settle" ? "Valor da quitação (R$)" : "Valor (R$)"}
+            value={form.amount}
+            onChange={(v) => set("amount", v)}
+            numeric
+            autoFocus
+            hint={
+              form.kind === "settle"
+                ? "Já vem com o saldo devedor. Ajuste se o banco informou outro valor."
+                : form.kind === "contractPay"
+                  ? "Informe menos que a parcela para pagar em partes."
+                  : undefined
+            }
+          />
+          {form.kind !== "lateFee" && (
+            <>
+              <Choice label="Pagar com" values={accounts.map((a: any) => [a.id, a.name])} value={form.accountId} onChange={(v) => set("accountId", v)} />
+              <Field label="Data (AAAA-MM-DD)" value={form.date} onChange={(v) => set("date", v)} />
+            </>
+          )}
         </>
       )}
 

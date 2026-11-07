@@ -13,6 +13,9 @@ import {
   payInvoice,
 } from "../finance.mjs";
 import { saveRecurrence, generateRecurrences } from "../planning.mjs";
+import { saveContract, changeMethod, payPart, addLateFee, extraAmortization, settleContract } from "../contracts.mjs";
+import { expenseOwed } from "../commitments.mjs";
+import { saveBudget } from "../analysis.mjs";
 import { bankProfile } from "../banks.mjs";
 
 export const toInput = (cents: number) => (cents / 100).toFixed(2).replace(".", ",");
@@ -37,12 +40,24 @@ export const formTitles: Record<string, (f: any) => string> = {
             : "Nova despesa",
   account: (f) => (f.id ? "Editar conta" : "Nova conta"),
   card: (f) => (f.id ? "Editar cartão" : "Novo cartão"),
-  budget: () => "Orçamento mensal",
+  budget: (f) => (f.id ? "Editar orçamento" : "Novo orçamento"),
   goal: (f) => (f.id ? "Editar meta" : "Nova meta"),
   deposit: () => "Guardar dinheiro",
   withdraw: () => "Retirar reserva",
   reserveTransfer: () => "Transferir reserva",
   payment: () => "Pagar fatura",
+  contract: (f) => (f.type === "loan" ? "Novo empréstimo" : "Novo financiamento"),
+  recurrence: (f) => (f.id ? "Editar recorrência" : "Nova recorrência"),
+  contractPay: () => "Pagar parcela",
+  lateFee: () => "Juros por atraso",
+  extraAmort: () => "Amortização extraordinária",
+  settle: () => "Quitar contrato",
+  changeMethod: () => "Trocar cálculo",
+};
+const rate = (text: string) => {
+  const n = Number(String(text || "0").replace(",", "."));
+  if (!Number.isFinite(n) || n < 0 || n > 30) throw Error("Informe a taxa mensal entre 0 e 30%.");
+  return n;
 };
 
 export function defaults(kind: string, state: any, initial: any = {}) {
@@ -78,6 +93,16 @@ export function defaults(kind: string, state: any, initial: any = {}) {
     target: "",
     deadline: "",
     goalId: state.goals[0]?.id || "",
+    method: "fixed",
+    rate: "",
+    principal: "",
+    insurance: "",
+    count: "12",
+    paid: "0",
+    owed: false,
+    person: "",
+    endDate: "",
+    mode: "term",
     ...initial,
   };
 }
@@ -104,6 +129,8 @@ export function buildChange(f: any, month: string): (s: any) => any {
           });
           return generateRecurrences(withRule, f.date < today() ? today() : f.date);
         }
+        if (f.owed && !f.editId)
+          return expenseOwed(base, { ...f, amount, confirmed: true });
         return addTransaction(base, {
           ...f,
           amount,
@@ -150,16 +177,18 @@ export function buildChange(f: any, month: string): (s: any) => any {
         };
         return { ...s, cards: f.id ? s.cards.map((c: any) => (c.id === f.id ? row : c)) : [...s.cards, row] };
       }
-      case "budget": {
-        const amount = parseMoney(f.amount);
-        const exists = s.budgets.find((b: any) => b.category === f.category);
-        return {
-          ...s,
-          budgets: exists
-            ? s.budgets.map((b: any) => (b.id === exists.id ? { ...b, amount } : b))
-            : [...s.budgets, { id: uid(), category: f.category, amount }],
-        };
-      }
+      case "budget":
+        return saveBudget(s, {
+          id: f.id,
+          name: f.name,
+          type: f.budgetType || "expense",
+          amount: parseMoney(f.amount),
+          categories: f.categories?.length ? f.categories : [f.category],
+          where: f.where || [],
+          cycle: f.cycle || "monthly",
+          startDay: Number(f.startDay ?? 1),
+          affectsForecast: !!f.affectsForecast,
+        });
       case "goal": {
         if (f.deadline && !isDate(f.deadline)) throw Error("Informe o prazo como AAAA-MM-DD.");
         if (!f.name.trim()) throw Error("Dê um nome à sua meta.");
@@ -178,6 +207,46 @@ export function buildChange(f: any, month: string): (s: any) => any {
         return withdrawGoal(s, f.goalId, parseMoney(f.amount), f.accountId, f.date);
       case "reserveTransfer":
         return transferGoal(s, f.goalId, f.destinationGoalId, parseMoney(f.amount), f.accountId, f.date);
+      case "contract":
+        return saveContract(s, {
+          ...f,
+          installment: f.method === "sac" || (f.method === "price" && f.principal?.trim()) ? 0 : parseMoney(f.amount),
+          principal: f.principal?.trim() ? parseMoney(f.principal) : 0,
+          rate: f.method === "fixed" ? 0 : rate(f.rate),
+          insurance: optionalMoney(f.insurance),
+          count: Number(f.count),
+          paid: Number(f.paid || 0),
+        });
+      case "recurrence": {
+        const next = saveRecurrence(s, {
+          id: f.id,
+          description: f.description?.trim() || f.category,
+          amount: parseMoney(f.amount),
+          date: f.date,
+          endDate: f.endDate,
+          frequency: f.frequency,
+          accountId: f.accountId,
+          category: f.category,
+          type: f.type === "income" ? "income" : "expense",
+        });
+        return generateRecurrences(next, today());
+      }
+      case "contractPay":
+        return payPart(s, f.txId, parseMoney(f.amount), f.accountId, f.date);
+      case "lateFee":
+        return addLateFee(s, f.txId, parseMoney(f.amount));
+      case "extraAmort":
+        return extraAmortization(s, f.contractId, parseMoney(f.amount), f.accountId, f.date, f.mode || "term");
+      case "settle":
+        return settleContract(s, f.contractId, f.accountId, f.date, f.amount?.trim() ? parseMoney(f.amount) : undefined);
+      case "changeMethod":
+        return changeMethod(s, f.contractId, {
+          method: f.method,
+          rate: f.method === "fixed" ? 0 : rate(f.rate),
+          principal: f.principal?.trim() ? parseMoney(f.principal) : 0,
+          installment: f.amount?.trim() ? parseMoney(f.amount) : 0,
+          insurance: optionalMoney(f.insurance),
+        });
       case "payment":
         return payInvoice(
           s,

@@ -420,7 +420,7 @@ export function projection(
         t.type === "transfer"
           ? (included.has(t.destinationId) ? t.amount : 0) -
             (included.has(t.accountId) ? t.amount : 0)
-          : signedAmount(t),
+          : signedAmount(t) + (t.paidPart || 0),
     }))
     .filter((e) => e.amount !== 0);
   for (const e of recurrenceEvents(s, through, from).filter((e) =>
