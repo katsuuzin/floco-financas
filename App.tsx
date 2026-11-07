@@ -343,9 +343,9 @@ function Shell({ onPinChange, unlocked, protectedApp }: { onPinChange: () => voi
               accessibilityRole="button"
               accessibilityLabel="Adicionar lançamento"
               onPress={() => setAdding(true)}
-              style={({ pressed }) => [s.add, { backgroundColor: c.primary, opacity: pressed ? 0.8 : 1 }]}
+              style={({ pressed }) => [s.add, { backgroundColor: c.accent, opacity: pressed ? 0.85 : 1 }]}
             >
-              <Feather name="plus" size={28} color={c.onPrimary} />
+              <Feather name="plus" size={28} color={c.heroText} />
             </Pressable>
             {tab4 === "analysis" ? (
               <TabButton item={TABS[2]} />
@@ -430,7 +430,8 @@ function TabButton({ item, onPress }: { item: { key: Tab; label: string; icon: I
       onPress={onPress || (() => nav.setTab(item.key))}
       style={s.tab}
     >
-      <View style={[s.indicator, { backgroundColor: on ? c.soft : "transparent" }]}>
+      <View style={[s.bar, { backgroundColor: on ? c.primary : "transparent" }]} />
+      <View style={s.indicator}>
         <I name={item.icon} color={on ? c.primary : c.muted} />
       </View>
       <T style={{ fontSize: 10, color: on ? c.primary : c.muted, fontFamily: on ? "SoraSemi" : "Sora" }}>{item.label}</T>
@@ -500,7 +501,8 @@ const s = StyleSheet.create({
   bottomNav: { flexDirection: "row", borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 6, paddingBottom: 4, alignItems: "center" },
   tab: { flex: 1, alignItems: "center", justifyContent: "center", minHeight: 60, gap: 2 },
   indicator: { paddingHorizontal: 16, paddingVertical: 4, borderRadius: 16 },
-  add: { width: 56, height: 56, borderRadius: 18, alignItems: "center", justifyContent: "center", marginHorizontal: 6, elevation: 3 },
+  add: { width: 58, height: 58, borderRadius: 29, alignItems: "center", justifyContent: "center", marginHorizontal: 6, elevation: 4 },
+  bar: { width: 22, height: 3, borderRadius: 2, marginBottom: 4 },
   snackbar: {
     position: "absolute",
     left: 18,

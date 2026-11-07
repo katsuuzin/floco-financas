@@ -17,20 +17,23 @@ export const palette = {
     red: "#B53846",
     amber: "#94621C",
   },
+  // Escuro: preto e cinza grafite em camadas; ação no amarelo Solar.
+  // Contrastes: texto #F4F4F2 sobre #1D1D20 ≈ 15:1; secundário #A3A3A8 ≈ 6,9:1;
+  // marrom #311E0D sobre amarelo #FFCB45 ≈ 10:1.
   dark: {
-    bg: "#311E0D",
-    surface: "#402A17",
-    text: "#FFF5E8",
-    muted: "#D8C0A8",
-    line: "#735840",
-    soft: "#553B25",
-    primary: "#F0C998",
+    bg: "#0E0E10",
+    surface: "#1D1D20",
+    text: "#F4F4F2",
+    muted: "#A3A3A8",
+    line: "#2E2E33",
+    soft: "#2A2A2E",
+    primary: "#FFCB45",
     onPrimary: "#311E0D",
-    accent: "#EAC15B",
+    accent: "#FFCB45",
     heroText: "#311E0D",
-    green: "#E8BD8F",
-    red: "#FFADB3",
-    amber: "#E3BE7F",
+    green: "#8FD9A0",
+    red: "#FF8A8A",
+    amber: "#FFCB45",
   },
 };
 export type Colors = typeof palette.light;

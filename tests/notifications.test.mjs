@@ -43,7 +43,7 @@ test("Pix enviado e recebido", () => {
   assert.equal(inn.kind, "pixIn");
   assert.equal(inn.type, "income");
   assert.equal(inn.amount, "50,00");
-  assert.match(inn.description, /Ademar da Silva Jardim/);
+  assert.equal(inn.description, "Ademar da Silva Jardim");
 });
 
 test("com saldo junto, usa o primeiro valor", () => {

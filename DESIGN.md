@@ -8,6 +8,8 @@ Claro: fundo #FAF5EF, superfície #FFFFFF, texto #311E0D, secundário #705C4B, m
 
 Sora 400/600/700, números tabulares e moeda pt-BR. Cabeçalho com mascote em proporção quadrada. Saldo amarelo, entradas/saídas separadas, atalhos de entrada, saída e transferência. Planejamento alterna orçamentos e metas. Seu Floco reúne preferências, dados, recursos livres e atualizações.
 
+Tema escuro (v1.3.2): fundo #0E0E10, cartões #1D1D20, camadas #2A2A2E e divisórias #2E2E33. Texto #F4F4F2 e secundário #A3A3A8 (≈6,9:1). A ação e os destaques usam o amarelo Solar #FFCB45, com texto marrom #311E0D sobre ele; receitas em #8FD9A0 e despesas em #FF8A8A. Botões, campos e seletor segmentado em pílula; cartões com raio 22. Na barra, um traço amarelo marca a aba ativa e o botão + é redondo e amarelo. Inspirado na referência preto/cinza enviada pelo usuário, mantendo o tom de amarelo da marca.
+
 Revisão de layout (v1.3.1, skill ui-ux-pro-max). A consulta de produto confirmou o tipo "Personal Finance Tracker". O estilo secundário recomendado, Minimalism/Swiss + Flat, foi adotado com a paleta Solar. A sugestão primária (glassmorphism, azul e fonte manuscrita) foi descartada por contrariar a identidade definida pelo usuário. Decisões:
 - Escala de espaçamento 4/8 (`space` em `src/ui/kit.tsx`), gutter de 16dp e raios 10/14/18.
 - Texto base 15/22 e secundário 12,5/18.

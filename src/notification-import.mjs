@@ -34,7 +34,7 @@ function classify(content) {
 function counterpart(content, kind) {
   const patterns =
     kind === "pixIn" || kind === "transferIn" || kind === "income"
-      ? [/(?:de|por)\s+([A-ZÀ-Ú0-9][^.\n]{2,60}?)(?:\s+(?:no valor|via|com|em)\b|[.\n]|$)/i, /recebeu[^.]*?de\s+([^.\n]{3,60})/i]
+      ? [/\b(?:de|por)\s+(?!R\$)([A-ZÀ-Ú][^.\n]{2,60}?)(?:\s+(?:no valor|via|com|em)\b|[.\n]|$)/i, /recebeu[^.]*?de\s+([^.\n]{3,60})/i]
       : [
           /\bem\s+([A-Z0-9*][^.\n]{2,60}?)(?:\s+(?:para o cart|no cart|com o cart|foi)|[.\n]|$)/,
           /para\s+([A-ZÀ-Ú0-9][^.\n]{2,60}?)(?:\s+(?:no valor|via|com|foi)\b|[.\n]|$)/i,

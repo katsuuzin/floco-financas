@@ -267,7 +267,7 @@ export function Toggle({
   hint?: string;
   icon?: Icon;
 }) {
-  const { c } = useTheme();
+  const { c, dark } = useTheme();
   return (
     <View style={{ gap: 4 }}>
       {/* A linha inteira alterna o valor (alvo de toque maior que a chave sozinha). */}
@@ -289,7 +289,7 @@ export function Toggle({
           value={value}
           onValueChange={onChange}
           thumbColor={value ? c.accent : c.muted}
-          trackColor={{ false: c.line, true: c.primary }}
+          trackColor={{ false: c.line, true: dark ? "#6E5A1F" : c.primary }}
         />
       </Pressable>
       {!!hint && <Muted>{hint}</Muted>}
@@ -400,9 +400,9 @@ export function Segmented<K extends string>({
               accessibilityState={{ checked: on }}
               accessibilityLabel={name}
               onPress={() => onChange(key)}
-              style={[styles.segment, on && { backgroundColor: c.surface, elevation: 1 }]}
+              style={[styles.segment, on && { backgroundColor: c.primary }]}
             >
-              <T numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: 12, fontFamily: on ? "SoraSemi" : "Sora", color: on ? c.text : c.muted }}>
+              <T numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: 12, fontFamily: on ? "SoraSemi" : "Sora", color: on ? c.onPrimary : c.muted }}>
                 {name}
               </T>
             </Pressable>
@@ -460,7 +460,7 @@ export function Group({ title, children }: { title?: string; children: React.Rea
           {title}
         </Muted>
       )}
-      <View style={{ backgroundColor: c.surface, borderRadius: radius.lg, overflow: "hidden" }}>
+      <View style={{ backgroundColor: c.surface, borderRadius: 22, overflow: "hidden" }}>
         {items.map((child, i) => (
           <View key={i} style={i < items.length - 1 ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.line } : null}>
             {child}
@@ -518,17 +518,17 @@ export const styles = StyleSheet.create({
   text: { fontSize: 15, lineHeight: 22 },
   muted: { fontSize: 12.5, lineHeight: 18 },
   compactChip: { minHeight: 40, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1, justifyContent: "center" },
-  segmented: { flexDirection: "row", borderRadius: 14, padding: 4, gap: 4 },
-  segment: { flex: 1, minHeight: 44, borderRadius: 11, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
-  amountBox: { borderRadius: 18, paddingHorizontal: 18, paddingVertical: 14, gap: 2 },
-  rowIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  segmented: { flexDirection: "row", borderRadius: 999, padding: 4, gap: 4 },
+  segment: { flex: 1, minHeight: 44, borderRadius: 999, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
+  amountBox: { borderRadius: 22, paddingHorizontal: 20, paddingVertical: 14, gap: 2 },
+  rowIcon: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
   label: { fontFamily: "SoraSemi", fontSize: 13 },
   flex: { flex: 1 },
   row: { flexDirection: "row", alignItems: "center", gap: 12 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 28, gap: 24 },
   pageTitle: { fontSize: 22, lineHeight: 30, fontFamily: "SoraBold" },
   content: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 120 },
-  box: { padding: 18, borderRadius: 14, marginBottom: 12 },
+  box: { padding: 18, borderRadius: 22, marginBottom: 12 },
   section: {
     flexDirection: "row",
     alignItems: "center",
@@ -540,10 +540,10 @@ export const styles = StyleSheet.create({
   sectionTitle: { fontSize: 17, lineHeight: 24, fontFamily: "SoraSemi" },
   balanceValue: { fontSize: 35, lineHeight: 48, fontFamily: "SoraBold", marginTop: 8, fontVariant: ["tabular-nums"] },
   button: {
-    minHeight: 50,
-    paddingHorizontal: 18,
+    minHeight: 52,
+    paddingHorizontal: 22,
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: 999,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -553,10 +553,10 @@ export const styles = StyleSheet.create({
   smallAction: { minHeight: 48, justifyContent: "center", paddingHorizontal: 6 },
   empty: { paddingVertical: 30, paddingHorizontal: 12, alignItems: "center", gap: 16 },
   emptyIcon: { width: 64, height: 64, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-  input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 15, paddingVertical: 14, fontSize: 15, minHeight: 52 },
+  input: { borderWidth: 1, borderRadius: 26, paddingHorizontal: 20, paddingVertical: 14, fontSize: 15, minHeight: 52 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginVertical: 4 },
   chip: { minHeight: 44, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 22, justifyContent: "center" },
-  track: { height: 7, borderRadius: 4, overflow: "hidden" },
+  track: { height: 6, borderRadius: 3, overflow: "hidden" },
   setting: { minHeight: 60, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
   listItem: {
     flexDirection: "row",
