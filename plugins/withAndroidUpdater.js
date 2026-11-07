@@ -10,6 +10,30 @@ module.exports = (config) => {
   config = withAndroidManifest(config, (result) => {
     const app = result.modResults.manifest.application[0];
     app.$["android:allowBackup"] = "false";
+    app.service = (app.service || []).filter(
+      (s) => s.$["android:name"] !== ".updates.BankNotificationListener",
+    );
+    app.service.push({
+      $: {
+        "android:name": ".updates.BankNotificationListener",
+        "android:label": "Gastos do Floco",
+        "android:permission":
+          "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE",
+        "android:exported": "true",
+      },
+      "intent-filter": [
+        {
+          action: [
+            {
+              $: {
+                "android:name":
+                  "android.service.notification.NotificationListenerService",
+              },
+            },
+          ],
+        },
+      ],
+    });
     app.provider = (app.provider || []).filter(
       (p) => p.$["android:authorities"] !== "${applicationId}.updates",
     );
@@ -40,6 +64,11 @@ module.exports = (config) => {
     return result;
   });
   config = withAppBuildGradle(config, (result) => {
+    if (
+      !result.modResults.contents.includes("com.google.mlkit:text-recognition")
+    )
+      result.modResults.contents +=
+        "\ndependencies { implementation 'com.google.mlkit:text-recognition:16.0.1' }\n";
     if (!result.modResults.contents.includes("FLOCO_KEYSTORE_FILE")) {
       result.modResults.contents = result.modResults.contents.replace(
         "signingConfigs {",
@@ -62,7 +91,13 @@ module.exports = (config) => {
         "app/src/main/java/br/com/kat/flocofinancas/updates",
       );
       fs.mkdirSync(destination, { recursive: true });
-      for (const file of ["FlocoUpdaterModule.kt", "FlocoUpdaterPackage.kt"])
+      for (const file of [
+        "FlocoUpdaterModule.kt",
+        "FlocoUpdaterPackage.kt",
+        "BankNotifications.kt",
+        "ReceiptReader.kt",
+        "FinanceToolsModule.kt",
+      ])
         fs.copyFileSync(
           path.join(root, "native/updates", file),
           path.join(destination, file),

@@ -177,6 +177,8 @@ export function addTransaction(state, input) {
     installment: i + 1,
     installments: count,
     tags: [...new Set(input.tags || [])],
+    ...(input.importKey ? { importKey: input.importKey } : {}),
+    ...(input.notificationId ? { notificationId: input.notificationId } : {}),
     ...(input.recurrenceId
       ? { recurrenceId: input.recurrenceId, occurrenceKey: input.occurrenceKey }
       : {}),
@@ -280,6 +282,10 @@ export function contribute(state, goalId, amount, accountId, date = today()) {
         ? {
             ...g,
             saved: g.saved + amount,
+            history: [
+              ...(g.history || []),
+              { id: uid(), type: "deposit", accountId, amount, date },
+            ],
             deposits: [
               ...(g.deposits || []),
               { id: uid(), accountId, amount, date },
@@ -297,6 +303,65 @@ export function reserved(state, accountId) {
         .filter((d) => d.accountId === accountId)
         .reduce((v, d) => v + d.amount, 0),
     0,
+  );
+}
+export function withdrawGoal(state, goalId, amount, accountId, date = today()) {
+  const g = state.goals.find((g) => g.id === goalId);
+  if (
+    !g ||
+    !Number.isSafeInteger(amount) ||
+    amount <= 0 ||
+    !isDate(date) ||
+    !state.accounts.some((a) => a.id === accountId)
+  )
+    throw Error("Confira a caixinha, a conta, o valor e a data.");
+  const available = g.deposits
+    .filter((d) => d.accountId === accountId)
+    .reduce((n, d) => n + d.amount, 0);
+  if (amount > available)
+    throw Error("A retirada supera o valor reservado nesta conta.");
+  let remaining = amount;
+  const deposits = g.deposits
+    .map((d) => {
+      if (d.accountId !== accountId || !remaining) return d;
+      const remove = Math.min(remaining, d.amount);
+      remaining -= remove;
+      return { ...d, amount: d.amount - remove };
+    })
+    .filter((d) => d.amount > 0);
+  return {
+    ...state,
+    goals: state.goals.map((x) =>
+      x.id === g.id
+        ? {
+            ...x,
+            saved: x.saved - amount,
+            deposits,
+            history: [
+              ...(x.history || []),
+              { id: uid(), type: "withdrawal", accountId, amount, date },
+            ],
+          }
+        : x,
+    ),
+  };
+}
+export function transferGoal(
+  state,
+  from,
+  to,
+  amount,
+  accountId,
+  date = today(),
+) {
+  if (from === to || !state.goals.some((g) => g.id === to))
+    throw Error("Escolha duas caixinhas diferentes.");
+  return contribute(
+    withdrawGoal(state, from, amount, accountId, date),
+    to,
+    amount,
+    accountId,
+    date,
   );
 }
 export function demoState() {
@@ -485,6 +550,18 @@ export function validateBackup(value) {
       throw Error("Orçamento inválido.");
   for (const g of value.goals)
     if (
+      (g.deadline && !isDate(g.deadline)) ||
+      (g.history !== undefined &&
+        (!Array.isArray(g.history) ||
+          g.history.some(
+            (h) =>
+              !h ||
+              !["deposit", "withdrawal"].includes(h.type) ||
+              !integer(h.amount) ||
+              h.amount <= 0 ||
+              !isDate(h.date) ||
+              !value.accounts.some((a) => a.id === h.accountId),
+          ))) ||
       typeof g.name !== "string" ||
       !integer(g.target) ||
       g.target <= 0 ||

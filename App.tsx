@@ -16,12 +16,17 @@ import {
   KeyboardAvoidingView,
   Platform,
   useWindowDimensions,
+  NativeModules,
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
 import Feather from "@expo/vector-icons/Feather";
 import UpdatesPanel from "./src/UpdatesPanel";
+import NotificationsPanel from "./src/NotificationsPanel";
+import ImportsPanel from "./src/ImportsPanel";
+import ReceiptPanel from "./src/ReceiptPanel";
+import SecurityPanel from "./src/SecurityPanel";
 import usePublicUpdates from "./src/usePublicUpdates";
 import PlanningPanel, { planningOptions } from "./src/PlanningPanel";
 import { categoryNames } from "./src/planning.mjs";
@@ -50,6 +55,9 @@ import {
   deleteTransaction,
   spent,
   contribute,
+  withdrawGoal,
+  transferGoal,
+  isDate,
   reserved,
   validateBackup,
   totalBalance,
@@ -111,6 +119,9 @@ function FinanceApp() {
   const ref = useRef<any>(state);
   const queue = useRef(Promise.resolve());
   const [showUpdates, setShowUpdates] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showImports, setShowImports] = useState(false);
+  const [showReceipt, setShowReceipt] = useState(false);
   const [tool, setTool] = useState("");
   const [loaded, setLoaded] = useState(false),
     [storageError, setStorageError] = useState(""),
@@ -121,6 +132,28 @@ function FinanceApp() {
     [filter, setFilter] = useState("all"),
     [planning, setPlanning] = useState("budgets"),
     [cardId, setCardId] = useState("");
+  const [showSecurity, setShowSecurity] = useState(false);
+  const [pinEnabled, setPinEnabled] = useState(false),
+    [pinReady, setPinReady] = useState(false),
+    [pinValue, setPinValue] = useState(""),
+    [pinError, setPinError] = useState("");
+  const pinRef = useRef(false);
+  const refreshPin = async (initial = false) => {
+    try {
+      const result = NativeModules.FlocoFinanceTools
+        ? await NativeModules.FlocoFinanceTools.pinStatus()
+        : { enabled: false };
+      pinRef.current = !!result.enabled;
+      setPinEnabled(!!result.enabled);
+      if (initial && result.enabled) setLocked(true);
+      setPinReady(true);
+    } catch {
+      setPinError("Não foi possível verificar o PIN. Reabra o app.");
+    }
+  };
+  useEffect(() => {
+    void refreshPin(true);
+  }, []);
   const [locked, setLocked] = useState(false),
     [authBusy, setAuthBusy] = useState(false),
     [notice, setNotice] = useState(""),
@@ -145,7 +178,7 @@ function FinanceApp() {
           restored.settings.biometric = !!parsed.settings?.biometric;
           ref.current = restored;
           setState(restored);
-          setLocked(restored.settings.biometric);
+          setLocked(restored.settings.biometric || pinRef.current);
         }
       } catch (e) {
         setStorageError(
@@ -158,7 +191,10 @@ function FinanceApp() {
   }, []);
   useEffect(() => {
     const sub = AppState.addEventListener("change", (status) => {
-      if (status !== "active" && ref.current.settings.biometric)
+      if (
+        status !== "active" &&
+        (ref.current.settings.biometric || pinRef.current)
+      )
         setLocked(true);
     });
     return () => sub.remove();
@@ -347,18 +383,40 @@ function FinanceApp() {
               : [...s.budgets, { id: uid(), category: f.category, amount }],
           };
         }
+        if (f.kind === "withdraw")
+          return withdrawGoal(
+            s,
+            f.goalId,
+            parseMoney(f.amount),
+            f.accountId,
+            f.date,
+          );
+        if (f.kind === "reserveTransfer")
+          return transferGoal(
+            s,
+            f.goalId,
+            f.destinationGoalId,
+            parseMoney(f.amount),
+            f.accountId,
+            f.date,
+          );
         if (f.kind === "goal") {
+          if (f.deadline && !isDate(f.deadline))
+            throw Error("Informe o prazo como AAAA-MM-DD.");
           if (!f.name.trim()) throw Error("Dê um nome à sua meta.");
           return {
             ...s,
             goals: [
-              ...s.goals,
+              ...s.goals.filter((g: any) => g.id !== f.id),
               {
-                id: uid(),
+                ...(s.goals.find((g: any) => g.id === f.id) || {
+                  id: uid(),
+                  saved: 0,
+                  deposits: [],
+                }),
                 name: f.name.trim(),
                 target: parseMoney(f.target),
-                saved: 0,
-                deposits: [],
+                deadline: f.deadline || "",
               },
             ],
           };
@@ -963,30 +1021,71 @@ function FinanceApp() {
       </T>
     </Pressable>
   ));
-  if (!loaded)
+  if (!loaded || !pinReady)
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: c.bg }]}>
         <ActivityIndicator color={c.primary} />
         <Text>Carregando finanças…</Text>
       </SafeAreaView>
     );
-  if (locked)
-    return (
-      <SafeAreaView style={[styles.center, { backgroundColor: c.bg }]}>
-        <StatusBar style={state.settings.dark ? "light" : "dark"} />
-        <I name="lock" size={42} color={c.primary} />
-        <T style={styles.pageTitle}>Suas finanças protegidas</T>
-        <T style={{ color: c.muted, textAlign: "center" }}>
-          Use a biometria ou o bloqueio do Android para entrar.
-        </T>
-        <Button
-          title={authBusy ? "Autenticando…" : "Desbloquear"}
-          disabled={authBusy}
-          onPress={unlock}
-          icon="unlock"
-        />
-      </SafeAreaView>
-    );
+  const lockContent = (
+    <SafeAreaView style={[styles.center, { backgroundColor: c.bg }]}>
+      <StatusBar style={state.settings.dark ? "light" : "dark"} />
+      <I name="lock" size={42} color={c.primary} />
+      <T style={styles.pageTitle}>Suas finanças protegidas</T>
+      <T style={{ color: c.muted, textAlign: "center" }}>
+        Use seu PIN do Floco ou confirme o bloqueio do Android para entrar.
+      </T>
+      {pinEnabled && (
+        <View style={{ alignSelf: "stretch", padding: 20, gap: 12 }}>
+          <TextInput
+            accessibilityLabel="PIN do Floco"
+            secureTextEntry
+            keyboardType="number-pad"
+            maxLength={12}
+            value={pinValue}
+            onChangeText={setPinValue}
+            style={{
+              minHeight: 52,
+              padding: 14,
+              borderWidth: 1,
+              borderColor: c.line,
+              borderRadius: 12,
+              color: c.text,
+              backgroundColor: c.surface,
+            }}
+          />
+          <Button
+            title="Entrar com PIN"
+            disabled={authBusy}
+            onPress={async () => {
+              setAuthBusy(true);
+              try {
+                const valid =
+                  await NativeModules.FlocoFinanceTools.verifyPin(pinValue);
+                setPinValue("");
+                if (valid) {
+                  setLocked(false);
+                  setPinError("");
+                } else setPinError("PIN incorreto.");
+              } catch (e: any) {
+                setPinError(e.message);
+              } finally {
+                setAuthBusy(false);
+              }
+            }}
+          />
+          {!!pinError && <T style={{ color: c.red }}>{pinError}</T>}
+        </View>
+      )}
+      <Button
+        title={authBusy ? "Autenticando…" : "Usar bloqueio do Android"}
+        disabled={authBusy}
+        onPress={unlock}
+        icon="unlock"
+      />
+    </SafeAreaView>
+  );
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: c.bg }}
@@ -1723,6 +1822,49 @@ function FinanceApp() {
                               size={26}
                             />
                           </View>
+                          {!!g.deadline && (
+                            <T style={styles.muted}>Prazo: {g.deadline}</T>
+                          )}
+                          <Button
+                            title="Editar meta"
+                            secondary
+                            onPress={() =>
+                              open("goal", {
+                                ...g,
+                                target: (g.target / 100)
+                                  .toFixed(2)
+                                  .replace(".", ","),
+                              })
+                            }
+                          />
+                          <Button
+                            title="Retirar da caixinha"
+                            secondary
+                            onPress={() => open("withdraw", { goalId: g.id })}
+                          />
+                          <Button
+                            title="Transferir para outra caixinha"
+                            secondary
+                            onPress={() =>
+                              open("reserveTransfer", {
+                                goalId: g.id,
+                                destinationGoalId:
+                                  state.goals.find((x: any) => x.id !== g.id)
+                                    ?.id || "",
+                              })
+                            }
+                          />
+                          {!!g.history?.length && (
+                            <T style={styles.muted}>
+                              {g.history
+                                .slice(-5)
+                                .map(
+                                  (h: any) =>
+                                    `${h.date} · ${h.type === "deposit" ? "Depósito" : "Retirada"} · ${showMoney(h.amount)}`,
+                                )
+                                .join("\n")}
+                            </T>
+                          )}
                           <View style={{ marginVertical: 18 }}>
                             <Progress value={g.saved} max={g.target} />
                           </View>
@@ -1778,6 +1920,13 @@ function FinanceApp() {
             {screen === "accounts" && accountsContent}
             {screen === "more" && (
               <>
+                <Section title="Registrar pelos bancos" />
+                <Button
+                  title="Notificações bancárias"
+                  icon="bell"
+                  onPress={() => setShowNotifications(true)}
+                />
+
                 {["Organizar", "Planejar", "Acompanhar", "Analisar"].map(
                   (group) => (
                     <View key={group}>
@@ -1849,6 +1998,11 @@ function FinanceApp() {
                   ),
                 )}
                 <Section title="Preferências" />
+                <Button
+                  title="PIN e backup criptografado"
+                  icon="shield"
+                  onPress={() => setShowSecurity(true)}
+                />
                 <Box>
                   <View style={styles.setting}>
                     <View style={styles.row}>
@@ -1910,6 +2064,16 @@ function FinanceApp() {
                   />
                 </Box>
                 <Section title="Seus dados" />
+                <Button
+                  title="Ler comprovante / PDF"
+                  icon="camera"
+                  onPress={() => setShowReceipt(true)}
+                />
+                <Button
+                  title="Importar extrato CSV / OFX"
+                  icon="file-text"
+                  onPress={() => setShowImports(true)}
+                />
                 <Box>
                   <Button
                     title="Salvar backup JSON"
@@ -2032,7 +2196,7 @@ function FinanceApp() {
           )}
         </View>
       </View>
-      {!!tool && !locked && (
+      {!!tool && (
         <PlanningPanel
           state={state}
           c={c}
@@ -2042,7 +2206,49 @@ function FinanceApp() {
         />
       )}
       <Modal
-        visible={showUpdates && !locked}
+        visible={showReceipt}
+        animationType="slide"
+        onRequestClose={() => setShowReceipt(false)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
+          <ReceiptPanel
+            state={state}
+            c={c}
+            onChange={perform}
+            onClose={() => setShowReceipt(false)}
+          />
+        </SafeAreaView>
+      </Modal>
+      <Modal
+        visible={showImports}
+        animationType="slide"
+        onRequestClose={() => setShowImports(false)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
+          <ImportsPanel
+            state={state}
+            c={c}
+            onChange={perform}
+            onClose={() => setShowImports(false)}
+          />
+        </SafeAreaView>
+      </Modal>
+      <Modal
+        visible={showNotifications}
+        animationType="slide"
+        onRequestClose={() => setShowNotifications(false)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
+          <NotificationsPanel
+            state={state}
+            c={c}
+            onChange={perform}
+            onClose={() => setShowNotifications(false)}
+          />
+        </SafeAreaView>
+      </Modal>
+      <Modal
+        visible={showUpdates}
         animationType="slide"
         onRequestClose={() => setShowUpdates(false)}
       >
@@ -2080,6 +2286,8 @@ function FinanceApp() {
                       budget: "Orçamento mensal",
                       goal: "Nova meta",
                       deposit: "Guardar dinheiro",
+                      withdraw: "Retirar reserva",
+                      reserveTransfer: "Transferir reserva",
                       payment: "Pagar fatura",
                     } as any
                   )[form?.kind]
@@ -2555,6 +2763,12 @@ function FinanceApp() {
                         autoFocus
                       />
                       <Field
+                        label="Prazo opcional (AAAA-MM-DD)"
+                        value={form.deadline || ""}
+                        onChange={(v: string) => update("deadline", v)}
+                        c={c}
+                      />
+                      <Field
                         label="Quanto quer guardar? (R$)"
                         value={form.target}
                         onChange={(v: string) => update("target", v)}
@@ -2563,7 +2777,9 @@ function FinanceApp() {
                       />
                     </>
                   )}
-                  {form.kind === "deposit" && (
+                  {["deposit", "withdraw", "reserveTransfer"].includes(
+                    form.kind,
+                  ) && (
                     <>
                       <Choice
                         label="Meta"
@@ -2573,7 +2789,7 @@ function FinanceApp() {
                         c={c}
                       />
                       <Field
-                        label="Valor para reservar (R$)"
+                        label="Valor (R$)"
                         value={form.amount}
                         onChange={(v: string) => update("amount", v)}
                         c={c}
@@ -2590,6 +2806,17 @@ function FinanceApp() {
                         c={c}
                       />
                     </>
+                  )}
+                  {form.kind === "reserveTransfer" && (
+                    <Choice
+                      label="Caixinha de destino"
+                      values={state.goals
+                        .filter((g: any) => g.id !== form.goalId)
+                        .map((g: any) => [g.id, g.name])}
+                      value={form.destinationGoalId}
+                      onChange={(v: string) => update("destinationGoalId", v)}
+                      c={c}
+                    />
                   )}
                   {form.kind === "payment" && (
                     <>
@@ -2644,6 +2871,24 @@ function FinanceApp() {
             </ScrollView>
           </KeyboardAvoidingView>
         </SafeAreaView>
+      </Modal>
+      <Modal
+        visible={showSecurity}
+        animationType="slide"
+        onRequestClose={() => setShowSecurity(false)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
+          <SecurityPanel
+            state={state}
+            c={c}
+            onClose={() => setShowSecurity(false)}
+            onChange={perform}
+            onPinChange={() => refreshPin()}
+          />
+        </SafeAreaView>
+      </Modal>
+      <Modal visible={locked} animationType="fade" onRequestClose={() => {}}>
+        {lockContent}
       </Modal>
     </SafeAreaView>
   );
