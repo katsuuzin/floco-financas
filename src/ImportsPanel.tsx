@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -41,10 +41,23 @@ export default function ImportsPanel({ state, c, onChange, onClose }: any) {
       {v}
     </Text>
   );
-  const button = (label: string, fn: any) => (
+  const button = (
+    label: string,
+    fn: any,
+    selectedState?: boolean,
+    role: any = "button",
+  ) => (
     <Pressable
       disabled={busy}
-      accessibilityRole="button"
+      accessibilityRole={role}
+      accessibilityState={{
+        disabled: busy,
+        ...(selectedState === undefined
+          ? {}
+          : role === "radio"
+            ? { checked: selectedState }
+            : { checked: selectedState }),
+      }}
       onPress={fn}
       style={({ pressed }) => ({
         minHeight: 48,
@@ -157,10 +170,18 @@ export default function ImportsPanel({ state, c, onChange, onClose }: any) {
   };
   const confirmImport = () => {
     if (!state.accounts.some((a: any) => a.id === account)) {
+      Alert.alert(
+        "Escolha a conta",
+        "Selecione uma conta de destino antes de importar.",
+      );
       setError("Escolha uma conta de destino antes de importar.");
       return;
     }
     if (!selected.length) {
+      Alert.alert(
+        "Selecione os lan�amentos",
+        "Marque as linhas revisadas antes de importar.",
+      );
       setError("Selecione as linhas revisadas.");
       return;
     }
@@ -206,7 +227,17 @@ export default function ImportsPanel({ state, c, onChange, onClose }: any) {
   };
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <View style={{ padding: 16, borderBottomWidth: 1, borderColor: c.line }}>
+      <View
+        style={{
+          paddingHorizontal: 16,
+          paddingVertical: 4,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 16,
+          borderBottomWidth: 1,
+          borderColor: c.line,
+        }}
+      >
         {button("Voltar", onClose)}
         {text("Importar extrato", true)}
       </View>
@@ -217,14 +248,20 @@ export default function ImportsPanel({ state, c, onChange, onClose }: any) {
         {text(
           "Importar soma lançamentos realizados a uma conta existente. Não substitui os dados. Confira conta, datas, valores e possíveis duplicatas antes de confirmar.",
         )}
+        {button("Escolher arquivo CSV, OFX, PDF ou XLSX", pick)}
         {text("Conta de destino", true)}
         {!state.accounts.length &&
           text("Cadastre uma conta em Mais → Contas antes de importar.")}
         {state.accounts.map((a: any) =>
-          button((account === a.id ? "✓ " : "") + a.name, () => {
-            setAccount(a.id);
-            setSelected([]);
-          }),
+          button(
+            (account === a.id ? "✓ " : "") + a.name,
+            () => {
+              setAccount(a.id);
+              setSelected([]);
+            },
+            account === a.id,
+            "radio",
+          ),
         )}
         {text(
           "CSV: Data;Descrição;Valor (R$);Tipo;Categoria. Datas AAAA-MM-DD ou DD/MM/AAAA, valores brasileiros. OFX: lançamentos bancários e FITID. Transferências CSV devem ser lançadas entre duas contas no Floco.",
@@ -244,7 +281,6 @@ export default function ImportsPanel({ state, c, onChange, onClose }: any) {
             setSelected([]);
           },
         )}
-        {button("Escolher arquivo CSV, OFX, PDF ou XLSX", pick)}
         {busy && (
           <ActivityIndicator
             color={c.primary}
@@ -353,13 +389,15 @@ export default function ImportsPanel({ state, c, onChange, onClose }: any) {
                       {button(
                         selected.includes(index)
                           ? "✓ Selecionada — remover"
-                          : "Selecionar linha",
+                          : `Selecionar ${r.date}, ${r.description}, ${r.type === "income" ? "receita" : "despesa"}, ${state.settings.hide ? "valor oculto" : money(r.amount)}`,
                         () =>
                           setSelected(
                             selected.includes(index)
                               ? selected.filter((i) => i !== index)
                               : [...selected, index],
                           ),
+                        selected.includes(index),
+                        "checkbox",
                       )}
                     </>
                   )}
@@ -390,6 +428,11 @@ export default function ImportsPanel({ state, c, onChange, onClose }: any) {
             backgroundColor: c.surface,
           }}
         >
+          {!!error && (
+            <Text accessibilityLiveRegion="assertive" style={{ color: c.red }}>
+              {error}
+            </Text>
+          )}
           {text(`${selected.length} selecionadas de ${rows.length}`)}
           {button("Importar selecionadas", confirmImport)}
         </View>

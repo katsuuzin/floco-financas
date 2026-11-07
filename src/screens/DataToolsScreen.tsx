@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useRef } from "react";
 import { Alert } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
@@ -11,7 +11,12 @@ import { exportCSV } from "./SettingsScreen";
 export default function DataToolsScreen() {
   const nav = useNav();
   const { current, perform, confirm } = useStore();
+  const [busy, setBusy] = useState(false);
+  const locked = useRef(false);
   const run = async (fn: any) => {
+    if (locked.current) return;
+    locked.current = true;
+    setBusy(true);
     try {
       await fn();
     } catch (e: any) {
@@ -56,6 +61,9 @@ export default function DataToolsScreen() {
     });
   return (
     <>
+      {busy && (
+        <Muted accessibilityLiveRegion="polite">Preparando arquivo�</Muted>
+      )}
       <Box>
         <Muted>
           A importação soma lançamentos sem apagar o que já existe. Restaurar um
@@ -71,7 +79,7 @@ export default function DataToolsScreen() {
       />
       <ListItem
         icon="file"
-        label="Extrato PDF do banco"
+        label="Extrato PDF Nubank"
         detail="Conferência de movimentações e saldos"
         onPress={() => nav.push({ name: "imports" })}
       />

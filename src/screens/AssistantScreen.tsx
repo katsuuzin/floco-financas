@@ -1,5 +1,5 @@
 // F8 — Assistente: insights e saúde financeira locais; chat, resumo e plano com IA opcional.
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { View, ActivityIndicator } from "react-native";
 import {
   T,
@@ -60,9 +60,12 @@ export default function AssistantScreen() {
       alive = false;
     };
   }, [ai.provider]);
-  const h = healthScore(state);
-  const insights = monthInsights(state, monthKey(today()));
-  const plan = actionPlan(state);
+  const h = useMemo(() => healthScore(state), [state]);
+  const insights = useMemo(
+    () => monthInsights(state, monthKey(today())),
+    [state],
+  );
+  const plan = useMemo(() => actionPlan(state), [state]);
   const history: any[] = state.settings.healthHistory || [];
   const saveAi = (patch: any) =>
     perform(
@@ -136,8 +139,10 @@ export default function AssistantScreen() {
               {h.factors.map((f: any) => (
                 <View key={f.id}>
                   <View style={[k.row, { justifyContent: "space-between" }]}>
-                    <T style={{ fontSize: 13 }}>{f.label}</T>
-                    <Muted>
+                    <T style={{ fontSize: 13, flex: 1, flexShrink: 1 }}>
+                      {f.label}
+                    </T>
+                    <Muted style={{ flexShrink: 0 }}>
                       {Math.round(f.score * f.weight)}/{f.weight}
                     </Muted>
                   </View>
@@ -256,7 +261,7 @@ export default function AssistantScreen() {
               onPress={() =>
                 run("chat", async () => {
                   const next = [
-                    ...chat,
+                    ...chat.slice(-18),
                     { role: "user" as const, text: question.trim() },
                   ];
                   setChat(next);
@@ -285,24 +290,29 @@ export default function AssistantScreen() {
                 enviados a provedores.
               </Muted>
             </Box>
-            {LOCAL_QUESTIONS.map((q) => (
-              <Button
-                key={q}
-                title={q}
-                secondary
-                onPress={() =>
-                  setChat([
-                    ...chat,
-                    { role: "user", text: q },
-                    { role: "assistant", text: answerLocal(state, q) },
-                  ])
-                }
-              />
-            ))}
+            {!chat.length &&
+              LOCAL_QUESTIONS.map((q) => (
+                <Button
+                  key={q}
+                  title={q}
+                  secondary
+                  onPress={() =>
+                    setChat([
+                      ...chat.slice(-18),
+                      { role: "user", text: q },
+                      { role: "assistant", text: answerLocal(state, q) },
+                    ])
+                  }
+                />
+              ))}
             {chat.map((m, i) => (
               <Box key={i}>
-                <Muted>{m.role === "user" ? "Você" : "Assistente local"}</Muted>
-                <T>{m.text}</T>
+                <View accessible accessibilityLiveRegion="polite">
+                  <Muted>
+                    {m.role === "user" ? "Você" : "Assistente local"}
+                  </Muted>
+                  <T>{m.text}</T>
+                </View>
               </Box>
             ))}
             <Field
@@ -317,7 +327,7 @@ export default function AssistantScreen() {
               onPress={() => {
                 const q = question.trim();
                 setChat([
-                  ...chat,
+                  ...chat.slice(-18),
                   { role: "user", text: q },
                   { role: "assistant", text: answerLocal(state, q) },
                 ]);

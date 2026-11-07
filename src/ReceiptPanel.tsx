@@ -109,6 +109,14 @@ export default function ReceiptPanel({ state, c, onChange, onClose }: any) {
       {text(label, true)}
       <TextInput
         accessibilityLabel={label}
+        keyboardType={
+          key === "amount"
+            ? "decimal-pad"
+            : key === "date"
+              ? "numbers-and-punctuation"
+              : "default"
+        }
+        maxLength={key === "date" ? 10 : key === "amount" ? 16 : 100}
         value={form[key]}
         onChangeText={(v) => setForm({ ...form, [key]: v })}
         style={{
@@ -155,7 +163,17 @@ export default function ReceiptPanel({ state, c, onChange, onClose }: any) {
   );
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <View style={{ padding: 16, borderBottomWidth: 1, borderColor: c.line }}>
+      <View
+        style={{
+          paddingHorizontal: 16,
+          paddingVertical: 4,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 16,
+          borderBottomWidth: 1,
+          borderColor: c.line,
+        }}
+      >
         {button("Voltar", onClose)}
         {text("Ler comprovante / PDF", true)}
       </View>
