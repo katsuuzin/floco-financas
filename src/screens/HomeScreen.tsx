@@ -174,7 +174,7 @@ function FirstSteps() {
             accessibilityState={{ checked: step.done }}
             disabled={step.done}
             onPress={go[step.id]}
-            style={[k.row, { minHeight: 48 }]}
+            style={[k.row, { minHeight: 48, paddingVertical: 6 }]}
           >
             <I name={step.done ? "check-circle" : "circle"} color={step.done ? c.green : c.muted} />
             <T style={{ flex: 1, textDecorationLine: step.done ? "line-through" : "none", opacity: step.done ? 0.6 : 1 }}>{step.label}</T>

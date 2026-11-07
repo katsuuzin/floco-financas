@@ -91,6 +91,17 @@ PIN, backup criptografado com versões, Google Drive opcional, sync com conflito
 - **Arquivos nativos fora do plugin:** os layouts e o XML dos widgets e as entradas novas do `AndroidManifest.xml` (receivers, esquema `floco`, `POST_NOTIFICATIONS`) foram feitos direto em `android/`. Um `expo prebuild --clean` apagaria isso. Não rode prebuild sem antes passar essas mudanças para `plugins/withAndroidUpdater.js`.
 - **Testes:** 95.
 
+**Resultado da F7 (7/11/2026):** APK universal (ARM64 + x86_64) 1.3.0, versionCode 6, assinado com o mesmo certificado das versões anteriores (SHA-256 `ea08d8…cad2`). Validado no emulador Android 15:
+- atualização sobre a 1.1.1 com dados, com saldos e pendências idênticos;
+- fonte em 130%;
+- botão voltar;
+- link `floco://`;
+- registro dos dois widgets;
+- criação de empréstimo Price com pagamento parcial;
+- lembretes e assistente.
+
+Publicado como release `v1.3.0` em `katsuuzin/floco-financas`. **Não testado:** aparelho físico, TalkBack completo, captura real de notificação ou SMS de banco, OCR com comprovante real e o PDF aberto num leitor externo.
+
 ### F7 — Conferência final e entrega (Etapa 6)
 Repetir as fichas da F1 no Floco, com acessibilidade (TalkBack, fonte grande), modo offline, restauração e atualização do APK. Publicar a release assinada.
 

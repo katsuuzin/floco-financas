@@ -1,8 +1,8 @@
-param(
+﻿param(
   [Parameter(Mandatory=$true)][string]$JavaHome,
   [Parameter(Mandatory=$true)][string]$Java17Home,
   [Parameter(Mandatory=$true)][string]$AndroidSdk,
-  [ValidateSet('arm64-v8a','x86_64')][string]$Architecture='arm64-v8a',
+  [ValidateSet('arm64-v8a','x86_64','universal')][string]$Architecture='arm64-v8a',
   # O Android Gradle Plugin recusa caminhos com acentos ("Finanças") e o CMake do NDK falha
   # através de junções. Por isso o build roda numa cópia espelhada em um caminho ASCII.
   # A cópia é descartável: edite sempre o repositório, nunca esta pasta.
@@ -37,7 +37,7 @@ try {
   Set-Location -LiteralPath $BuildDir
   # Windows PowerShell 5.1 converte o stderr do Gradle em erro; o resultado é conferido por $LASTEXITCODE.
   $ErrorActionPreference='Continue'
-  & '.\android\gradlew.bat' -p android assembleRelease "-PreactNativeArchitectures=$Architecture" '-Pandroid.compileSdkVersion=37' '-Pandroid.buildToolsVersion=37.0.0' "-Porg.gradle.java.installations.paths=$taskJava17" '-Porg.gradle.java.installations.auto-download=false' '-Pkotlin.incremental=false' '-Pkotlin.compiler.execution.strategy=in-process' --max-workers=4 --console=plain
+  & '.\android\gradlew.bat' -p android assembleRelease "-PreactNativeArchitectures=$(if ($Architecture -eq 'universal') { 'arm64-v8a,x86_64' } else { $Architecture })" '-Pandroid.compileSdkVersion=37' '-Pandroid.buildToolsVersion=37.0.0' "-Porg.gradle.java.installations.paths=$taskJava17" '-Porg.gradle.java.installations.auto-download=false' '-Pkotlin.incremental=false' '-Pkotlin.compiler.execution.strategy=in-process' --max-workers=4 --console=plain
   if ($LASTEXITCODE -ne 0) { throw 'A compilação falhou. Leia a mensagem do Gradle acima.' }
   $ErrorActionPreference='Stop'
   $out = Join-Path $PSScriptRoot 'entrega'
