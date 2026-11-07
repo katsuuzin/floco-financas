@@ -4,6 +4,9 @@ import { T, Muted, I, Box, Section, Button, Empty, IconButton, Progress, styles 
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav, destination } from "../app/nav";
+import { useBankInbox } from "../app/inbox";
+import InboxSheet from "./InboxSheet";
+import { suggestNotification } from "../notification-import.mjs";
 import { layoutOf, firstSteps, DESTINATIONS } from "../layout.mjs";
 import { monthInsights } from "../insights.mjs";
 import { normalizeBudget, budgetUsage } from "../analysis.mjs";
@@ -15,6 +18,9 @@ import {
   invoice,
   monthKey,
   today,
+  addMonths,
+  signedAmount,
+  invoiceDueDate,
   demoState,
   balance,
   reserved,
@@ -189,6 +195,210 @@ function FirstSteps() {
   );
 }
 
+const INBOX_ICON: Record<string, any> = { card: "credit-card", pixIn: "arrow-down-left", transferIn: "arrow-down-left", income: "arrow-down-left" };
+
+function PendingInbox() {
+  const { c } = useTheme();
+  const { state } = useStore();
+  const nav = useNav();
+  const inbox = useBankInbox(state);
+  const [open, setOpen] = React.useState<any>(null);
+  const st = inbox.status;
+  const working = st?.available && st.permission && st.enabled;
+  if (!st) return null;
+  if (!working)
+    return (
+      <>
+        <Section title="Leitura automática" />
+        <Box style={{ gap: 10 }}>
+          <T style={{ fontFamily: "SoraSemi" }}>{!st.available ? "Atualize o Floco para ler notificações" : "Ligue a leitura das notificações do banco"}</T>
+          <Muted>
+            O Floco lê as notificações de compra e Pix do seu banco e deixa cada uma aqui para você confirmar. Nada é lançado sem a sua confirmação.
+          </Muted>
+          {st.available && (
+            <>
+              <Muted>
+                1. Toque em “Permitir acesso” e ative o Floco Finanças.{"\n"}2. Se a opção estiver bloqueada (“configuração restrita”), abra as informações do app, toque em ⋮ e em “Permitir configurações restritas”, e repita o passo 1.
+              </Muted>
+              <Button title="Permitir acesso" icon="bell" onPress={() => inbox.native.openSettings().catch(() => {})} />
+              <Button title="Abrir informações do app" secondary icon="info" onPress={() => inbox.native.openAppInfo?.().catch(() => {})} />
+              {!st.enabled && <Button title="Ligar captura" secondary onPress={() => inbox.native.setEnabled(true).then(inbox.refresh)} />}
+            </>
+          )}
+        </Box>
+      </>
+    );
+  return (
+    <>
+      <Section title={`Pendentes (${inbox.rows.length})`} action="Ajustes" onPress={() => nav.push({ name: "notifications" })} />
+      {inbox.rows.length ? (
+        <Box style={{ padding: 0, overflow: "hidden" }}>
+          {inbox.rows.slice(0, 12).map((row: any, i: number, all: any[]) => {
+            const sug = suggestNotification(row);
+            const income = sug.type === "income";
+            return (
+              <View key={row.id} style={[k.row, i < all.length - 1 && k.hairline, { borderBottomColor: c.line, paddingLeft: 14, paddingRight: 4, minHeight: 64 }]}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${sug.kindLabel}: ${sug.description}, ${sug.amount ? "R$ " + sug.amount : "sem valor"}. Revisar e confirmar`}
+                  onPress={() => setOpen(row)}
+                  android_ripple={{ color: c.soft }}
+                  style={[k.row, { flex: 1, paddingVertical: 10 }]}
+                >
+                  <View style={{ width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: c.soft }}>
+                    <I name={INBOX_ICON[sug.kind] || "arrow-up-right"} size={18} color={income ? c.green : c.red} />
+                  </View>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <T numberOfLines={1} style={{ fontFamily: "SoraSemi", fontSize: 14 }}>
+                      {sug.description}
+                    </T>
+                    <Muted numberOfLines={1}>
+                      {sug.kindLabel} · {row.bank}
+                    </Muted>
+                  </View>
+                  <T style={{ fontFamily: "SoraSemi", color: income ? c.green : c.red, fontVariant: ["tabular-nums"] }}>{sug.amount ? `R$ ${sug.amount}` : "—"}</T>
+                </Pressable>
+                <IconButton name="x" label={`Descartar ${sug.description}`} onPress={() => inbox.dismiss(row.id)} />
+              </View>
+            );
+          })}
+        </Box>
+      ) : (
+        <Box>
+          <Muted>
+            Nenhuma notificação pendente.
+            {st.lastSeen?.time
+              ? ` Última vista: ${st.lastSeen.bank} às ${new Date(st.lastSeen.time).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} (${st.lastSeen.reason}).`
+              : " Assim que o banco avisar uma compra ou Pix, ela aparece aqui."}
+          </Muted>
+        </Box>
+      )}
+      <InboxSheet
+        row={open}
+        onClose={() => setOpen(null)}
+        onDone={(id) => {
+          setOpen(null);
+          void inbox.dismiss(id);
+        }}
+      />
+    </>
+  );
+}
+
+// Contas com saldo atual e previsto (inclui pendências do mês) e total.
+function AccountsSummary() {
+  const { c } = useTheme();
+  const { state, show } = useStore();
+  const nav = useNav();
+  const month = nav.month;
+  const accounts = state.accounts.filter((a: any) => !a.archived);
+  if (!accounts.length) return <AccountList />;
+  const forecast = (id: string) =>
+    balance(state, id) +
+    state.transactions
+      .filter((t: any) => !t.confirmed && !t.cardId && monthKey(t.date) <= month && (t.accountId === id || t.destinationId === id))
+      .reduce((n: number, t: any) => n + (t.accountId === id ? signedAmount(t) + (t.paidPart || 0) : 0) + (t.type === "transfer" && t.destinationId === id ? t.amount : 0), 0);
+  const included = accounts.filter((a: any) => a.includeInTotal !== false);
+  const total = included.reduce((n: number, a: any) => n + balance(state, a.id), 0);
+  const totalF = included.reduce((n: number, a: any) => n + forecast(a.id), 0);
+  const money2 = (n: number, hidden = false) => (n < 0 ? "−" : "") + show(Math.abs(n), hidden);
+  return (
+    <>
+      <Section title="Contas" action="Ver" onPress={() => nav.push({ name: "accounts" })} />
+      <Box style={{ padding: 0, overflow: "hidden" }}>
+        {accounts.map((a: any) => {
+          const hidden = accountBalanceHidden(state, a.id);
+          const b = balance(state, a.id),
+            f = forecast(a.id);
+          return (
+            <Pressable
+              key={a.id}
+              accessibilityRole="button"
+              onPress={() => nav.push({ name: "form", kind: "account", initial: { ...a, initial: (a.initial / 100).toFixed(2).replace(".", ",") } })}
+              android_ripple={{ color: c.soft }}
+              style={[k.row, k.hairline, { borderBottomColor: c.line, paddingHorizontal: 14, paddingVertical: 12 }]}
+            >
+              <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: a.color || c.primary, alignItems: "center", justifyContent: "center" }}>
+                <T style={{ color: "#FFFFFF", fontFamily: "SoraBold" }}>{a.name.slice(0, 1).toUpperCase()}</T>
+              </View>
+              <View style={{ flex: 1 }}>
+                <T style={{ fontFamily: "SoraSemi" }}>{a.name}</T>
+                <Muted>Previsto{a.includeInTotal === false ? " · fora do total" : ""}</Muted>
+              </View>
+              <View style={{ alignItems: "flex-end" }}>
+                <T style={{ fontFamily: "SoraSemi", color: b < 0 ? c.red : c.text }}>{money2(b, hidden)}</T>
+                <Muted style={{ color: f < 0 ? c.red : c.muted }}>{money2(f, hidden)}</Muted>
+              </View>
+            </Pressable>
+          );
+        })}
+        <View style={[k.row, { paddingHorizontal: 14, paddingVertical: 12 }]}>
+          <View style={{ flex: 1 }}>
+            <T style={{ fontFamily: "SoraSemi" }}>Total</T>
+            <Muted>Previsto</Muted>
+          </View>
+          <View style={{ alignItems: "flex-end" }}>
+            <T style={{ fontFamily: "SoraBold", color: total < 0 ? c.red : c.text }}>{money2(total)}</T>
+            <Muted style={{ color: totalF < 0 ? c.red : c.muted }}>{money2(totalF)}</Muted>
+          </View>
+        </View>
+      </Box>
+    </>
+  );
+}
+
+// Cartões com a fatura do mês e o total da próxima.
+function CardsSummary() {
+  const { c } = useTheme();
+  const { state, show } = useStore();
+  const nav = useNav();
+  const month = nav.month;
+  const next = monthKey(addMonths(month + "-01", 1));
+  const cards = state.cards.filter((x: any) => !x.archived);
+  if (!cards.length) return null;
+  const totalNow = cards.reduce((n: number, x: any) => n + invoice(state, x.id, month).due, 0);
+  const totalNext = cards.reduce((n: number, x: any) => n + invoice(state, x.id, next).due, 0);
+  return (
+    <>
+      <Section title="Cartões" action="Ver" onPress={() => nav.push({ name: "cards" })} />
+      <Box style={{ padding: 0, overflow: "hidden" }}>
+        {cards.map((x: any) => {
+          const bill = invoice(state, x.id, month);
+          const status = bill.total === 0 ? "Sem fatura aberta" : bill.due === 0 ? "Fatura paga" : `Vence ${invoiceDueDate(x, month).split("-").reverse().join("/").slice(0, 5)}`;
+          return (
+            <Pressable
+              key={x.id}
+              accessibilityRole="button"
+              onPress={() => nav.push({ name: "cards", cardId: x.id })}
+              android_ripple={{ color: c.soft }}
+              style={[k.row, k.hairline, { borderBottomColor: c.line, paddingHorizontal: 14, paddingVertical: 12 }]}
+            >
+              <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: x.color || c.primary, alignItems: "center", justifyContent: "center" }}>
+                <I name="credit-card" size={18} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <T style={{ fontFamily: "SoraSemi" }}>{x.name}</T>
+                <Muted>{status}</Muted>
+              </View>
+              <T style={{ fontFamily: "SoraSemi" }}>{show(bill.due)}</T>
+            </Pressable>
+          );
+        })}
+        <View style={[k.row, { paddingHorizontal: 14, paddingVertical: 12 }]}>
+          <View style={{ flex: 1 }}>
+            <T style={{ fontFamily: "SoraSemi" }}>Total</T>
+            <Muted>Próxima</Muted>
+          </View>
+          <View style={{ alignItems: "flex-end" }}>
+            <T style={{ fontFamily: "SoraBold" }}>{show(totalNow)}</T>
+            <Muted>{show(totalNext)}</Muted>
+          </View>
+        </View>
+      </Box>
+    </>
+  );
+}
+
 export default function HomeScreen() {
   const { c } = useTheme();
   const { state, perform, confirm, show } = useStore();
@@ -203,6 +413,7 @@ export default function HomeScreen() {
     .reduce((n: number, card: any) => n + invoice(state, card.id, month).due, 0);
   const ref = month === monthKey(today()) ? today() : `${month}-15`;
   const blocks: Record<string, () => React.ReactNode> = {
+    inbox: () => <PendingInbox />,
     firstSteps: () => <FirstSteps />,
     shortcuts: () => <Shortcuts />,
     pending: () =>
@@ -236,38 +447,8 @@ export default function HomeScreen() {
         </>
       );
     },
-    accounts: () => (
-      <>
-        <Section title="Contas" action="Ver todas" onPress={() => nav.push({ name: "accounts" })} />
-        <AccountList limit={5} />
-      </>
-    ),
-    cards: () =>
-      state.cards.some((x: any) => !x.archived) && (
-        <>
-          <Section title="Cartões" action="Ver faturas" onPress={() => nav.push({ name: "cards" })} />
-          <Box style={{ paddingVertical: 4 }}>
-            {state.cards
-              .filter((x: any) => !x.archived)
-              .map((card: any) => {
-                const bill = invoice(state, card.id, month);
-                return (
-                  <Pressable
-                    key={card.id}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${card.name}, fatura ${show(bill.due)}`}
-                    onPress={() => nav.push({ name: "cards", cardId: card.id })}
-                    style={[k.row, { minHeight: 56 }]}
-                  >
-                    <I name="credit-card" color={card.color || c.primary} />
-                    <T style={{ flex: 1 }}>{card.name}</T>
-                    <T style={{ fontFamily: "SoraSemi" }}>{show(bill.due)}</T>
-                  </Pressable>
-                );
-              })}
-          </Box>
-        </>
-      ),
+    accounts: () => <AccountsSummary />,
+    cards: () => <CardsSummary />,
     budgets: () =>
       state.budgets.length > 0 && (
         <>
@@ -363,7 +544,7 @@ export default function HomeScreen() {
     },
     recent: () => (
       <>
-        <Section title="Lançamentos recentes" action="Ver todos" onPress={() => nav.setTab("transactions")} />
+        <Section title="Despesas recentes" action="Ver todas" onPress={() => nav.setTab("transactions")} />
         {recent.length ? (
           <Box style={{ padding: 0, overflow: "hidden" }}>
             {recent.slice(0, 5).map((t: any, i: number, all: any[]) => (

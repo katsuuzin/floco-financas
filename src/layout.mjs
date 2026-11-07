@@ -1,5 +1,6 @@
 // S2–S5 — personalização da Início, atalhos, Análise e quarto botão da barra.
 export const HOME_BLOCKS = [
+  ["inbox", "Pendentes das notificações"],
   ["firstSteps", "Primeiros passos"],
   ["pending", "Pendências do mês"],
   ["insights", "Destaques do assistente"],
@@ -11,7 +12,7 @@ export const HOME_BLOCKS = [
   ["receivables", "Quem me deve"],
   ["installments", "Parcelamentos"],
   ["recurrences", "Recorrências do mês"],
-  ["recent", "Lançamentos recentes"],
+  ["recent", "Despesas recentes"],
 ];
 export const DEFAULT_HOME_HIDDEN = ["insights", "goals", "receivables", "installments", "recurrences"];
 

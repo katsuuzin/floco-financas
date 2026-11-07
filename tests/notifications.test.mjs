@@ -1,6 +1,75 @@
-import {test} from 'node:test';import assert from 'node:assert/strict';
-import {emptyState,balance,validateBackup} from '../src/finance.mjs';
-import {suggestNotification,importNotification} from '../src/notification-import.mjs';
-const row={id:'notification-1',bank:'Nubank',title:'Compra aprovada',text:'Compra de R$ 42,90 no Mercado.',postedAt:Date.now()};
-test('sugere valor brasileiro e exige revisão quando houver múltiplos valores',()=>{assert.equal(suggestNotification(row).amount,'42,90');assert.equal(suggestNotification(row).type,'expense');assert.equal(suggestNotification({...row,text:'Compra R$ 42,90. Saldo R$ 100,00'}).amount,'');assert.equal(suggestNotification({...row,title:'Pix recebido',text:'Você recebeu R$ 100,00'}).type,'income');});
-test('registrar e repetir após falha de confirmação não duplica a despesa',()=>{let s={...emptyState(),accounts:[{id:'pf',name:'PF',initial:10000},{id:'pj',name:'PJ',initial:10000}]};const input={description:'Mercado',amount:'42,90',type:'expense',date:'2026-11-06',accountId:'pj'};s=importNotification(s,row,input);assert.equal(balance(s,'pj'),5710);assert.equal(balance(s,'pf'),10000);s=validateBackup(JSON.parse(JSON.stringify(s)));s=importNotification(s,row,input);assert.equal(s.transactions.length,1);assert.equal(balance(s,'pj'),5710);assert.throws(()=>importNotification(s,{...row,id:'n2'},{...input,accountId:''}));});
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { emptyState, balance, validateBackup } from "../src/finance.mjs";
+import { suggestNotification, importNotification, draftFromNotification } from "../src/notification-import.mjs";
+
+const at = new Date("2026-11-07T00:36:00").getTime();
+const row = { id: "n1", bank: "Nubank", title: "Compra aprovada", text: "Compra de R$ 42,90 no Mercado.", postedAt: at };
+
+test("compra no cartão Nubank: valor, comerciante, final do cartão e horário", () => {
+  const s = suggestNotification({
+    ...row,
+    title: "Compra aprovada",
+    text: "Compra de R$ 27,69 APROVADA em TIM*13982040146 para o cartão com final 5179.",
+  });
+  assert.equal(s.kind, "card");
+  assert.equal(s.amount, "27,69");
+  assert.equal(s.description, "TIM*13982040146");
+  assert.equal(s.lastFour, "5179");
+  assert.equal(s.time, "00:36");
+  assert.equal(s.type, "expense");
+});
+
+test("notificação real do Nubank (título + texto)", () => {
+  const s = suggestNotification({
+    id: "real",
+    bank: "Nubank",
+    title: "Compra no crédito aprovada",
+    text: "Compra de R$ 27,69 APROVADA em TIM*13982040146 para o cartão com final 5179.",
+    postedAt: at,
+  });
+  assert.equal(s.kind, "card");
+  assert.equal(s.kindLabel, "Compra no cartão");
+  assert.equal(s.amount, "27,69");
+  assert.equal(s.description, "TIM*13982040146");
+  assert.equal(s.lastFour, "5179");
+});
+
+test("Pix enviado e recebido", () => {
+  const out = suggestNotification({ ...row, title: "Pix enviado", text: "Você enviou um Pix de R$ 183,40 para JOAO DA SILVA." });
+  assert.equal(out.kind, "pixOut");
+  assert.equal(out.description, "JOAO DA SILVA");
+  const inn = suggestNotification({ ...row, title: "Pix recebido", text: "Você recebeu um Pix de R$ 50,00 de Ademar da Silva Jardim." });
+  assert.equal(inn.kind, "pixIn");
+  assert.equal(inn.type, "income");
+  assert.equal(inn.amount, "50,00");
+  assert.match(inn.description, /Ademar da Silva Jardim/);
+});
+
+test("com saldo junto, usa o primeiro valor", () => {
+  assert.equal(suggestNotification({ ...row, text: "Compra R$ 42,90. Limite disponível R$ 100,00" }).amount, "42,90");
+});
+
+test("rascunho escolhe o cartão pelo final e a conta pelo banco", () => {
+  const s = {
+    ...emptyState(),
+    accounts: [{ id: "inter", name: "Inter", initial: 0 }, { id: "nu", name: "Nubank", institution: "Nubank", initial: 0 }],
+    cards: [{ id: "c1", name: "Nubank", limit: 100000, closingDay: 1, dueDay: 8, lastFour: "5179" }],
+  };
+  const d = draftFromNotification(s, { ...row, text: "Compra de R$ 27,69 APROVADA em TIM*1398 para o cartão com final 5179." });
+  assert.equal(d.cardId, "c1");
+  assert.equal(d.accountId, "nu");
+  const pix = draftFromNotification(s, { ...row, title: "Pix enviado", text: "Você enviou um Pix de R$ 10,00 para Ana." });
+  assert.equal(pix.cardId, "");
+});
+
+test("registrar duas vezes não duplica e respeita a conta", () => {
+  let s = { ...emptyState(), accounts: [{ id: "pf", name: "PF", initial: 10000 }, { id: "pj", name: "PJ", initial: 10000 }] };
+  const input = { description: "Mercado", amount: "42,90", type: "expense", date: "2026-11-06", accountId: "pj" };
+  s = importNotification(s, row, input);
+  assert.equal(balance(s, "pj"), 5710);
+  s = validateBackup(JSON.parse(JSON.stringify(s)));
+  s = importNotification(s, row, input);
+  assert.equal(s.transactions.length, 1);
+  assert.throws(() => importNotification(s, { ...row, id: "n2" }, { ...input, accountId: "" }));
+});
