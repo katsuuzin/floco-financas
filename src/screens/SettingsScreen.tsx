@@ -1,5 +1,5 @@
 import React from "react";
-import { Alert } from "react-native";
+import { Alert, Linking } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import * as DocumentPicker from "expo-document-picker";
@@ -44,6 +44,7 @@ export default function SettingsScreen() {
       const path = FileSystem.cacheDirectory + "floco-backup-" + today() + ".json";
       await FileSystem.writeAsStringAsync(path, JSON.stringify(current(), null, 2));
       await Sharing.shareAsync(path, { mimeType: "application/json", dialogTitle: "Guardar backup das finanças" });
+      await perform((s: any) => ({ ...s, settings: { ...s.settings, lastBackup: today() } }), "Backup gerado");
     } catch (e: any) {
       Alert.alert("Falha ao exportar", e.message);
     }
@@ -86,11 +87,17 @@ export default function SettingsScreen() {
 
   return (
     <>
-      <Section title="Aparência" />
+      <Section title="Personalização" />
       <Box>
         <Toggle icon="moon" label="Tema escuro" value={!!state.settings.dark} onChange={setting("dark")} />
         <Toggle icon="eye-off" label="Ocultar valores" value={!!state.settings.hide} onChange={setting("hide")} />
       </Box>
+      <ListItem icon="layout" label="Personalizar início, análise e barra" onPress={() => nav.push({ name: "layout" })} />
+      <ListItem icon="list" label="Preferências do extrato" onPress={() => nav.push({ name: "preferences" })} />
+      <Section title="Notificações" />
+      <ListItem icon="bell" label="Lembretes" detail={state.settings.reminders?.enabled ? "Ligados" : "Desligados"} onPress={() => nav.push({ name: "reminders" })} />
+      <ListItem icon="radio" label="Notificações bancárias" detail="Bancos monitorados e SMS" onPress={() => nav.push({ name: "notifications" })} />
+      <ListItem icon="zap" label="Categorização automática" onPress={() => nav.push({ name: "rules" })} />
       <Section title="Segurança" />
       <Box>
         <Toggle icon="lock" label="Bloqueio biométrico" value={!!state.settings.biometric} onChange={toggleBiometric} />
@@ -116,7 +123,13 @@ export default function SettingsScreen() {
         onPress={() => nav.push({ name: "updates" })}
       />
       <Section title="Manutenção" />
-      <Box>
+      <Box style={{ gap: 8 }}>
+        <Button
+          title="Reabrir os primeiros passos"
+          secondary
+          onPress={() => perform((s: any) => ({ ...s, settings: { ...s.settings, firstStepsHidden: false } }), "Primeiros passos de volta na Início")}
+        />
+        <Button title="Reabrir a apresentação" secondary onPress={() => nav.push({ name: "welcome" })} />
         {!state.accounts.length && (
           <Button title="Carregar dados fictícios" secondary onPress={() => perform(demoState(), "Demonstração carregada")} />
         )}
@@ -134,6 +147,17 @@ export default function SettingsScreen() {
           }
         />
       </Box>
+      <Section title="Ajuda" />
+      <ListItem
+        icon="github"
+        label="Enviar sugestão ou relatar problema"
+        detail="Abre o GitHub do projeto"
+        onPress={() =>
+          Linking.openURL(
+            `https://github.com/katsuuzin/floco-financas/issues/new?title=${encodeURIComponent("[" + (Application.nativeApplicationVersion || "") + "] ")}`,
+          )
+        }
+      />
       <Section title="Sobre" />
       <Box>
         <T style={{ fontFamily: "SoraSemi" }}>Floco Finanças · Android · {Application.nativeApplicationVersion}</T>

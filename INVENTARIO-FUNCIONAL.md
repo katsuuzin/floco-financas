@@ -6,6 +6,18 @@ Auditoria feita em 7 de novembro de 2026 no Kontto 1.0.83 (emulador Android 15, 
 
 **Status no Floco v1.1.1 + F0:** ✅ tem · 🟡 parcial · ❌ falta. Os status foram estimados pelo código e ainda serão confirmados ficha a ficha na F2.
 
+## Status atual (v1.3.0, após F2–F6)
+
+As colunas "Floco" das tabelas abaixo guardam o diagnóstico da F1. Esta tabela é o estado atual, verificado por testes automatizados (93) e por uso no emulador.
+
+| Situação | IDs |
+|---|---|
+| ✅ Feito | N1, N2, N3, L2, L3, L4, L5, L6, L7, L8, L9, L10, L14, O2, O3, P1, P4, P5, P6, A1, A2, D1, D2, D3, R1–R10, F2, F3, F4, F5, F6, F7, F8, S2, S3, S4, S5, S7, S8, S12, H1, H2, H4 |
+| 🟡 Parcial | **L1** (sem teclado de cálculo) · **L11** (o comprovante abre o leitor, não preenche o formulário aberto) · **L12** (sem calendário no extrato) · **L13** (filtros rápidos; sem filtro por conta, tag ou valor) · **O1** (sem reordenar por arraste nem relatório por conta) · **O4/O5** (sem ícone e cor em categorias e tags) · **P2/P3** (meta sem conta e caixinha não são tipos separados; sem arquivar caixinha) · **F1** (OFX e CSV sim; extrato em PDF não) · **S1** (tema claro/escuro; sem cores de destaque) · **S6** (extrato e saldo; sem vibração ou teclado) · **S9** (backup criptografado sim; Drive e sincronização não) · **S11** (sem lixeira para purgar, porque a exclusão é definitiva) · **H3** (lembretes entram pelos primeiros passos) · **W1** (2 de 6 widgets: saldo do mês com botões de lançar e próximas contas com orçamentos) |
+| ❌ Não feito | **S10** ícones alternativos do app |
+
+Drive e sincronização (S9) precisam de um projeto OAuth do Google registrado em nome do dono do app. Isso não dá para criar sem a sua conta, por isso ficou de fora, e não é uma limitação técnica do app.
+
 **Limite da auditoria:** telas atrás do paywall mostraram só a apresentação. Para elas, o comportamento foi deduzido das descrições visíveis e está marcado com *(PRO, deduzido)*. Nenhuma compra ou teste grátis foi iniciado.
 
 ## Dúvidas do plano de paridade, agora fechadas

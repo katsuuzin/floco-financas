@@ -89,6 +89,9 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
 
       {tx && (
         <>
+          {!form.editId && form.type !== "transfer" && (
+            <Button title="Ler de um comprovante (foto ou PDF)" secondary icon="camera" onPress={() => nav.replace({ name: "receipt" })} />
+          )}
           {!form.editId && (
             <Choice
               label="Tipo"

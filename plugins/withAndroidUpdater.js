@@ -97,6 +97,7 @@ module.exports = (config) => {
         "BankNotifications.kt",
         "ReceiptReader.kt",
         "FinanceToolsModule.kt",
+      "FlocoWidgets.kt",
       ])
         fs.copyFileSync(
           path.join(root, "native/updates", file),

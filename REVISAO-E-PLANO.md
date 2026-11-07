@@ -83,6 +83,14 @@ Importação CSV/OFX/PDF com revisão e deduplicação, OCR de comprovante, noti
 ### F6 — Proteção e nuvem (Etapa 5, corrige R9)
 PIN, backup criptografado com versões, Google Drive opcional, sync com conflitos, os seis widgets e o assistente IA opcional.
 
+**Resultado da F3–F6 (7/11/2026), v1.3.0:** o status por função está em [INVENTARIO-FUNCIONAL.md](INVENTARIO-FUNCIONAL.md#status-atual-v130-após-f2f6). Resumo:
+- **F3:** contratos com Parcela fixa, Price e SAC (`src/contracts.mjs`), pagamento parcial com juros primeiro, juros por atraso, amortização extra, quitação e troca de cálculo; recorrências com totais e calendário; central de parcelas e simulador (`src/commitments.mjs`).
+- **F4:** orçamentos por ciclo e com várias categorias; projeções curto/médio prazo e "e se"; relatórios avançados e PDF (`src/analysis.mjs`, `src/screens/ReportScreens.tsx`).
+- **F5:** regras de categorização e conferência de fatura (`src/rules.mjs`); catálogo de 34 bancos, palavras ignoradas e SMS bancário na captura nativa; lembretes locais (`src/reminders.mjs`, `expo-notifications`).
+- **F6:** saúde financeira, destaques e plano de ação locais (`src/insights.mjs`); assistente com chave própria opcional (Gemini, OpenAI, OpenRouter, Anthropic), enviando só resumo agregado e com consentimento; Início e Análise configuráveis, atalhos, quarto botão, preferências do extrato, primeiros passos, boas-vindas, link de suporte; 2 widgets Android e o link `floco://`.
+- **Arquivos nativos fora do plugin:** os layouts e o XML dos widgets e as entradas novas do `AndroidManifest.xml` (receivers, esquema `floco`, `POST_NOTIFICATIONS`) foram feitos direto em `android/`. Um `expo prebuild --clean` apagaria isso. Não rode prebuild sem antes passar essas mudanças para `plugins/withAndroidUpdater.js`.
+- **Testes:** 95.
+
 ### F7 — Conferência final e entrega (Etapa 6)
 Repetir as fichas da F1 no Floco, com acessibilidade (TalkBack, fonte grande), modo offline, restauração e atualização do APK. Publicar a release assinada.
 

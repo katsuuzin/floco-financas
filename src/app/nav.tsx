@@ -17,6 +17,11 @@ export type Route =
   | { name: "report"; id: string }
   | { name: "projections" }
   | { name: "rules" }
+  | { name: "reminders" }
+  | { name: "assistant" }
+  | { name: "layout" }
+  | { name: "preferences" }
+  | { name: "welcome" }
   | { name: "reconcile" }
   | { name: "tool"; id: string }
   | { name: "imports" }
@@ -96,6 +101,27 @@ export function NavProvider({ children, initialMonth }: { children: React.ReactN
     [tab, stack, back, month],
   );
   return <NavContext.Provider value={value}>{children}</NavContext.Provider>;
+}
+
+// Destino configurável (atalhos e quarto botão) → aba ou rota.
+export function destination(id: string): { tab?: Tab; route?: Route } {
+  const map: Record<string, Route> = {
+    budgets: { name: "budgets" },
+    goals: { name: "goals" },
+    projections: { name: "projections" },
+    recurrences: { name: "recurrences" },
+    installments: { name: "installments" },
+    financings: { name: "contracts", type: "financing" },
+    loans: { name: "contracts", type: "loan" },
+    receivables: { name: "tool", id: "receivables" },
+    reports: { name: "reports" },
+    cashflow: { name: "report", id: "cashflow" },
+    accounts: { name: "accounts" },
+    cards: { name: "cards" },
+    assistant: { name: "assistant" },
+    receipt: { name: "receipt" },
+  };
+  return id === "analysis" ? { tab: "analysis" } : { route: map[id] };
 }
 
 export function useNav() {

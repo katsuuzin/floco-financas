@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/w_bills_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="14dp"
+    android:background="@drawable/floco_widget_bg">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+        <TextView android:id="@+id/w_bills_title" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+            android:text="Próximas contas" android:textColor="#311E0D" android:textSize="14sp" android:textStyle="bold" />
+        <TextView android:id="@+id/w_bills_add" android:layout_width="40dp" android:layout_height="32dp" android:gravity="center"
+            android:text="+" android:textColor="#FFFFFF" android:textSize="18sp" android:textStyle="bold"
+            android:background="@drawable/floco_widget_button" />
+    </LinearLayout>
+    <TextView android:id="@+id/w_bills" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="6dp" android:textColor="#311E0D" android:textSize="12sp" android:lineSpacingExtra="2dp" />
+    <TextView android:id="@+id/w_budgets" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="6dp" android:textColor="#705C4B" android:textSize="11sp" />
+</LinearLayout>

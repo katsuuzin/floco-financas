@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
+  Linking,
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -22,7 +23,7 @@ import { ThemeProvider, useTheme } from "./src/ui/theme";
 import { T, I, Button, IconButton, Muted, styles as k } from "./src/ui/kit";
 import type { Icon } from "./src/ui/kit";
 import { StoreProvider, useStore } from "./src/app/store";
-import { NavProvider, useNav, Route, Tab } from "./src/app/nav";
+import { NavProvider, useNav, Route, Tab, destination } from "./src/app/nav";
 import { monthKey, today } from "./src/finance.mjs";
 import HomeScreen from "./src/screens/HomeScreen";
 import TransactionsScreen from "./src/screens/TransactionsScreen";
@@ -34,6 +35,11 @@ import { AccountsScreen, CardsScreen, BudgetsScreen, GoalsScreen } from "./src/s
 import { ContractsScreen, RecurrencesScreen, InstallmentsScreen } from "./src/screens/CommitmentScreens";
 import { ReportsScreen, ReportScreen, ProjectionsScreen } from "./src/screens/ReportScreens";
 import { RulesScreen, ReconcileScreen } from "./src/screens/ToolScreens";
+import RemindersScreen from "./src/screens/RemindersScreen";
+import AssistantScreen from "./src/screens/AssistantScreen";
+import { LayoutScreen, PreferencesScreen, WelcomeScreen } from "./src/screens/PersonalizeScreens";
+import { layoutOf, DESTINATIONS } from "./src/layout.mjs";
+import { reschedule, updateWidgets } from "./src/app/notify";
 import PlanningPanel from "./src/PlanningPanel";
 import ImportsPanel from "./src/ImportsPanel";
 import ReceiptPanel from "./src/ReceiptPanel";
@@ -120,7 +126,7 @@ function Gate() {
   return (
     <>
       <StatusBar style={dark ? "light" : "dark"} />
-      <Shell onPinChange={() => refreshPin()} unlocked={!locked} />
+      <Shell onPinChange={() => refreshPin()} unlocked={!locked} protectedApp={pinEnabled} />
       <Modal visible={locked} animationType="fade" onRequestClose={() => {}}>
         <Lock pinEnabled={pinEnabled} onUnlock={() => setLocked(false)} />
       </Modal>
@@ -213,6 +219,11 @@ const TITLES: Record<string, string> = {
   reports: "Relatórios",
   projections: "Projeções",
   rules: "Categorização automática",
+  reminders: "Lembretes",
+  assistant: "Assistente",
+  layout: "Personalizar",
+  preferences: "Preferências",
+  welcome: "Boas-vindas",
   reconcile: "Conferir fatura",
 };
 const REPORT_TITLES: Record<string, string> = {
@@ -233,12 +244,34 @@ const routeTitle = (r: Route) =>
       ? REPORT_TITLES[r.id] || "Relatório"
       : TITLES[r.name] || "";
 
-function Shell({ onPinChange, unlocked }: { onPinChange: () => void; unlocked: boolean }) {
+function Shell({ onPinChange, unlocked, protectedApp }: { onPinChange: () => void; unlocked: boolean; protectedApp: boolean }) {
   const { c } = useTheme();
   const { state, perform, notice, setNotice, storageError } = useStore();
   const nav = useNav();
   const updates = usePublicUpdates(unlocked);
   const [adding, setAdding] = useState(false);
+  // Reagenda os lembretes quando os dados mudam (com pequena espera para agrupar mudanças).
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void reschedule(state);
+      void updateWidgets(state, !!state.settings.biometric || protectedApp);
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [state, protectedApp]);
+  // Links floco:// vindos dos widgets.
+  useEffect(() => {
+    const handle = (url?: string | null) => {
+      if (!url) return;
+      const m = /^floco:\/\/([^/?#]+)(?:\/([^/?#]+))?/.exec(url);
+      if (!m) return;
+      if (m[1] === "add") nav.push({ name: "form", kind: "transaction", initial: { type: m[2] === "income" ? "income" : "expense" } });
+      else if (m[1] === "bills") nav.push({ name: "reminders" });
+      else nav.reset();
+    };
+    Linking.getInitialURL().then(handle).catch(() => {});
+    const sub = Linking.addEventListener("url", (e) => handle(e.url));
+    return () => sub.remove();
+  }, []);
   const top = nav.top;
 
   // Painéis que já trazem cabeçalho e rolagem próprios.
@@ -257,7 +290,10 @@ function Shell({ onPinChange, unlocked }: { onPinChange: () => void; unlocked: b
     );
   }
 
-  const content = top ? renderRoute(top) : renderTab(nav.tab);
+  const firstRun = !state.settings.onboarded && !state.accounts.length && !state.transactions.length;
+  const content = top ? renderRoute(top) : firstRun && nav.tab === "home" ? <WelcomeScreen /> : renderTab(nav.tab);
+  const tab4 = layoutOf(state).tab4;
+  const slot4 = DESTINATIONS.find(([id]: string[]) => id === tab4) || DESTINATIONS[0];
   const title = top ? routeTitle(top) : TITLES[nav.tab];
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }} edges={["top", "bottom"]}>
@@ -312,9 +348,18 @@ function Shell({ onPinChange, unlocked }: { onPinChange: () => void; unlocked: b
             >
               <Feather name="plus" size={28} color={c.onPrimary} />
             </Pressable>
-            {TABS.slice(2).map((t) => (
-              <TabButton key={t.key} item={t} />
-            ))}
+            {tab4 === "analysis" ? (
+              <TabButton item={TABS[2]} />
+            ) : (
+              <TabButton
+                item={{ key: "analysis", label: slot4[1], icon: slot4[2] as Icon }}
+                onPress={() => {
+                  const d = destination(tab4);
+                  if (d.route) nav.push(d.route);
+                }}
+              />
+            )}
+            <TabButton item={TABS[3]} />
           </View>
         )}
       </KeyboardAvoidingView>
@@ -356,6 +401,16 @@ function renderRoute(r: Route) {
       return <ProjectionsScreen />;
     case "rules":
       return <RulesScreen />;
+    case "reminders":
+      return <RemindersScreen />;
+    case "assistant":
+      return <AssistantScreen />;
+    case "layout":
+      return <LayoutScreen />;
+    case "preferences":
+      return <PreferencesScreen />;
+    case "welcome":
+      return <WelcomeScreen />;
     case "reconcile":
       return <ReconcileScreen />;
     case "form":
@@ -364,16 +419,16 @@ function renderRoute(r: Route) {
   return null;
 }
 
-function TabButton({ item }: { item: { key: Tab; label: string; icon: Icon } }) {
+function TabButton({ item, onPress }: { item: { key: Tab; label: string; icon: Icon }; onPress?: () => void }) {
   const { c } = useTheme();
   const nav = useNav();
-  const on = nav.tab === item.key;
+  const on = !onPress && nav.tab === item.key;
   return (
     <Pressable
       accessibilityRole="tab"
       accessibilityLabel={item.label}
       accessibilityState={{ selected: on }}
-      onPress={() => nav.setTab(item.key)}
+      onPress={onPress || (() => nav.setTab(item.key))}
       style={s.tab}
     >
       <View style={[s.indicator, { backgroundColor: on ? c.soft : "transparent" }]}>

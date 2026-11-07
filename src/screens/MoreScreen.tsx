@@ -2,6 +2,8 @@ import React from "react";
 import { Section, ListItem, Muted, Box, T } from "../ui/kit";
 import type { Icon } from "../ui/kit";
 import { useNav, Route } from "../app/nav";
+import { useStore } from "../app/store";
+import { layoutOf } from "../layout.mjs";
 
 type Item = { label: string; icon: Icon; route: Route };
 const groups: [string, Item[]][] = [
@@ -53,9 +55,12 @@ const groups: [string, Item[]][] = [
 
 export default function MoreScreen() {
   const nav = useNav();
+  const { state } = useStore();
   return (
     <>
       <ListItem icon="settings" label="Configurações" detail="Aparência, segurança, backup e dados" onPress={() => nav.push({ name: "settings" })} />
+      <ListItem icon="message-circle" label="Assistente" detail="Saúde financeira, destaques e plano de ação" onPress={() => nav.push({ name: "assistant" })} />
+      {layoutOf(state).tab4 !== "analysis" && <ListItem icon="bar-chart-2" label="Análise" onPress={() => nav.setTab("analysis")} />}
       {groups.map(([title, items]) => (
         <React.Fragment key={title}>
           <Section title={title} />

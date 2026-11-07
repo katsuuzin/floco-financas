@@ -1,4 +1,8 @@
 <resources>
   <string name="app_name">Floco Finanças</string>
   <string name="expo_system_ui_user_interface_style" translatable="false">automatic</string>
+  <string name="floco_widget_summary_name">Saldo do Floco</string>
+  <string name="floco_widget_summary_desc">Saldo total, receitas e despesas do mês e botões de lançar.</string>
+  <string name="floco_widget_bills_name">Próximas contas</string>
+  <string name="floco_widget_bills_desc">Contas e faturas que vencem nos próximos dias e orçamentos.</string>
 </resources>

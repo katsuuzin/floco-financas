@@ -6,6 +6,7 @@ import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
 import { money, deleteTransaction } from "../finance.mjs";
 import { toInput } from "../app/forms";
+import { displayOf } from "./PersonalizeScreens";
 
 const br = (date: string) => date.split("-").reverse().join("/");
 
@@ -92,6 +93,7 @@ export default function TransactionRow({ t }: { t: any }) {
       ],
     );
   const income = t.type === "income" || t.refund;
+  const d = displayOf(state);
   return (
     <Pressable
       accessibilityRole="button"
@@ -120,13 +122,19 @@ export default function TransactionRow({ t }: { t: any }) {
           {t.description}
         </T>
         <Muted style={{ fontSize: 11 }}>
-          {t.category} · {card?.name || account?.name}
+          {d.showCategory === "category" ? `${t.category} · ` : ""}
+          {card?.name || account?.name}
           {t.installments > 1 ? ` · ${t.installment}/${t.installments}` : ""}
-          {tags.length ? " · " + tags.map((x: string) => "#" + x).join(" ") : ""}
+          {d.showTags && tags.length ? " · " + tags.map((x: string) => "#" + x).join(" ") : ""}
         </Muted>
-        <Muted style={{ fontSize: 10 }}>
+        {d.showNotes && !!t.notes && (
+          <Muted style={{ fontSize: 11 }} numberOfLines={2}>
+            {t.notes}
+          </Muted>
+        )}
+        <Muted style={{ fontSize: 10, color: !t.confirmed && d.highlightPending ? c.amber : undefined }}>
           {br(t.date)}
-          {t.time ? " · " + t.time : ""}
+          {d.showTime && t.time ? " · " + t.time : ""}
           {!t.confirmed ? " · Pendente" : t.cardId ? " · Na fatura" : ""}
           {t.refund ? " · Estorno" : ""}
           {t.ignored ? " · Fora da análise" : ""}
