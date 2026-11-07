@@ -1,5 +1,8 @@
 package br.com.kat.flocofinancas.updates
 
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
+import com.tom_roush.pdfbox.pdmodel.PDDocument
+import com.tom_roush.pdfbox.text.PDFTextStripper
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
@@ -29,6 +32,7 @@ class ReceiptReader(private val context:ReactApplicationContext):ReactContextBas
  override fun getName()="FlocoReceiptReader"
  init{context.addActivityEventListener(object:BaseActivityEventListener(){override fun onActivityResult(activity:Activity,requestCode:Int,resultCode:Int,data:Intent?){if(requestCode!=7321)return;val p=cameraPromise?:return;cameraPromise=null;val file=cameraFile;cameraFile=null;if(resultCode!=Activity.RESULT_OK||file==null){file?.delete();p.resolve(null);return};read(Uri.fromFile(file),p,file)}})}
  @ReactMethod fun camera(p:Promise){try{if(cameraPromise!=null||busy.get())throw Exception("Já há uma leitura em andamento.");val activity=context.currentActivity?:throw Exception("Abra o aplicativo para usar a câmera.");val file=File(context.cacheDir,"updates/receipt-${System.currentTimeMillis()}.jpg");file.parentFile?.mkdirs();val uri=FileProvider.getUriForFile(context,"${context.packageName}.updates",file);val intent=Intent(MediaStore.ACTION_IMAGE_CAPTURE).putExtra(MediaStore.EXTRA_OUTPUT,uri).addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION);cameraPromise=p;cameraFile=file;activity.startActivityForResult(intent,7321)}catch(e:Exception){cameraPromise=null;cameraFile?.delete();cameraFile=null;p.reject("CAMERA",e.message?:"Câmera indisponível.")}}
+ @ReactMethod fun spreadsheet(uri:String,p:Promise){if(!uri.startsWith("content://")&&!uri.startsWith("file://")){p.reject("URI","Arquivo inválido.");return};if(!busy.compareAndSet(false,true)){p.reject("BUSY","Leitura em andamento.");return};worker.execute{val file=File(context.cacheDir,"sheet-${System.nanoTime()}.xlsx");try{context.contentResolver.openInputStream(Uri.parse(uri))?.use{input->file.outputStream().use{out->val buffer=ByteArray(65536);var size=0;while(true){val count=input.read(buffer);if(count<0)break;size+=count;if(size>10000000)throw Exception("Limite de 10 MB por planilha.");out.write(buffer,0,count)}}}?:throw Exception("Não foi possível abrir a planilha.");p.resolve(SpreadsheetParser.read(file))}catch(e:Exception){p.reject("XLSX",e.message?:"Planilha inválida.")}finally{file.delete();busy.set(false)}}}
  @ReactMethod fun recognize(uri:String,p:Promise){if(!uri.startsWith("content://")&&!uri.startsWith("file://")){p.reject("URI","Arquivo inválido.");return};read(Uri.parse(uri),p,null)}
  private fun read(uri:Uri,p:Promise,temporary:File?){
   if(!busy.compareAndSet(false,true)){p.reject("BUSY","Já há uma leitura em andamento.");return}
@@ -40,6 +44,14 @@ class ReceiptReader(private val context:ReactApplicationContext):ReactContextBas
     val header=file.inputStream().use{val b=ByteArray(5);it.read(b);String(b)}
     val text=StringBuilder()
     if(header=="%PDF-"){
+     PDFBoxResourceLoader.init(context)
+     PDDocument.load(file).use { document ->
+      if(document.numberOfPages>15)throw Exception("Selecione um PDF com até 15 páginas.")
+      val stripper=PDFTextStripper().apply { sortByPosition=true }
+      val embedded=stripper.getText(document)
+      if(embedded.count { it.isLetterOrDigit() }>100){p.resolve(embedded);return@execute}
+     }
+
      ParcelFileDescriptor.open(file,ParcelFileDescriptor.MODE_READ_ONLY).use{descriptor->PdfRenderer(descriptor).use{pdf->
       if(pdf.pageCount>15)throw Exception("Selecione um PDF com até 15 páginas.")
       for(i in 0 until pdf.pageCount){pdf.openPage(i).use{page->val scale=2000.0/maxOf(page.width,page.height);val bitmap=Bitmap.createBitmap(maxOf(1,(page.width*scale).toInt()),maxOf(1,(page.height*scale).toInt()),Bitmap.Config.ARGB_8888);try{bitmap.eraseColor(android.graphics.Color.WHITE);page.render(bitmap,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);text.append(Tasks.await(reader.process(InputImage.fromBitmap(bitmap,0)),60,TimeUnit.SECONDS).text).append("\n\n")}finally{bitmap.recycle()}}}

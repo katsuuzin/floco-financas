@@ -46,7 +46,12 @@ export function diffState(prev, next) {
         seen.add(row.id);
         const was = old.get(row.id);
         if (!was || was.row !== row || was.index !== index)
-          upserts.push({ collection: key, id: row.id, ord: index, json: JSON.stringify(row) });
+          upserts.push({
+            collection: key,
+            id: row.id,
+            ord: index,
+            json: JSON.stringify(row),
+          });
       });
       for (const id of old.keys())
         if (!seen.has(id)) deletes.push({ collection: key, id });
@@ -70,7 +75,10 @@ export function applyDiff(db, diff) {
       [r.collection, r.id, r.ord, r.json],
     );
   for (const r of diff.deletes)
-    db.runSync("DELETE FROM rows WHERE collection = ? AND id = ?", [r.collection, r.id]);
+    db.runSync("DELETE FROM rows WHERE collection = ? AND id = ?", [
+      r.collection,
+      r.id,
+    ]);
   for (const m of diff.meta)
     if (m.json === null) db.runSync("DELETE FROM meta WHERE key = ?", [m.key]);
     else
@@ -84,7 +92,8 @@ export function applyDiff(db, diff) {
 export function assembleState(rows, metaRows, base = {}) {
   const state = { ...base };
   for (const m of metaRows) state[m.key] = JSON.parse(m.json);
-  for (const key of Object.keys(base)) if (isCollection(base[key])) state[key] = [];
+  for (const key of Object.keys(base))
+    if (isCollection(base[key])) state[key] = [];
   for (const r of rows) {
     if (!isCollection(state[r.collection])) state[r.collection] = [];
     state[r.collection].push(JSON.parse(r.json));
@@ -92,8 +101,13 @@ export function assembleState(rows, metaRows, base = {}) {
   return state;
 }
 
-export const LOAD_ROWS = "SELECT collection, json FROM rows ORDER BY collection, ord";
+export const LOAD_ROWS =
+  "SELECT collection, json FROM rows ORDER BY collection, ord";
 export const LOAD_META = "SELECT key, json FROM meta";
+// Older fresh installs wrote only changed fields, without the version marker.
+// Existing rows must be loaded instead of silently starting an empty state.
+export const HAS_STORED_DATA =
+  "SELECT 1 FROM meta UNION ALL SELECT 1 FROM rows LIMIT 1";
 
 // Igualdade estrutural usada para conferir a migração antes de confiar no banco novo.
 export function sameData(a, b) {

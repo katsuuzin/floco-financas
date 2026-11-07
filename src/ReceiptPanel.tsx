@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
+import { receiptAmounts, receiptDates } from "./receipt-suggestions.mjs";
 import { today, parseMoney, addTransaction } from "./finance.mjs";
 import { categoryNames } from "./planning.mjs";
 export default function ReceiptPanel({ state, c, onChange, onClose }: any) {
@@ -78,24 +79,13 @@ export default function ReceiptPanel({ state, c, onChange, onClose }: any) {
       }
       if (!content) return;
       setRaw(content);
-      const candidates = [
-        ...new Set<string>(
-          (content.match(/(?:R\$\s*)?\d{1,3}(?:\.\d{3})*,\d{2}/g) || []).map(
-            (v: string) => v.replace(/R\$\s*/, ""),
-          ),
-        ),
-      ].filter((v) => {
-        try {
-          parseMoney(v);
-          return true;
-        } catch {
-          return false;
-        }
-      });
+      const candidates = receiptAmounts(content);
+      const dates = receiptDates(content);
       setValues(candidates.slice(0, 100));
       setForm({
         ...form,
         amount: candidates.length === 1 ? candidates[0] : "",
+        date: dates.length === 1 ? dates[0] : today(),
         description:
           content
             .split("\n")

@@ -69,6 +69,9 @@ module.exports = (config) => {
     )
       result.modResults.contents +=
         "\ndependencies { implementation 'com.google.mlkit:text-recognition:16.0.1' }\n";
+    if (!result.modResults.contents.includes("com.tom-roush:pdfbox-android"))
+      result.modResults.contents +=
+        "\ndependencies { implementation 'com.tom-roush:pdfbox-android:2.0.27.0' }\n";
     if (!result.modResults.contents.includes("FLOCO_KEYSTORE_FILE")) {
       result.modResults.contents = result.modResults.contents.replace(
         "signingConfigs {",
@@ -96,8 +99,9 @@ module.exports = (config) => {
         "FlocoUpdaterPackage.kt",
         "BankNotifications.kt",
         "ReceiptReader.kt",
+        "SpreadsheetParser.kt",
         "FinanceToolsModule.kt",
-      "FlocoWidgets.kt",
+        "FlocoWidgets.kt",
       ])
         fs.copyFileSync(
           path.join(root, "native/updates", file),

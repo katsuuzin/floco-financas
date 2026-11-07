@@ -23,7 +23,11 @@ export function T({ style, ...props }: TextProps & { style?: any }) {
   return (
     <Text
       {...props}
-      style={[styles.text, { color: c.text, fontFamily: fonts ? "Sora" : undefined }, style]}
+      style={[
+        styles.text,
+        { color: c.text, fontFamily: fonts ? "Sora" : undefined },
+        style,
+      ]}
     />
   );
 }
@@ -33,7 +37,15 @@ export function Muted({ style, ...props }: TextProps & { style?: any }) {
   return <T {...props} style={[styles.muted, { color: c.muted }, style]} />;
 }
 
-export function I({ name, size = 21, color }: { name: Icon; size?: number; color?: string }) {
+export function I({
+  name,
+  size = 21,
+  color,
+}: {
+  name: Icon;
+  size?: number;
+  color?: string;
+}) {
   const { c } = useTheme();
   return <Feather name={name} size={size} color={color || c.muted} />;
 }
@@ -65,7 +77,11 @@ export function Button({
       style={({ pressed }) => [
         styles.button,
         {
-          backgroundColor: danger ? "transparent" : secondary ? c.soft : c.primary,
+          backgroundColor: danger
+            ? "transparent"
+            : secondary
+              ? c.soft
+              : c.primary,
           opacity: disabled ? 0.5 : pressed ? 0.75 : 1,
         },
       ]}
@@ -94,14 +110,25 @@ export function IconButton({
       accessibilityLabel={label}
       onPress={onPress}
       hitSlop={4}
-      style={({ pressed }) => [styles.iconButton, { backgroundColor: pressed ? c.soft : "transparent" }]}
+      style={({ pressed }) => [
+        styles.iconButton,
+        { backgroundColor: pressed ? c.soft : "transparent" },
+      ]}
     >
       <I name={name} color={color || c.primary} />
     </Pressable>
   );
 }
 
-export function Section({ title, action, onPress }: { title: string; action?: string; onPress?: () => void }) {
+export function Section({
+  title,
+  action,
+  onPress,
+}: {
+  title: string;
+  action?: string;
+  onPress?: () => void;
+}) {
   const { c } = useTheme();
   return (
     <View style={styles.section}>
@@ -109,17 +136,33 @@ export function Section({ title, action, onPress }: { title: string; action?: st
         {title}
       </T>
       {action && onPress && (
-        <Pressable accessibilityRole="button" onPress={onPress} style={styles.smallAction}>
-          <T style={{ color: c.primary, fontSize: 13, fontFamily: "SoraSemi" }}>{action}</T>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onPress}
+          style={styles.smallAction}
+        >
+          <T style={{ color: c.primary, fontSize: 13, fontFamily: "SoraSemi" }}>
+            {action}
+          </T>
         </Pressable>
       )}
     </View>
   );
 }
 
-export function Box({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
+export function Box({
+  children,
+  style,
+}: {
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+}) {
   const { c } = useTheme();
-  return <View style={[styles.box, { backgroundColor: c.surface }, style]}>{children}</View>;
+  return (
+    <View style={[styles.box, { backgroundColor: c.surface }, style]}>
+      {children}
+    </View>
+  );
 }
 
 export function Empty({
@@ -148,7 +191,15 @@ export function Empty({
   );
 }
 
-export function Progress({ value, max, color }: { value: number; max: number; color?: string }) {
+export function Progress({
+  value,
+  max,
+  color,
+}: {
+  value: number;
+  max: number;
+  color?: string;
+}) {
   const { c } = useTheme();
   const pct = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
   return (
@@ -156,7 +207,14 @@ export function Progress({ value, max, color }: { value: number; max: number; co
       accessibilityLabel={`${Math.round(pct)} por cento`}
       style={[styles.track, { backgroundColor: c.soft }]}
     >
-      <View style={{ height: 7, borderRadius: 4, width: `${pct}%`, backgroundColor: color || c.primary }} />
+      <View
+        style={{
+          height: 7,
+          borderRadius: 4,
+          width: `${pct}%`,
+          backgroundColor: color || c.primary,
+        }}
+      />
     </View>
   );
 }
@@ -169,6 +227,7 @@ export function Field({
   placeholder = "",
   autoFocus = false,
   multiline = false,
+  secure = false,
   hint,
   maxLength,
 }: {
@@ -179,6 +238,7 @@ export function Field({
   placeholder?: string;
   autoFocus?: boolean;
   multiline?: boolean;
+  secure?: boolean;
   hint?: string;
   maxLength?: number;
 }) {
@@ -187,6 +247,8 @@ export function Field({
     <View style={{ gap: 8 }}>
       <T style={styles.label}>{label}</T>
       <TextInput
+        secureTextEntry={secure}
+        autoCorrect={!secure}
         accessibilityLabel={label}
         accessibilityHint={hint}
         value={value}
@@ -196,11 +258,16 @@ export function Field({
         keyboardType={numeric ? "decimal-pad" : "default"}
         autoFocus={autoFocus}
         multiline={multiline}
-        autoCapitalize="sentences"
+        autoCapitalize={secure ? "none" : "sentences"}
         maxLength={maxLength ?? (numeric ? 16 : multiline ? 2000 : 180)}
         style={[
           styles.input,
-          { backgroundColor: c.surface, color: c.text, borderColor: c.line, fontFamily: "Sora" },
+          {
+            backgroundColor: c.surface,
+            color: c.text,
+            borderColor: c.line,
+            fontFamily: "Sora",
+          },
           multiline && { minHeight: 96, textAlignVertical: "top" },
         ]}
       />
@@ -224,7 +291,11 @@ export function Choice<K extends string>({
 }) {
   const { c } = useTheme();
   return (
-    <View style={{ gap: 8 }} accessibilityRole="radiogroup" accessibilityLabel={label}>
+    <View
+      style={{ gap: 8 }}
+      accessibilityRole="radiogroup"
+      accessibilityLabel={label}
+    >
       <T style={styles.label}>{label}</T>
       <View style={styles.chips}>
         {values.length ? (
@@ -239,10 +310,16 @@ export function Choice<K extends string>({
                 onPress={() => onChange(key)}
                 style={[
                   styles.chip,
-                  { backgroundColor: on ? c.primary : c.surface, borderWidth: 1, borderColor: on ? c.primary : c.line },
+                  {
+                    backgroundColor: on ? c.primary : c.surface,
+                    borderWidth: 1,
+                    borderColor: on ? c.primary : c.line,
+                  },
                 ]}
               >
-                <T style={{ fontSize: 12, color: on ? c.onPrimary : c.text }}>{name}</T>
+                <T style={{ fontSize: 12, color: on ? c.onPrimary : c.text }}>
+                  {name}
+                </T>
               </Pressable>
             );
           })
@@ -317,10 +394,16 @@ export function ListItem({
       accessibilityLabel={detail ? `${label}, ${detail}` : label}
       onPress={onPress}
       android_ripple={{ color: c.soft }}
-      style={({ pressed }) => [styles.listItem, { backgroundColor: pressed ? c.soft : c.surface }]}
+      style={({ pressed }) => [
+        styles.listItem,
+        { backgroundColor: pressed ? c.soft : c.surface },
+      ]}
     >
       {icon && (
-        <View style={[styles.rowIcon, { backgroundColor: c.soft }]} importantForAccessibility="no">
+        <View
+          style={[styles.rowIcon, { backgroundColor: c.soft }]}
+          importantForAccessibility="no"
+        >
           <I name={icon} size={18} color={c.primary} />
         </View>
       )}
@@ -363,9 +446,23 @@ export function Chips<K extends string>({
             onPress={() => onChange(key)}
             hitSlop={{ top: 4, bottom: 4 }}
             android_ripple={{ color: c.soft, borderless: false }}
-            style={[styles.compactChip, { backgroundColor: on ? c.primary : c.surface, borderColor: on ? c.primary : c.line }]}
+            style={[
+              styles.compactChip,
+              {
+                backgroundColor: on ? c.primary : c.surface,
+                borderColor: on ? c.primary : c.line,
+              },
+            ]}
           >
-            <T style={{ fontSize: 13, fontFamily: on ? "SoraSemi" : "Sora", color: on ? c.onPrimary : c.text }}>{label}</T>
+            <T
+              style={{
+                fontSize: 13,
+                fontFamily: on ? "SoraSemi" : "Sora",
+                color: on ? c.onPrimary : c.text,
+              }}
+            >
+              {label}
+            </T>
           </Pressable>
         );
       })}
@@ -390,7 +487,11 @@ export function Segmented<K extends string>({
   return (
     <View style={{ gap: space.sm }}>
       {!!label && <T style={styles.label}>{label}</T>}
-      <View accessibilityRole="radiogroup" accessibilityLabel={label} style={[styles.segmented, { backgroundColor: c.soft }]}>
+      <View
+        accessibilityRole="radiogroup"
+        accessibilityLabel={label}
+        style={[styles.segmented, { backgroundColor: c.soft }]}
+      >
         {values.map(([key, name]) => {
           const on = key === value;
           return (
@@ -402,7 +503,15 @@ export function Segmented<K extends string>({
               onPress={() => onChange(key)}
               style={[styles.segment, on && { backgroundColor: c.primary }]}
             >
-              <T numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: 12, fontFamily: on ? "SoraSemi" : "Sora", color: on ? c.onPrimary : c.muted }}>
+              <T
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                style={{
+                  fontSize: 12,
+                  fontFamily: on ? "SoraSemi" : "Sora",
+                  color: on ? c.onPrimary : c.muted,
+                }}
+              >
                 {name}
               </T>
             </Pressable>
@@ -432,7 +541,15 @@ export function AmountField({
     <View style={[styles.amountBox, { backgroundColor: c.surface }]}>
       <Muted>{label}</Muted>
       <View style={[styles.row, { gap: space.sm }]}>
-        <T style={{ fontSize: 22, fontFamily: "SoraSemi", color: color || c.text }}>R$</T>
+        <T
+          style={{
+            fontSize: 22,
+            fontFamily: "SoraSemi",
+            color: color || c.text,
+          }}
+        >
+          R$
+        </T>
         <TextInput
           accessibilityLabel={`${label} em reais`}
           value={value}
@@ -442,7 +559,13 @@ export function AmountField({
           keyboardType="decimal-pad"
           autoFocus={autoFocus}
           maxLength={16}
-          style={{ flex: 1, fontSize: 34, fontFamily: "SoraBold", color: color || c.text, paddingVertical: space.xs }}
+          style={{
+            flex: 1,
+            fontSize: 34,
+            fontFamily: "SoraBold",
+            color: color || c.text,
+            paddingVertical: space.xs,
+          }}
         />
       </View>
     </View>
@@ -450,19 +573,50 @@ export function AmountField({
 }
 
 // Grupo de itens num único cartão, com divisórias (listas de menu e configurações).
-export function Group({ title, children }: { title?: string; children: React.ReactNode }) {
+export function Group({
+  title,
+  children,
+}: {
+  title?: string;
+  children: React.ReactNode;
+}) {
   const { c } = useTheme();
   const items = React.Children.toArray(children).filter(Boolean);
   return (
     <View style={{ marginTop: space.lg }}>
       {!!title && (
-        <Muted accessibilityRole="header" style={{ fontFamily: "SoraSemi", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: space.sm, marginLeft: space.xs }}>
+        <Muted
+          accessibilityRole="header"
+          style={{
+            fontFamily: "SoraSemi",
+            textTransform: "uppercase",
+            letterSpacing: 0.6,
+            marginBottom: space.sm,
+            marginLeft: space.xs,
+          }}
+        >
           {title}
         </Muted>
       )}
-      <View style={{ backgroundColor: c.surface, borderRadius: 22, overflow: "hidden" }}>
+      <View
+        style={{
+          backgroundColor: c.surface,
+          borderRadius: 22,
+          overflow: "hidden",
+        }}
+      >
         {items.map((child, i) => (
-          <View key={i} style={i < items.length - 1 ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.line } : null}>
+          <View
+            key={i}
+            style={
+              i < items.length - 1
+                ? {
+                    borderBottomWidth: StyleSheet.hairlineWidth,
+                    borderBottomColor: c.line,
+                  }
+                : null
+            }
+          >
             {child}
           </View>
         ))}
@@ -494,10 +648,21 @@ export function Row({
       accessibilityLabel={detail ? `${label}, ${detail}` : label}
       onPress={onPress}
       android_ripple={{ color: c.soft }}
-      style={({ pressed }) => [styles.row, { minHeight: 56, paddingHorizontal: space.lg, paddingVertical: space.md, backgroundColor: pressed ? c.soft : "transparent" }]}
+      style={({ pressed }) => [
+        styles.row,
+        {
+          minHeight: 56,
+          paddingHorizontal: space.lg,
+          paddingVertical: space.md,
+          backgroundColor: pressed ? c.soft : "transparent",
+        },
+      ]}
     >
       {icon && (
-        <View style={[styles.rowIcon, { backgroundColor: c.soft }]} importantForAccessibility="no">
+        <View
+          style={[styles.rowIcon, { backgroundColor: c.soft }]}
+          importantForAccessibility="no"
+        >
           <I name={icon} size={18} color={danger ? c.red : c.primary} />
         </View>
       )}
@@ -517,15 +682,45 @@ export const radius = { sm: 10, md: 14, lg: 18, pill: 999 };
 export const styles = StyleSheet.create({
   text: { fontSize: 15, lineHeight: 22 },
   muted: { fontSize: 12.5, lineHeight: 18 },
-  compactChip: { minHeight: 40, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1, justifyContent: "center" },
+  compactChip: {
+    minHeight: 40,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    justifyContent: "center",
+  },
   segmented: { flexDirection: "row", borderRadius: 999, padding: 4, gap: 4 },
-  segment: { flex: 1, minHeight: 44, borderRadius: 999, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
-  amountBox: { borderRadius: 22, paddingHorizontal: 20, paddingVertical: 14, gap: 2 },
-  rowIcon: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
+  segment: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  amountBox: {
+    borderRadius: 22,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    gap: 2,
+  },
+  rowIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   label: { fontFamily: "SoraSemi", fontSize: 13 },
   flex: { flex: 1 },
   row: { flexDirection: "row", alignItems: "center", gap: 12 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 28, gap: 24 },
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 28,
+    gap: 24,
+  },
   pageTitle: { fontSize: 22, lineHeight: 30, fontFamily: "SoraBold" },
   content: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 120 },
   box: { padding: 18, borderRadius: 22, marginBottom: 12 },
@@ -538,7 +733,13 @@ export const styles = StyleSheet.create({
     gap: 12,
   },
   sectionTitle: { fontSize: 17, lineHeight: 24, fontFamily: "SoraSemi" },
-  balanceValue: { fontSize: 35, lineHeight: 48, fontFamily: "SoraBold", marginTop: 8, fontVariant: ["tabular-nums"] },
+  balanceValue: {
+    fontSize: 35,
+    lineHeight: 48,
+    fontFamily: "SoraBold",
+    marginTop: 8,
+    fontVariant: ["tabular-nums"],
+  },
   button: {
     minHeight: 52,
     paddingHorizontal: 22,
@@ -549,15 +750,55 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 9,
   },
-  iconButton: { minWidth: 48, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: 24 },
-  smallAction: { minHeight: 48, justifyContent: "center", paddingHorizontal: 6 },
-  empty: { paddingVertical: 30, paddingHorizontal: 12, alignItems: "center", gap: 16 },
-  emptyIcon: { width: 64, height: 64, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-  input: { borderWidth: 1, borderRadius: 26, paddingHorizontal: 20, paddingVertical: 14, fontSize: 15, minHeight: 52 },
+  iconButton: {
+    minWidth: 48,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 24,
+  },
+  smallAction: {
+    minHeight: 48,
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  empty: {
+    paddingVertical: 30,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    gap: 16,
+  },
+  emptyIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 26,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    fontSize: 15,
+    minHeight: 52,
+  },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginVertical: 4 },
-  chip: { minHeight: 44, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 22, justifyContent: "center" },
+  chip: {
+    minHeight: 44,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 22,
+    justifyContent: "center",
+  },
   track: { height: 6, borderRadius: 3, overflow: "hidden" },
-  setting: { minHeight: 60, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  setting: {
+    minHeight: 60,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
   listItem: {
     flexDirection: "row",
     alignItems: "center",

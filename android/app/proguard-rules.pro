@@ -12,3 +12,6 @@
 -keep class com.facebook.react.turbomodule.** { *; }
 
 # Add any project specific keep options here:
+
+# Optional JPEG2000 decoder is not used by text extraction; PDFs without text use Android PdfRenderer.
+-dontwarn com.gemalto.jp2.JP2Decoder

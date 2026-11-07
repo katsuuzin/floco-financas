@@ -101,6 +101,28 @@ export function draftFromNotification(s, row) {
   return { ...sug, ...targets, category: rule?.category || (sug.type === "income" ? "Outros" : "Outros"), installments: "1", tags: [] };
 }
 
+// A mesma operação pode chegar pelo app do banco e por SMS: mesmo valor e tipo,
+// mesmo banco, até 10 minutos de diferença. Marca para revisão, sem apagar:
+// duas operações legítimas podem ter o mesmo valor e comerciante.
+export function dedupeInbox(rows) {
+  const sorted = [...rows].sort((a, b) => (a.source === "sms") - (b.source === "sms") || b.postedAt - a.postedAt);
+  const kept = [];
+  const duplicates = [];
+  const bankOf = (r) => String(r.bank || "").toLowerCase().replace(/^sms · /, "");
+  for (const r of sorted) {
+    const s = suggestNotification(r);
+    const twin = kept.find(
+      (k) =>
+        (k.r.source === "sms") !== (r.source === "sms") &&
+        k.s.kind === s.kind && k.s.description === s.description &&
+        k.s.amount && k.s.amount === s.amount && k.s.type === s.type && bankOf(k.r) === bankOf(r) && Math.abs(k.r.postedAt - r.postedAt) <= 10 * 60 * 1000,
+    );
+    if (twin) duplicates.push(r.id);
+    else kept.push({ r, s });
+  }
+  return { unique: [...rows].sort((a, b) => b.postedAt - a.postedAt), duplicates };
+}
+
 export function importNotification(s, row, input) {
   if (s.transactions.some((t) => t.notificationId === row.id)) return s;
   const next = addTransaction(s, {

@@ -30,14 +30,32 @@ import TransactionsScreen from "./src/screens/TransactionsScreen";
 import AnalysisScreen from "./src/screens/AnalysisScreen";
 import MoreScreen from "./src/screens/MoreScreen";
 import SettingsScreen from "./src/screens/SettingsScreen";
+import DataToolsScreen from "./src/screens/DataToolsScreen";
 import FormScreen from "./src/screens/FormScreen";
-import { AccountsScreen, CardsScreen, BudgetsScreen, GoalsScreen } from "./src/screens/OrganizeScreens";
-import { ContractsScreen, RecurrencesScreen, InstallmentsScreen } from "./src/screens/CommitmentScreens";
-import { ReportsScreen, ReportScreen, ProjectionsScreen } from "./src/screens/ReportScreens";
+import {
+  AccountsScreen,
+  CardsScreen,
+  BudgetsScreen,
+  GoalsScreen,
+} from "./src/screens/OrganizeScreens";
+import {
+  ContractsScreen,
+  RecurrencesScreen,
+  InstallmentsScreen,
+} from "./src/screens/CommitmentScreens";
+import {
+  ReportsScreen,
+  ReportScreen,
+  ProjectionsScreen,
+} from "./src/screens/ReportScreens";
 import { RulesScreen, ReconcileScreen } from "./src/screens/ToolScreens";
 import RemindersScreen from "./src/screens/RemindersScreen";
 import AssistantScreen from "./src/screens/AssistantScreen";
-import { LayoutScreen, PreferencesScreen, WelcomeScreen } from "./src/screens/PersonalizeScreens";
+import {
+  LayoutScreen,
+  PreferencesScreen,
+  WelcomeScreen,
+} from "./src/screens/PersonalizeScreens";
 import { layoutOf, DESTINATIONS } from "./src/layout.mjs";
 import { reschedule, updateWidgets } from "./src/app/notify";
 import PlanningPanel from "./src/PlanningPanel";
@@ -67,7 +85,13 @@ export default function App() {
   );
 }
 
-function Themed({ fonts, children }: { fonts: boolean; children: React.ReactNode }) {
+function Themed({
+  fonts,
+  children,
+}: {
+  fonts: boolean;
+  children: React.ReactNode;
+}) {
   const { state } = useStore();
   return (
     <ThemeProvider dark={!!state.settings.dark} fonts={fonts}>
@@ -90,7 +114,9 @@ function Gate() {
 
   const refreshPin = async (initial = false) => {
     try {
-      const r = NativeModules.FlocoFinanceTools ? await NativeModules.FlocoFinanceTools.pinStatus() : { enabled: false };
+      const r = NativeModules.FlocoFinanceTools
+        ? await NativeModules.FlocoFinanceTools.pinStatus()
+        : { enabled: false };
       pinRef.current = !!r.enabled;
       setPinEnabled(!!r.enabled);
       if (initial && r.enabled) setLocked(true);
@@ -111,7 +137,8 @@ function Gate() {
   }, [loaded, checked, state.settings.biometric]);
   useEffect(() => {
     const sub = AppState.addEventListener("change", (status) => {
-      if (status !== "active" && (bioRef.current || pinRef.current)) setLocked(true);
+      if (status !== "active" && (bioRef.current || pinRef.current))
+        setLocked(true);
     });
     return () => sub.remove();
   }, []);
@@ -126,7 +153,11 @@ function Gate() {
   return (
     <>
       <StatusBar style={dark ? "light" : "dark"} />
-      <Shell onPinChange={() => refreshPin()} unlocked={!locked} protectedApp={pinEnabled} />
+      <Shell
+        onPinChange={() => refreshPin()}
+        unlocked={!locked}
+        protectedApp={pinEnabled}
+      />
       <Modal visible={locked} animationType="fade" onRequestClose={() => {}}>
         <Lock pinEnabled={pinEnabled} onUnlock={() => setLocked(false)} />
       </Modal>
@@ -134,7 +165,13 @@ function Gate() {
   );
 }
 
-function Lock({ pinEnabled, onUnlock }: { pinEnabled: boolean; onUnlock: () => void }) {
+function Lock({
+  pinEnabled,
+  onUnlock,
+}: {
+  pinEnabled: boolean;
+  onUnlock: () => void;
+}) {
   const { c } = useTheme();
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
@@ -159,7 +196,9 @@ function Lock({ pinEnabled, onUnlock }: { pinEnabled: boolean; onUnlock: () => v
     <SafeAreaView style={[k.center, { backgroundColor: c.bg }]}>
       <I name="lock" size={42} color={c.primary} />
       <T style={k.pageTitle}>Suas finanças protegidas</T>
-      <Muted style={{ textAlign: "center" }}>Use o PIN do Floco ou o bloqueio do Android para entrar.</Muted>
+      <Muted style={{ textAlign: "center" }}>
+        Use o PIN do Floco ou o bloqueio do Android para entrar.
+      </Muted>
       {pinEnabled && (
         <View style={{ alignSelf: "stretch", gap: 12 }}>
           <TextInput
@@ -169,7 +208,14 @@ function Lock({ pinEnabled, onUnlock }: { pinEnabled: boolean; onUnlock: () => v
             maxLength={12}
             value={pin}
             onChangeText={setPin}
-            style={[k.input, { borderColor: c.line, color: c.text, backgroundColor: c.surface }]}
+            style={[
+              k.input,
+              {
+                borderColor: c.line,
+                color: c.text,
+                backgroundColor: c.surface,
+              },
+            ]}
           />
           <Button
             title="Entrar com PIN"
@@ -192,7 +238,13 @@ function Lock({ pinEnabled, onUnlock }: { pinEnabled: boolean; onUnlock: () => v
           />
         </View>
       )}
-      <Button title={busy ? "Autenticando…" : "Usar bloqueio do Android"} disabled={busy} onPress={system} icon="unlock" secondary={pinEnabled} />
+      <Button
+        title={busy ? "Autenticando…" : "Usar bloqueio do Android"}
+        disabled={busy}
+        onPress={system}
+        icon="unlock"
+        secondary={pinEnabled}
+      />
       {!!error && <T style={{ color: c.red }}>{error}</T>}
     </SafeAreaView>
   );
@@ -214,6 +266,7 @@ const TITLES: Record<string, string> = {
   budgets: "Orçamento",
   goals: "Metas e caixinhas",
   settings: "Configurações",
+  dataTools: "Importar e exportar",
   recurrences: "Recorrências",
   installments: "Parcelamentos",
   reports: "Relatórios",
@@ -244,7 +297,15 @@ const routeTitle = (r: Route) =>
       ? REPORT_TITLES[r.id] || "Relatório"
       : TITLES[r.name] || "";
 
-function Shell({ onPinChange, unlocked, protectedApp }: { onPinChange: () => void; unlocked: boolean; protectedApp: boolean }) {
+function Shell({
+  onPinChange,
+  unlocked,
+  protectedApp,
+}: {
+  onPinChange: () => void;
+  unlocked: boolean;
+  protectedApp: boolean;
+}) {
   const { c } = useTheme();
   const { state, perform, notice, setNotice, storageError } = useStore();
   const nav = useNav();
@@ -264,67 +325,133 @@ function Shell({ onPinChange, unlocked, protectedApp }: { onPinChange: () => voi
       if (!url) return;
       const m = /^floco:\/\/([^/?#]+)(?:\/([^/?#]+))?/.exec(url);
       if (!m) return;
-      if (m[1] === "add") nav.push({ name: "form", kind: "transaction", initial: { type: m[2] === "income" ? "income" : "expense" } });
+      if (m[1] === "add")
+        nav.push({
+          name: "form",
+          kind: "transaction",
+          initial: { type: m[2] === "income" ? "income" : "expense" },
+        });
       else if (m[1] === "bills") nav.push({ name: "reminders" });
       else nav.reset();
     };
-    Linking.getInitialURL().then(handle).catch(() => {});
+    Linking.getInitialURL()
+      .then(handle)
+      .catch(() => {});
     const sub = Linking.addEventListener("url", (e) => handle(e.url));
     return () => sub.remove();
   }, []);
   const top = nav.top;
 
   // Painéis que já trazem cabeçalho e rolagem próprios.
-  if (top && ["tool", "imports", "receipt", "notifications", "security", "updates"].includes(top.name)) {
+  if (
+    top &&
+    [
+      "tool",
+      "imports",
+      "receipt",
+      "notifications",
+      "security",
+      "updates",
+    ].includes(top.name)
+  ) {
     const common = { state, c, onChange: perform, onClose: nav.back };
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
-        {top.name === "tool" && <PlanningPanel {...common} initial={(top as any).id} />}
+        {top.name === "tool" && (
+          <PlanningPanel {...common} initial={(top as any).id} />
+        )}
         {top.name === "imports" && <ImportsPanel {...common} />}
         {top.name === "receipt" && <ReceiptPanel {...common} />}
         {top.name === "notifications" && <NotificationsPanel {...common} />}
-        {top.name === "security" && <SecurityPanel {...common} onPinChange={onPinChange} />}
-        {top.name === "updates" && <UpdatesPanel c={c} updates={updates} onBack={nav.back} />}
+        {top.name === "security" && (
+          <SecurityPanel {...common} onPinChange={onPinChange} />
+        )}
+        {top.name === "updates" && (
+          <UpdatesPanel c={c} updates={updates} onBack={nav.back} />
+        )}
         <Snackbar notice={notice} onClose={() => setNotice("")} />
       </SafeAreaView>
     );
   }
 
-  const firstRun = !state.settings.onboarded && !state.accounts.length && !state.transactions.length;
-  const content = top ? renderRoute(top) : firstRun && nav.tab === "home" ? <WelcomeScreen /> : renderTab(nav.tab);
+  const firstRun =
+    !state.settings.onboarded &&
+    !state.accounts.length &&
+    !state.transactions.length;
+  const content = top ? (
+    renderRoute(top)
+  ) : firstRun && nav.tab === "home" ? (
+    <WelcomeScreen />
+  ) : (
+    renderTab(nav.tab)
+  );
   const tab4 = layoutOf(state).tab4;
-  const slot4 = DESTINATIONS.find(([id]: string[]) => id === tab4) || DESTINATIONS[0];
+  const slot4 =
+    DESTINATIONS.find(([id]: string[]) => id === tab4) || DESTINATIONS[0];
   const title = top ? routeTitle(top) : TITLES[nav.tab];
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }} edges={["top", "bottom"]}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: c.bg }}
+      edges={["top", "bottom"]}
+    >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
         {top?.name !== "form" && (
           <View style={[s.header, { backgroundColor: c.bg }]}>
             {top ? (
               <IconButton name="arrow-left" label="Voltar" onPress={nav.back} />
             ) : nav.tab === "home" ? (
-              <Image source={require("./assets/icon.png")} accessibilityLabel="Mascote Floco" style={s.logo} />
+              <Image
+                source={require("./assets/icon.png")}
+                accessibilityLabel="Mascote Floco"
+                style={s.logo}
+              />
             ) : null}
-            <View style={{ flex: 1, paddingLeft: top || nav.tab === "home" ? 0 : 4 }}>
-              <T accessibilityRole="header" numberOfLines={1} style={[k.pageTitle, { fontSize: top ? 19 : 22 }]}>
+            <View
+              style={{
+                flex: 1,
+                paddingLeft: top || nav.tab === "home" ? 0 : 4,
+              }}
+            >
+              <T
+                accessibilityRole="header"
+                numberOfLines={1}
+                style={[k.pageTitle, { fontSize: top ? 19 : 22 }]}
+              >
                 {!top && nav.tab === "home" ? "Floco Finanças" : title}
               </T>
             </View>
-            {!top && <IconButton name="settings" label="Abrir configurações" onPress={() => nav.push({ name: "settings" })} />}
+            {!top && (
+              <IconButton
+                name="settings"
+                label="Abrir configurações"
+                onPress={() => nav.push({ name: "settings" })}
+              />
+            )}
           </View>
         )}
         {!!updates.release && !top && (
           <Pressable
             accessibilityRole="button"
             onPress={() => nav.push({ name: "updates" })}
-            style={({ pressed }) => [s.banner, { backgroundColor: c.soft, opacity: pressed ? 0.75 : 1 }]}
+            style={({ pressed }) => [
+              s.banner,
+              { backgroundColor: c.soft, opacity: pressed ? 0.75 : 1 },
+            ]}
           >
-            <T style={{ fontFamily: "SoraSemi" }}>Nova versão {updates.release.version} disponível · Atualizar</T>
+            <T style={{ fontFamily: "SoraSemi" }}>
+              Nova versão {updates.release.version} disponível · Atualizar
+            </T>
           </Pressable>
         )}
         <ScrollView
           key={top ? `${top.name}-${nav.stack.length}` : nav.tab}
-          contentContainerStyle={[k.content, { maxWidth: 900, width: "100%", alignSelf: "center" }]}
+          contentContainerStyle={[
+            k.content,
+            { maxWidth: 900, width: "100%", alignSelf: "center" },
+          ]}
           keyboardShouldPersistTaps="handled"
         >
           {!!storageError && (
@@ -335,7 +462,13 @@ function Shell({ onPinChange, unlocked, protectedApp }: { onPinChange: () => voi
           {content}
         </ScrollView>
         {!top && (
-          <View accessibilityRole="tablist" style={[s.bottomNav, { backgroundColor: c.surface, borderTopColor: c.line }]}>
+          <View
+            accessibilityRole="tablist"
+            style={[
+              s.bottomNav,
+              { backgroundColor: c.surface, borderTopColor: c.line },
+            ]}
+          >
             {TABS.slice(0, 2).map((t) => (
               <TabButton key={t.key} item={t} />
             ))}
@@ -343,7 +476,10 @@ function Shell({ onPinChange, unlocked, protectedApp }: { onPinChange: () => voi
               accessibilityRole="button"
               accessibilityLabel="Adicionar lançamento"
               onPress={() => setAdding(true)}
-              style={({ pressed }) => [s.add, { backgroundColor: c.accent, opacity: pressed ? 0.85 : 1 }]}
+              style={({ pressed }) => [
+                s.add,
+                { backgroundColor: c.accent, opacity: pressed ? 0.85 : 1 },
+              ]}
             >
               <Feather name="plus" size={28} color={c.heroText} />
             </Pressable>
@@ -351,7 +487,11 @@ function Shell({ onPinChange, unlocked, protectedApp }: { onPinChange: () => voi
               <TabButton item={TABS[2]} />
             ) : (
               <TabButton
-                item={{ key: "analysis", label: slot4[1], icon: slot4[2] as Icon }}
+                item={{
+                  key: "analysis",
+                  label: slot4[1],
+                  icon: slot4[2] as Icon,
+                }}
                 onPress={() => {
                   const d = destination(tab4);
                   if (d.route) nav.push(d.route);
@@ -384,6 +524,8 @@ function renderRoute(r: Route) {
       return <BudgetsScreen />;
     case "goals":
       return <GoalsScreen />;
+    case "dataTools":
+      return <DataToolsScreen />;
     case "settings":
       return <SettingsScreen />;
     case "contracts":
@@ -418,7 +560,13 @@ function renderRoute(r: Route) {
   return null;
 }
 
-function TabButton({ item, onPress }: { item: { key: Tab; label: string; icon: Icon }; onPress?: () => void }) {
+function TabButton({
+  item,
+  onPress,
+}: {
+  item: { key: Tab; label: string; icon: Icon };
+  onPress?: () => void;
+}) {
   const { c } = useTheme();
   const nav = useNav();
   const on = !onPress && nav.tab === item.key;
@@ -430,16 +578,32 @@ function TabButton({ item, onPress }: { item: { key: Tab; label: string; icon: I
       onPress={onPress || (() => nav.setTab(item.key))}
       style={s.tab}
     >
-      <View style={[s.bar, { backgroundColor: on ? c.primary : "transparent" }]} />
+      <View
+        style={[s.bar, { backgroundColor: on ? c.primary : "transparent" }]}
+      />
       <View style={s.indicator}>
         <I name={item.icon} color={on ? c.primary : c.muted} />
       </View>
-      <T style={{ fontSize: 10, color: on ? c.primary : c.muted, fontFamily: on ? "SoraSemi" : "Sora" }}>{item.label}</T>
+      <T
+        style={{
+          fontSize: 10,
+          color: on ? c.primary : c.muted,
+          fontFamily: on ? "SoraSemi" : "Sora",
+        }}
+      >
+        {item.label}
+      </T>
     </Pressable>
   );
 }
 
-function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+function AddSheet({
+  visible,
+  onClose,
+}: {
+  visible: boolean;
+  onClose: () => void;
+}) {
   const { c } = useTheme();
   const { state } = useStore();
   const nav = useNav();
@@ -447,17 +611,57 @@ function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void 
   const card = state.cards.find((x: any) => !x.archived);
   const go = (initial: any) => {
     onClose();
-    nav.push(hasAccount || initial.cardId ? { name: "form", kind: "transaction", initial } : { name: "form", kind: "account" });
+    nav.push(
+      hasAccount || initial.cardId
+        ? { name: "form", kind: "transaction", initial }
+        : { name: "form", kind: "account" },
+    );
   };
-  const options: { label: string; icon: Icon; color: string; initial: any; hidden?: boolean }[] = [
-    { label: "Receita", icon: "arrow-down-left", color: c.green, initial: { type: "income" } },
-    { label: "Despesa", icon: "arrow-up-right", color: c.red, initial: { type: "expense" } },
-    { label: "Despesa no cartão", icon: "credit-card", color: c.primary, initial: { type: "expense", cardId: card?.id }, hidden: !card },
-    { label: "Transferir", icon: "repeat", color: c.primary, initial: { type: "transfer" } },
+  const options: {
+    label: string;
+    icon: Icon;
+    color: string;
+    initial: any;
+    hidden?: boolean;
+  }[] = [
+    {
+      label: "Receita",
+      icon: "arrow-down-left",
+      color: c.green,
+      initial: { type: "income" },
+    },
+    {
+      label: "Despesa",
+      icon: "arrow-up-right",
+      color: c.red,
+      initial: { type: "expense" },
+    },
+    {
+      label: "Despesa no cartão",
+      icon: "credit-card",
+      color: c.primary,
+      initial: { type: "expense", cardId: card?.id },
+      hidden: !card,
+    },
+    {
+      label: "Transferir",
+      icon: "repeat",
+      color: c.primary,
+      initial: { type: "transfer" },
+    },
   ];
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable accessibilityLabel="Fechar" onPress={onClose} style={s.backdrop}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <Pressable
+        accessibilityLabel="Fechar"
+        onPress={onClose}
+        style={s.backdrop}
+      >
         <Pressable style={[s.sheet, { backgroundColor: c.surface }]}>
           <T style={k.sectionTitle}>Adicionar</T>
           <View style={s.sheetGrid}>
@@ -469,25 +673,51 @@ function AddSheet({ visible, onClose }: { visible: boolean; onClose: () => void 
                   accessibilityRole="button"
                   accessibilityLabel={o.label}
                   onPress={() => go(o.initial)}
-                  style={({ pressed }) => [s.sheetItem, { backgroundColor: c.soft, opacity: pressed ? 0.75 : 1 }]}
+                  style={({ pressed }) => [
+                    s.sheetItem,
+                    { backgroundColor: c.soft, opacity: pressed ? 0.75 : 1 },
+                  ]}
                 >
                   <I name={o.icon} size={26} color={o.color} />
-                  <T style={{ fontFamily: "SoraSemi", fontSize: 13, textAlign: "center" }}>{o.label}</T>
+                  <T
+                    style={{
+                      fontFamily: "SoraSemi",
+                      fontSize: 13,
+                      textAlign: "center",
+                    }}
+                  >
+                    {o.label}
+                  </T>
                 </Pressable>
               ))}
           </View>
-          {!hasAccount && <Muted>Cadastre uma conta primeiro: tocar em uma opção abre o cadastro.</Muted>}
+          {!hasAccount && (
+            <Muted>
+              Cadastre uma conta primeiro: tocar em uma opção abre o cadastro.
+            </Muted>
+          )}
         </Pressable>
       </Pressable>
     </Modal>
   );
 }
 
-function Snackbar({ notice, onClose }: { notice: string; onClose: () => void }) {
+function Snackbar({
+  notice,
+  onClose,
+}: {
+  notice: string;
+  onClose: () => void;
+}) {
   const { c } = useTheme();
   if (!notice) return null;
   return (
-    <Pressable onPress={onClose} accessibilityRole="alert" accessibilityLiveRegion="polite" style={[s.snackbar, { backgroundColor: c.text }]}>
+    <Pressable
+      onPress={onClose}
+      accessibilityRole="alert"
+      accessibilityLiveRegion="polite"
+      style={[s.snackbar, { backgroundColor: c.text }]}
+    >
       <T style={{ color: c.bg, fontSize: 12, flex: 1 }}>{notice}</T>
       <Feather name="x" size={18} color={c.bg} />
     </Pressable>
@@ -495,13 +725,40 @@ function Snackbar({ notice, onClose }: { notice: string; onClose: () => void }) 
 }
 
 const s = StyleSheet.create({
-  header: { paddingHorizontal: 12, minHeight: 60, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 10 },
+  header: {
+    paddingHorizontal: 12,
+    minHeight: 60,
+    paddingVertical: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
   logo: { width: 36, height: 36, borderRadius: 10, marginLeft: 4 },
   banner: { padding: 14, marginHorizontal: 20, marginTop: 8, borderRadius: 14 },
-  bottomNav: { flexDirection: "row", borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 6, paddingBottom: 4, alignItems: "center" },
-  tab: { flex: 1, alignItems: "center", justifyContent: "center", minHeight: 60, gap: 2 },
+  bottomNav: {
+    flexDirection: "row",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 6,
+    paddingBottom: 4,
+    alignItems: "center",
+  },
+  tab: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 60,
+    gap: 2,
+  },
   indicator: { paddingHorizontal: 16, paddingVertical: 4, borderRadius: 16 },
-  add: { width: 58, height: 58, borderRadius: 29, alignItems: "center", justifyContent: "center", marginHorizontal: 6, elevation: 4 },
+  add: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: "center",
+    justifyContent: "center",
+    marginHorizontal: 6,
+    elevation: 4,
+  },
   bar: { width: 22, height: 3, borderRadius: 2, marginBottom: 4 },
   snackbar: {
     position: "absolute",
@@ -514,8 +771,27 @@ const s = StyleSheet.create({
     gap: 14,
     alignItems: "center",
   },
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
-  sheet: { padding: 20, paddingBottom: 32, borderTopLeftRadius: 24, borderTopRightRadius: 24, gap: 16 },
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    padding: 20,
+    paddingBottom: 32,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    gap: 16,
+  },
   sheetGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
-  sheetItem: { flexGrow: 1, flexBasis: "45%", minHeight: 96, borderRadius: 16, alignItems: "center", justifyContent: "center", gap: 8, padding: 12 },
+  sheetItem: {
+    flexGrow: 1,
+    flexBasis: "45%",
+    minHeight: 96,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 12,
+  },
 });

@@ -1,6 +1,7 @@
 // Fila de notificações bancárias capturadas (lida do serviço nativo).
 import { useCallback, useEffect, useState } from "react";
 import { AppState, NativeModules } from "react-native";
+import { dedupeInbox } from "../notification-import.mjs";
 
 const native = NativeModules.FlocoBankNotifications;
 
@@ -57,5 +58,6 @@ export function useBankInbox(state: any) {
   useEffect(() => {
     for (const r of rows) if (registered.has(r.id)) void dismiss(r.id);
   }, [rows.length, state.transactions.length]);
-  return { rows: rows.filter((r) => !registered.has(r.id)).sort((a, b) => b.postedAt - a.postedAt), status, refresh, dismiss, native };
+  const { unique, duplicates } = dedupeInbox(rows.filter((r) => !registered.has(r.id)));
+  return { rows: unique, possibleDuplicates: new Set(duplicates), status, refresh, dismiss, native };
 }

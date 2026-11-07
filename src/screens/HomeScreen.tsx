@@ -255,6 +255,7 @@ function PendingInbox() {
                     <Muted numberOfLines={1}>
                       {sug.kindLabel} · {row.bank}
                     </Muted>
+                    {inbox.possibleDuplicates.has(row.id) && <Muted>Possível duplicata — confira antes de registrar</Muted>}
                   </View>
                   <T style={{ fontFamily: "SoraSemi", color: income ? c.green : c.red, fontVariant: ["tabular-nums"] }}>{sug.amount ? `R$ ${sug.amount}` : "—"}</T>
                 </Pressable>

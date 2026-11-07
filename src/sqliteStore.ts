@@ -10,6 +10,7 @@ import {
   sameData,
   LOAD_ROWS,
   LOAD_META,
+  HAS_STORED_DATA,
 } from "./storage.mjs";
 import { emptyState, validateBackup } from "./finance.mjs";
 
@@ -24,7 +25,9 @@ function open() {
   if (db) return db;
   db = SQLite.openDatabaseSync(DB_NAME);
   db.execSync("PRAGMA journal_mode = WAL");
-  const version = db.getFirstSync<{ user_version: number }>("PRAGMA user_version")?.user_version ?? 0;
+  const version =
+    db.getFirstSync<{ user_version: number }>("PRAGMA user_version")
+      ?.user_version ?? 0;
   if (version < SCHEMA_VERSION) {
     db.withTransactionSync(() => {
       for (const sql of SCHEMA) db!.execSync(sql);
@@ -43,7 +46,7 @@ function readAll(d: SQLite.SQLiteDatabase) {
 }
 
 function hasData(d: SQLite.SQLiteDatabase) {
-  return !!d.getFirstSync("SELECT 1 FROM meta WHERE key = 'version'");
+  return !!d.getFirstSync(HAS_STORED_DATA);
 }
 
 export type LoadResult = { state: any; migrated: boolean; fresh: boolean };
@@ -52,10 +55,15 @@ export type LoadResult = { state: any; migrated: boolean; fresh: boolean };
 // confere que o que foi gravado é idêntico ao original e só então passa a usar o SQLite.
 export async function loadState(): Promise<LoadResult> {
   const d = open();
-  if (hasData(d)) return { state: validateBackup(readAll(d)), migrated: false, fresh: false };
+  if (hasData(d))
+    return { state: validateBackup(readAll(d)), migrated: false, fresh: false };
 
   const legacy = await AsyncStorage.getItem(LEGACY_KEY);
-  if (!legacy) return { state: emptyState(), migrated: false, fresh: true };
+  if (!legacy) {
+    const initial = emptyState();
+    d.withTransactionSync(() => applyDiff(d, diffState(null, initial)));
+    return { state: initial, migrated: false, fresh: true };
+  }
 
   const parsed = JSON.parse(legacy);
   const original = validateBackup(parsed);
@@ -66,7 +74,9 @@ export async function loadState(): Promise<LoadResult> {
   });
   const copy = readAll(d);
   if (!sameData(copy, original)) {
-    d.withTransactionSync(() => d.execSync("DELETE FROM rows; DELETE FROM meta;"));
+    d.withTransactionSync(() =>
+      d.execSync("DELETE FROM rows; DELETE FROM meta;"),
+    );
     throw Error(
       "A conferência da migração encontrou diferença. Seus dados antigos foram mantidos; reabra o app.",
     );

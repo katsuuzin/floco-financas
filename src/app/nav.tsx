@@ -1,6 +1,13 @@
 // Navegação própria: abas fixas + pilha por cima. Sem dependências nativas novas.
 // O botão voltar do Android desempilha; na raiz, volta para Início; em Início, sai.
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { BackHandler } from "react-native";
 
 export type Tab = "home" | "transactions" | "analysis" | "more";
@@ -24,6 +31,7 @@ export type Route =
   | { name: "welcome" }
   | { name: "reconcile" }
   | { name: "tool"; id: string }
+  | { name: "dataTools" }
   | { name: "imports" }
   | { name: "receipt" }
   | { name: "notifications" }
@@ -45,7 +53,13 @@ type Nav = {
 };
 const NavContext = createContext<Nav | null>(null);
 
-export function NavProvider({ children, initialMonth }: { children: React.ReactNode; initialMonth: string }) {
+export function NavProvider({
+  children,
+  initialMonth,
+}: {
+  children: React.ReactNode;
+  initialMonth: string;
+}) {
   const [tab, setTabState] = useState<Tab>("home");
   const [stack, setStack] = useState<Route[]>([]);
   const [month, setMonth] = useState(initialMonth);

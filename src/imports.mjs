@@ -44,7 +44,13 @@ export function csvRows(text, separator = ";") {
   if (row.some((x) => x.trim())) rows.push(row);
   return rows;
 }
-export function parseCSV(text, separator = ";") {
+export function parseCSV(text, separator) {
+  if (!separator) {
+    const first = text.replace(/^\uFEFF/, "").split(/\r?\n/)[0];
+    separator = [";", ",", "\t"].sort(
+      (a, b) => csvRows(first, b)[0].length - csvRows(first, a)[0].length,
+    )[0];
+  }
   const rows = csvRows(text.replace(/^\uFEFF/, ""), separator),
     headers = (rows.shift() || []).map(normalize);
   const find = (...names) => headers.findIndex((h) => names.includes(h));
@@ -54,6 +60,7 @@ export function parseCSV(text, separator = ";") {
     amount: find("valor (r$)", "valor", "amount"),
     type: find("tipo", "type"),
     category: find("categoria", "category"),
+    externalId: find("identificador", "fitid", "id"),
   };
   if ([cols.date, cols.description, cols.amount].some((i) => i < 0))
     throw Error(
@@ -63,7 +70,13 @@ export function parseCSV(text, separator = ";") {
     try {
       const value = r[cols.amount]?.trim().replace(/^R\$\s*/, "") || "";
       const negative = value.startsWith("-");
-      const amount = parseMoney(value.replace(/^[-+]/, ""));
+      const absolute = value.replace(/^[-+]/, "");
+      const nubank = cols.externalId >= 0 && headers.includes("identificador");
+      const amount = parseMoney(
+        nubank && /^\d+(?:\.\d{1,2})?$/.test(absolute)
+          ? absolute.replace(".", ",")
+          : absolute,
+      );
       const kind = normalize(r[cols.type] || "");
       if (["transfer", "transferencia"].includes(kind))
         throw Error(
@@ -77,7 +90,10 @@ export function parseCSV(text, separator = ";") {
             ? (() => {
                 throw Error("Tipo inválido");
               })()
-            : "expense";
+            : nubank && !negative
+              ? "income"
+              : "expense";
+      if (!r[cols.description]?.trim()) throw Error("Descrição vazia.");
       return {
         sourceLine: i + 2,
         date: dateOf(r[cols.date]),
@@ -85,6 +101,7 @@ export function parseCSV(text, separator = ";") {
         amount,
         type,
         category: r[cols.category]?.trim() || "Outros",
+        externalId: r[cols.externalId]?.trim() || "",
       };
     } catch (e) {
       return { sourceLine: i + 2, error: e.message };
@@ -133,18 +150,65 @@ export function parseOFX(text) {
     }
   });
 }
-export function importRows(state, rows, accountId) {
+export function importRows(
+  state,
+  rows,
+  accountId,
+  { skipPossibleDuplicates = true } = {},
+) {
   if (!state.accounts.some((a) => a.id === accountId))
     throw Error("Escolha a conta de destino.");
   if (!rows.length || rows.some((r) => r.error))
     throw Error("Selecione apenas linhas válidas para importar.");
   let s = state;
+  const consumed = new Set();
   for (const row of rows) {
-    const key = row.externalId ? `${accountId}:ofx:${row.externalId}` : null;
-    if (key && s.transactions.some((t) => t.importKey === key)) continue;
+    const key = row.externalId
+      ? `${accountId}:external:${row.externalId}`
+      : null;
+    if (
+      key &&
+      s.transactions.some(
+        (t) =>
+          t.importKey === key ||
+          t.importKey === `${accountId}:ofx:${row.externalId}`,
+      )
+    )
+      continue;
+    const match =
+      skipPossibleDuplicates &&
+      state.transactions.find(
+        (t) =>
+          !consumed.has(t.id) &&
+          t.accountId === accountId &&
+          t.confirmed &&
+          t.type === row.type &&
+          t.date === row.date &&
+          t.amount === row.amount &&
+          (!key || !t.importKey),
+      );
+    if (match) {
+      consumed.add(match.id);
+      if (key)
+        s = {
+          ...s,
+          transactions: s.transactions.map((t) =>
+            t.id === match.id ? { ...t, importKey: key } : t,
+          ),
+        };
+      continue;
+    }
     const old = new Set(s.transactions.map((t) => t.id));
-    const rule = !row.category || row.category === "Outros" ? categorize(s, row.description, row.type) : null;
-    s = addTransaction(s, { ...row, ...(rule ? { category: rule.category } : {}), accountId, confirmed: true });
+    const rule =
+      !row.category || row.category === "Outros"
+        ? categorize(s, row.description, row.type)
+        : null;
+    s = addTransaction(s, {
+      ...row,
+      ...(rule ? { category: rule.category } : {}),
+      accountId,
+      confirmed: true,
+    });
     s = {
       ...s,
       transactions: s.transactions.map((t) =>
@@ -155,6 +219,15 @@ export function importRows(state, rows, accountId) {
   return s;
 }
 export function possibleDuplicate(state, row, accountId) {
+  if (
+    row.externalId &&
+    state.transactions.some(
+      (t) =>
+        t.importKey === `${accountId}:external:${row.externalId}` ||
+        t.importKey === `${accountId}:ofx:${row.externalId}`,
+    )
+  )
+    return true;
   return state.transactions.some(
     (t) =>
       t.accountId === accountId &&

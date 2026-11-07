@@ -46,7 +46,6 @@ object BankInbox {
   }
   @Synchronized fun capture(c:Context,s:StatusBarNotification){
     val p=prefs(c)
-    android.util.Log.i("FlocoBank","post pkg=${s.packageName} enabled=${p.getBoolean("enabled",true)} sms=${p.getBoolean("sms",false)} pkgs=${p.getString("packages",null)} senders=${p.getString("smsSenders",null)}")
     if(!p.getBoolean("enabled",true))return
     val bankMap=banks(c)
     val isSms=smsApps.contains(s.packageName)
@@ -57,15 +56,16 @@ object BankInbox {
     if((n.flags and Notification.FLAG_GROUP_SUMMARY)!=0||(n.flags and Notification.FLAG_ONGOING_EVENT)!=0)return
     val title=n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
     val text=notificationText(n)
+    val hidden=Regex("(?i)conte[uú]do.*(sens[ií]vel|oculto)|sensitive notification content").containsMatchIn(n.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty())
     val content=(title+" "+text).take(2000)
-    if(!content.contains("R$",true)){seen0("sem valor em R$");return}
+    if(!content.contains("R$",true)){seen0(if(hidden) "o Android ocultou o conteúdo (Android 15+)" else "sem valor em R$");return}
     if(Regex("(?i)c[oó]digo|senha|token|verifica[çc][aã]o|autentica[çc][aã]o").containsMatchIn(content)){seen0("código de acesso descartado");return}
     if(!Regex("(?i)compra|pagamento|pix|transfer[eê]ncia|recebid|enviad|d[eé]bito|cr[eé]dito|saque|boleto|aprovad").containsMatchIn(content)){seen0("sem palavra de movimentação");return}
     val lower=content.lowercase()
     if(ignored(c).any{lower.contains(it)}){seen0("palavra ignorada");return}
     // SMS: só de remetentes bancários conhecidos (título da notificação = remetente).
     val smsBank=if(isSms)smsBanks(c).firstOrNull{b->val who=senderOf(n).lowercase();who.contains(b)||text.lines().any{l->l.lowercase().trimStart().startsWith(b)}} else null
-    if(isSms&&smsBank==null){android.util.Log.i("FlocoBank","sms sem banco title=$title sender=${senderOf(n)} keys=${n.extras.keySet()} text=${text.take(80)}");seen0("SMS de remetente não reconhecido");return}
+    if(isSms&&smsBank==null){seen0("SMS de remetente não reconhecido");return}
     val id=MessageDigest.getInstance("SHA-256").digest((s.key+":"+s.postTime).toByteArray()).joinToString(""){"%02x".format(it)}
     seen0("capturada")
     val seen=JSONArray(p.getString("seen","[]"));for(i in 0 until seen.length())if(seen.getString(i)==id)return

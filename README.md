@@ -4,6 +4,8 @@ Finanças pessoais offline, com o mascote enviado pelo usuário e identidade pr�
 
 ## Recursos
 
+**Atualização 1.3.4:** ferramentas de importação e exportação reunidas, CSV/OFX/PDF Nubank e Excel XLSX com revisão e proteção contra duplicatas, OCR de comprovantes e assistente local sem chave. Corrigida a reabertura de dados em instalações novas. Veja [a auditoria e os limites testados](AUDITORIA-FERRAMENTAS.md).
+
 Contas, carteiras, receitas, despesas, transferências, pendências, busca, filtros e edição. Perfis independentes Nubank PF/PJ e Inter PF/PJ, além de outros bancos. Cartões, limite, fechamento, vencimento, parcelas em centavos e pagamentos totais ou parciais de fatura sem duplicar despesas. Orçamentos, metas com reservas, tema claro/escuro, ocultação de valores, biometria, backup JSON e CSV. Demonstração opcional com valores fictícios.
 
 A versão 1.1.0 acrescenta categorias/subcategorias e tags, recorrências com geração explícita de pendentes sem duplicatas, central de parcelas, simulador Price, contratos com parcela fixa, Quem me deve com recebimentos parciais e estorno, projeções com cenário mensal e relatórios filtráveis/exportáveis em CSV. Veja PLANO-PARIDADE-KONTTO.md para o inventário de diferenças e as etapas ainda pendentes; a versão não representa equivalência completa com o Kontto.
@@ -28,7 +30,7 @@ Repositório público: https://github.com/katsuuzin/floco-financas. **Guarde em 
 
 ## Limites funcionais atuais
 
-Leitura de notificações bancárias, OCR, importação PDF/OFX/CSV/Excel, sincronização financeira na nuvem, widgets, amortização extraordinária, SAC e comparação dedicada entre períodos ainda não foram implementados. As recorrências são geradas pelo usuário dentro do app, sem execução automática em segundo plano. Não são recursos bloqueados por PRO. Não há desbloqueio de assinatura do app original.
+O projeto inclui leitura de notificações com revisão, OCR, importação OFX/CSV/PDF Nubank/XLSX, widgets, contratos e relatórios. A sincronização financeira na nuvem permanece adiada. Os limites específicos das ferramentas e os testes da versão atual estão em [AUDITORIA-FERRAMENTAS.md](AUDITORIA-FERRAMENTAS.md). Não há desbloqueio de assinatura do app original.
 
 O backup tem formato próprio, sem compatibilidade declarada com outros apps. JSON/CSV exportados não são criptografados. A biometria protege a abertura; o armazenamento financeiro não implementa criptografia adicional. Credenciais antigas de atualização são removidas; nenhum token é necessário.
 

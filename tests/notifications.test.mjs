@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { emptyState, balance, validateBackup } from "../src/finance.mjs";
-import { suggestNotification, importNotification, draftFromNotification } from "../src/notification-import.mjs";
+import { suggestNotification, importNotification, draftFromNotification, dedupeInbox } from "../src/notification-import.mjs";
 
 const at = new Date("2026-11-07T00:36:00").getTime();
 const row = { id: "n1", bank: "Nubank", title: "Compra aprovada", text: "Compra de R$ 42,90 no Mercado.", postedAt: at };
@@ -46,6 +46,15 @@ test("Pix enviado e recebido", () => {
   assert.equal(inn.description, "Ademar da Silva Jardim");
 });
 
+test("mesma compra pelo app e por SMS é marcada sem apagar pendências", () => {
+  const app = { id: "a", bank: "Nubank", source: "app", title: "Compra no crédito aprovada", text: "Compra de R$ 27,69 APROVADA em TIM.", postedAt: at };
+  const sms = { id: "b", bank: "SMS · NUBANK", source: "sms", title: "", text: "NUBANK: Compra de R$ 27,69 APROVADA em TIM.", postedAt: at + 60000 };
+  const other = { id: "c", bank: "Nubank", source: "app", title: "Compra", text: "Compra de R$ 27,69 em TIM.", postedAt: at + 3 * 3600000 };
+  const r = dedupeInbox([sms, app, other]);
+  assert.deepEqual(r.unique.map((x) => x.id).sort(), ["a", "b", "c"]);
+  assert.deepEqual(r.duplicates, ["b"]);
+});
+
 test("com saldo junto, usa o primeiro valor", () => {
   assert.equal(suggestNotification({ ...row, text: "Compra R$ 42,90. Limite disponível R$ 100,00" }).amount, "42,90");
 });
@@ -72,4 +81,12 @@ test("registrar duas vezes não duplica e respeita a conta", () => {
   s = importNotification(s, row, input);
   assert.equal(s.transactions.length, 1);
   assert.throws(() => importNotification(s, { ...row, id: "n2" }, { ...input, accountId: "" }));
+});
+
+test("duas compras próximas com mesmo valor pelo app continuam disponíveis", () => {
+  const a = { ...row, source: "app" };
+  const b = { ...a, id: "n2", postedAt: at + 1000 };
+  const r = dedupeInbox([a, b]);
+  assert.equal(r.unique.length, 2);
+  assert.deepEqual(r.duplicates, []);
 });
