@@ -46,33 +46,35 @@ export function selectRelease(release, currentVersion) {
     sha256: asset.digest.slice(7),
   };
 }
-export async function checkRelease(repo, token, currentVersion) {
+export const PUBLIC_REPOSITORY = "katsuuzin/floco-financas";
+export const AUTO_CHECK_INTERVAL = 15 * 60 * 1000;
+export const shouldAutoCheck = (last, now = Date.now()) =>
+  !Number.isFinite(last) ||
+  last <= 0 ||
+  now < last ||
+  now - last >= AUTO_CHECK_INTERVAL;
+export async function checkRelease(repo, currentVersion, fetcher = fetch) {
   const repository = normalizeRepository(repo);
-  if (!token?.trim())
-    throw Error("Configure seu token de leitura nas atualizações.");
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 20000);
   try {
-    const response = await fetch(
+    const response = await fetcher(
       `https://api.github.com/repos/${repository}/releases/latest`,
       {
         headers: {
-          Authorization: `Bearer ${token.trim()}`,
           Accept: "application/vnd.github+json",
           "X-GitHub-Api-Version": "2022-11-28",
         },
         signal: controller.signal,
       },
     );
-    if (response.status === 401)
-      throw Error("Token inválido ou expirado. Atualize a credencial.");
     if (response.status === 404)
       throw Error(
-        "Nenhuma release acessível. Confira o repositório, a permissão Contents: Read e se já existe uma release publicada.",
+        "Nenhuma versão pública disponível no momento. Tente novamente depois.",
       );
     if (response.status === 403 || response.status === 429)
       throw Error(
-        "O GitHub limitou a consulta ou o token não tem acesso. Tente depois e confira as permissões.",
+        "O GitHub limitou as consultas. Aguarde um pouco e tente novamente.",
       );
     if (!response.ok)
       throw Error(

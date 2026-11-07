@@ -7,6 +7,8 @@ import {
   balance,
   invoice,
   monthKey,
+  includedAccounts,
+  totalBalance,
 } from "./finance.mjs";
 
 export const extraLists = [
@@ -398,24 +400,39 @@ export function projection(
     !Number.isSafeInteger(scenarioMonthly)
   )
     fail("Escolha um horizonte de até 24 meses.");
-  const initial = s.accounts.reduce((n, a) => n + balance(s, a.id), 0);
+  const initial = totalBalance(s);
+  const included = new Set(includedAccounts(s).map((a) => a.id));
   const events = s.transactions
     .filter(
       (t) =>
-        !t.confirmed && !t.cardId && t.type !== "transfer" && t.date <= through,
+        !t.confirmed &&
+        !t.cardId &&
+        t.date <= through &&
+        (included.has(t.accountId) ||
+          (t.type === "transfer" && included.has(t.destinationId))),
     )
     .map((t) => ({
       date: t.date < from ? from : t.date,
       description: t.description,
-      amount: t.type === "income" ? t.amount : -t.amount,
-    }));
-  for (const e of recurrenceEvents(s, through, from))
+      amount:
+        t.type === "transfer"
+          ? (included.has(t.destinationId) ? t.amount : 0) -
+            (included.has(t.accountId) ? t.amount : 0)
+          : t.type === "income"
+            ? t.amount
+            : -t.amount,
+    }))
+    .filter((e) => e.amount !== 0);
+  for (const e of recurrenceEvents(s, through, from).filter((e) =>
+    included.has(e.accountId),
+  ))
     events.push({
       date: e.date,
       description: e.description,
       amount: e.type === "income" ? e.amount : -e.amount,
     });
   for (const card of s.cards) {
+    if (card.accountId && !included.has(card.accountId)) continue;
     const months = new Set(
       s.transactions
         .filter((t) => t.cardId === card.id)

@@ -4,7 +4,7 @@ Estado em 6 de novembro de 2026. Base do Floco: v1.0.1 Solar marrom. Este docume
 
 ## Objetivo e decisões preservadas
 
-Adicionar ao Floco as funções do Kontto verificadas no Android, incluindo as funções identificadas como PRO, sem criar assinatura, período de teste ou bloqueios comerciais no Floco. Manter nome, mascote, Solar marrom #311E0D, amarelo, dados locais e repositório privado. A chave de assinatura permanece exclusivamente no computador. Novos APKs precisam atualizar a instalação existente sem apagar dados.
+Adicionar ao Floco as funções do Kontto verificadas no Android, incluindo as funções identificadas como PRO, sem criar assinatura, período de teste ou bloqueios comerciais no Floco. Manter nome, mascote, Solar marrom #311E0D, amarelo, dados locais e repositório agora público por solicitação do usuário. A chave de assinatura permanece exclusivamente no computador. Novos APKs precisam atualizar a instalação existente sem apagar dados.
 
 ## Evidências e limite da verificação
 
@@ -153,3 +153,6 @@ Repetir no Kontto e no Floco os cenários documentados, comparando resultados fu
 - [ ] Fechar o inventário de comportamentos e executar as etapas de implementação.
 
 Nenhuma funcionalidade nova foi marcada como entregue apenas pela elaboração deste plano.
+
+## Incremento 1.1.1
+Ocultação de saldo por conta independente do olho global, inclusão opcional no saldo geral/projeções, atualização pública sem token e verificação automática em primeiro plano. A mudança de visibilidade do código não publica dados financeiros locais nem a chave de assinatura. O inventário de funções restantes continua válido.

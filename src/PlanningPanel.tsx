@@ -1094,10 +1094,11 @@ export default function PlanningPanel({
                 {page === "projections" && (
                   <>
                     <Txt c={c} muted>
-                      Saldo total das contas, pendências, faturas e recorrências
-                      futuras. Valores vencidos entram no início do horizonte.
-                      Reservas continuam incluídas no saldo total. Recebimentos
-                      de dívidas sem pagamento confirmado não são presumidos.
+                      Saldo das contas incluídas, pendências, faturas e
+                      recorrências futuras. Valores vencidos entram no início do
+                      horizonte. Reservas dessas contas continuam incluídas.
+                      Recebimentos de dívidas sem pagamento confirmado não são
+                      presumidos.
                     </Txt>
                     <Options
                       c={c}

@@ -4,7 +4,61 @@ import {
   normalizeRepository,
   newerVersion,
   selectRelease,
+  checkRelease,
+  shouldAutoCheck,
+  AUTO_CHECK_INTERVAL,
 } from "../src/updates.mjs";
+test("consulta pública funciona sem credencial e nunca envia Authorization", async () => {
+  let requested;
+  const response = {
+    tag_name: "v1.1.1",
+    assets: [
+      {
+        id: 1,
+        name: "Floco-Financas.apk",
+        size: 100,
+        digest: "sha256:" + "a".repeat(64),
+      },
+    ],
+  };
+  const next = await checkRelease(
+    "katsuuzin/floco-financas",
+    "1.1.0",
+    async (url, options) => {
+      requested = { url, options };
+      return { ok: true, status: 200, json: async () => response };
+    },
+  );
+  assert.equal(next.version, "v1.1.1");
+  assert.equal(requested.options.headers.Authorization, undefined);
+  assert.equal(
+    requested.url,
+    "https://api.github.com/repos/katsuuzin/floco-financas/releases/latest",
+  );
+  await assert.rejects(
+    () =>
+      checkRelease("katsuuzin/floco-financas", "1.1.0", async () => ({
+        ok: false,
+        status: 403,
+      })),
+    /limitou/,
+  );
+  await assert.rejects(
+    () =>
+      checkRelease("katsuuzin/floco-financas", "1.1.0", async () => ({
+        ok: false,
+        status: 404,
+      })),
+    /pública/,
+  );
+});
+test("verificação automática respeita intervalo e recupera mudança do relógio", () => {
+  const now = 10000000;
+  assert.equal(shouldAutoCheck(0, now), true);
+  assert.equal(shouldAutoCheck(now - 1000, now), false);
+  assert.equal(shouldAutoCheck(now - AUTO_CHECK_INTERVAL, now), true);
+  assert.equal(shouldAutoCheck(now + 1000, now), true);
+});
 test("repositório aceita somente owner/repo e impede injeção de caminho", () => {
   assert.equal(
     normalizeRepository("https://github.com/kat/floco.git"),

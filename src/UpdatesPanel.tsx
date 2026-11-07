@@ -1,340 +1,179 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import {
   View,
   Text,
-  TextInput,
   Pressable,
   ScrollView,
-  StyleSheet,
-  NativeModules,
-  DeviceEventEmitter,
+  Switch,
   ActivityIndicator,
 } from "react-native";
-import * as SecureStore from "expo-secure-store";
 import * as Application from "expo-application";
-import { normalizeRepository, checkRelease } from "./updates.mjs";
-const KEY = "floco.github.updates";
-export default function UpdatesPanel({ c, onBack }: any) {
-  const [repository, setRepository] = useState("katsuuzin/floco-financas"),
-    [token, setToken] = useState(""),
-    [ready, setReady] = useState(false),
-    [busy, setBusy] = useState(""),
-    [message, setMessage] = useState(""),
-    [error, setError] = useState(""),
-    [release, setRelease] = useState<any>(null),
-    [downloaded, setDownloaded] = useState(false),
-    [progress, setProgress] = useState(0),
-    [saved, setSaved] = useState(false);
-  const version = Application.nativeApplicationVersion || "1.0.0";
-  const native = NativeModules.FlocoUpdater;
-  useEffect(() => {
-    SecureStore.getItemAsync(KEY)
-      .then((raw) => {
-        if (raw) {
-          const data = JSON.parse(raw);
-          setRepository(data.repository);
-          setToken(data.token);
-          setSaved(true);
-        }
-      })
-      .catch(() =>
-        setError(
-          "Não foi possível ler a configuração. Salve novamente seu acesso.",
-        ),
-      )
-      .finally(() => setReady(true));
-    const listener = DeviceEventEmitter.addListener(
-      "FlocoUpdateProgress",
-      (value: number) => setProgress(value),
-    );
-    return () => listener.remove();
-  }, []);
-  const run = async (label: string, work: () => Promise<void>) => {
-    if (busy) return;
-    setError("");
-    setMessage("");
-    setBusy(label);
-    try {
-      await work();
-    } catch (e: any) {
-      setError(
-        e.message ||
-          "Não foi possível concluir. Confira sua conexão e tente novamente.",
-      );
-    } finally {
-      setBusy("");
-    }
-  };
-  const save = () =>
-    run("Salvando acesso…", async () => {
-      const repo = normalizeRepository(repository);
-      if (token.trim().length < 20 || /[\r\n]/.test(token.trim()))
-        throw Error("Informe seu token GitHub de leitura.");
-      await SecureStore.setItemAsync(
-        KEY,
-        JSON.stringify({ repository: repo, token: token.trim() }),
-      );
-      setRepository(repo);
-      setSaved(true);
-      setRelease(null);
-      setDownloaded(false);
-      setMessage("Acesso guardado de forma protegida neste Android.");
-    });
-  const check = () =>
-    run("Consultando GitHub…", async () => {
-      if (!saved) throw Error("Salve o repositório e o token primeiro.");
-      const next = await checkRelease(repository, token, version);
-      setRelease(next);
-      setDownloaded(false);
-      setMessage(
-        next
-          ? "Uma nova versão está disponível."
-          : "Você já usa a versão estável mais recente.",
-      );
-    });
-  const download = () =>
-    run("Baixando e verificando APK…", async () => {
-      if (!native)
-        throw Error("Este recurso precisa do APK Android do Floco Finanças.");
-      if (!saved || !release)
-        throw Error("Consulte as atualizações antes de baixar.");
-      setProgress(0);
-      setDownloaded(false);
-      await native.download(
-        normalizeRepository(repository),
-        release.assetId,
-        token.trim(),
-        release.sha256,
-        release.size,
-      );
-      setDownloaded(true);
-      setMessage(
-        "APK verificado: tamanho, SHA-256, aplicativo, assinatura e versão.",
-      );
-    });
-  const install = () =>
-    run("Abrindo instalador…", async () => {
-      if (!(await native.canInstall())) {
-        await native.openInstallSettings();
-        setMessage(
-          "Ative “Permitir desta fonte”, volte ao Floco e toque em Instalar atualização novamente.",
-        );
-        return;
-      }
-      await native.install();
-      setMessage(
-        "Confirme a atualização no instalador do Android. Seus dados permanecem no aplicativo.",
-      );
-    });
+export default function UpdatesPanel({ c, onBack, updates: u }: any) {
+  const text = (children: any, style: any = {}, rest: any = {}) => (
+    <Text
+      {...rest}
+      style={[
+        { fontFamily: "Sora", fontSize: 15, lineHeight: 23, color: c.text },
+        style,
+      ]}
+    >
+      {children}
+    </Text>
+  );
   const button = (
     title: string,
-    onPress: () => void,
+    action: any,
     secondary = false,
     disabled = false,
   ) => (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ disabled: !!busy || disabled }}
-      disabled={!!busy || disabled}
-      onPress={onPress}
-      style={({ pressed }) => [
-        s.button,
-        {
-          backgroundColor: secondary ? c.soft : c.primary,
-          opacity: busy || disabled ? 0.5 : pressed ? 0.75 : 1,
-        },
-      ]}
+      accessibilityState={{ disabled: !!u.busy || disabled }}
+      disabled={!!u.busy || disabled}
+      onPress={action}
+      style={({ pressed }) => ({
+        minHeight: 52,
+        padding: 16,
+        borderRadius: 16,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: secondary ? c.soft : c.primary,
+        opacity: u.busy || disabled ? 0.5 : pressed ? 0.75 : 1,
+      })}
     >
-      <Text
-        style={{
-          color: secondary ? c.primary : c.onPrimary,
-          fontFamily: "SoraSemi",
-          fontSize: 14,
-        }}
-      >
-        {title}
-      </Text>
+      {text(title, {
+        fontFamily: "SoraSemi",
+        color: secondary ? c.text : c.onPrimary,
+      })}
     </Pressable>
   );
-  if (!ready)
-    return (
-      <View style={{ flex: 1, justifyContent: "center" }}>
-        <ActivityIndicator color={c.primary} />
-      </View>
-    );
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <View style={[s.header, { borderColor: c.line }]}>
-        <Pressable accessibilityRole="button" onPress={onBack} style={s.back}>
-          <Text style={{ color: c.primary, fontFamily: "SoraSemi" }}>
-            Voltar
-          </Text>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 16,
+          padding: 16,
+          borderBottomWidth: 1,
+          borderColor: c.line,
+        }}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Voltar"
+          onPress={onBack}
+          style={{ minHeight: 48, justifyContent: "center", padding: 8 }}
+        >
+          {text("Voltar")}
         </Pressable>
-        <Text style={{ color: c.text, fontFamily: "SoraBold", fontSize: 20 }}>
-          Atualizações
-        </Text>
+        {text("Atualizações", { fontSize: 21, fontFamily: "SoraBold" })}
       </View>
       <ScrollView
-        keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
           padding: 24,
-          gap: 18,
           paddingBottom: 48,
-          maxWidth: 640,
+          gap: 18,
+          maxWidth: 700,
           width: "100%",
           alignSelf: "center",
         }}
       >
-        <Text style={{ fontFamily: "SoraBold", fontSize: 24, color: c.text }}>
-          Seu Floco sempre em dia.
-        </Text>
-        <Text style={[s.body, { color: c.muted }]}>
-          Versão instalada {version} ({Application.nativeBuildVersion}). Todos
-          os recursos são livres. O GitHub é usado somente para buscar novas
-          versões quando você solicitar.
-        </Text>
-        <View style={[s.box, { backgroundColor: c.surface }]}>
-          <Text style={[s.label, { color: c.text }]}>Repositório privado</Text>
-          <TextInput
-            accessibilityLabel="Repositório GitHub"
-            placeholder="usuario/floco-financas"
-            placeholderTextColor={c.muted}
-            value={repository}
-            autoCapitalize="none"
-            autoCorrect={false}
-            onChangeText={(v) => {
-              setRepository(v);
-              setSaved(false);
-              setRelease(null);
-              setDownloaded(false);
-            }}
-            style={[s.input, { color: c.text, borderColor: c.line }]}
-          />
-          <Text style={[s.label, { color: c.text, marginTop: 18 }]}>
-            Token pessoal de leitura
-          </Text>
-          <TextInput
-            accessibilityLabel="Token GitHub de leitura"
-            placeholder="github_pat_…"
-            placeholderTextColor={c.muted}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="off"
-            value={token}
-            onChangeText={(v) => {
-              setToken(v);
-              setSaved(false);
-              setRelease(null);
-              setDownloaded(false);
-            }}
-            style={[s.input, { color: c.text, borderColor: c.line }]}
-          />
-          <Text style={[s.body, { color: c.muted, marginVertical: 16 }]}>
-            Crie um token fine-grained com acesso apenas a este repositório e
-            Contents: Read-only. A credencial fica no armazenamento protegido do
-            Android e não entra no backup financeiro.
-          </Text>
-          {button(
-            saved ? "Acesso salvo · salvar novamente" : "Salvar acesso",
-            save,
-            true,
+        {text("Seu Floco sempre em dia.", {
+          fontSize: 24,
+          lineHeight: 32,
+          fontFamily: "SoraBold",
+        })}
+        {text(
+          `Versão instalada ${u.version} (${Application.nativeBuildVersion}). Atualizações públicas pelo GitHub, sem login e sem token.`,
+          { color: c.muted },
+        )}
+        <View
+          style={{
+            padding: 20,
+            borderRadius: 18,
+            backgroundColor: c.surface,
+            gap: 14,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            {text("Verificar automaticamente", {
+              flex: 1,
+              fontFamily: "SoraSemi",
+            })}
+            <Switch
+              accessibilityLabel="Verificar atualizações automaticamente"
+              value={u.autoCheck}
+              onValueChange={u.setAutomatic}
+              disabled={!u.ready}
+              trackColor={{ false: c.line, true: c.primary }}
+              thumbColor={u.autoCheck ? c.accent : c.muted}
+            />
+          </View>
+          {text(
+            "Verifica ao abrir, ao voltar ao aplicativo e a cada 15 minutos enquanto ele estiver aberto. Uma nova versão aparece em um aviso no Floco.",
+            { color: c.muted, fontSize: 13 },
           )}
-          <View style={{ height: 12 }} />
-          {button("Verificar atualizações", check, false, !saved)}
+          {text(
+            u.lastCheck
+              ? `Última verificação: ${new Date(u.lastCheck).toLocaleString("pt-BR")}`
+              : "Ainda não foi possível concluir uma verificação.",
+            { color: c.muted, fontSize: 13 },
+          )}
+          {button(
+            "Verificar atualizações",
+            () => u.check(false),
+            true,
+            !u.ready,
+          )}
         </View>
-        {!!busy && (
+        {!!u.busy && (
           <View accessibilityRole="alert" style={{ gap: 10 }}>
             <ActivityIndicator color={c.primary} />
-            <Text style={[s.body, { color: c.text, textAlign: "center" }]}>
-              {busy}
-              {busy.startsWith("Baixando") ? ` ${progress}%` : ""}
-            </Text>
+            {text(
+              u.busy + (u.busy.startsWith("Baixando") ? ` ${u.progress}%` : ""),
+              { textAlign: "center" },
+            )}
           </View>
         )}
-        {!!error && (
-          <Text accessibilityRole="alert" style={[s.body, { color: c.red }]}>
-            {error}
-          </Text>
-        )}
-        {!!message && (
-          <Text accessibilityRole="alert" style={[s.body, { color: c.green }]}>
-            {message}
-          </Text>
-        )}
-        {release && (
-          <View style={[s.box, { backgroundColor: c.surface }]}>
-            <Text
-              style={{ color: c.text, fontFamily: "SoraBold", fontSize: 21 }}
-            >
-              {release.version}
-            </Text>
-            <Text style={[s.body, { color: c.muted, marginVertical: 12 }]}>
-              {(release.size / 1024 / 1024).toFixed(1)} MB · APK Android
-            </Text>
-            <Text style={[s.body, { color: c.text, marginBottom: 20 }]}>
-              {release.notes}
-            </Text>
-            {downloaded
-              ? button("Instalar atualização", install)
-              : button("Baixar atualização", download)}
-            <Text style={[s.body, { color: c.muted, marginTop: 14 }]}>
-              O Android pedirá sua confirmação. Somente APKs mais recentes com a
-              mesma assinatura do Floco podem ser instalados.
-            </Text>
+        {!!u.error &&
+          text(u.error, { color: c.red }, { accessibilityRole: "alert" })}
+        {!!u.message &&
+          text(u.message, { color: c.text }, { accessibilityRole: "alert" })}
+        {u.release && (
+          <View
+            style={{
+              padding: 20,
+              borderRadius: 18,
+              backgroundColor: c.surface,
+              gap: 16,
+            }}
+          >
+            {text(`Nova versão ${u.release.version}`, {
+              fontFamily: "SoraBold",
+              fontSize: 21,
+            })}
+            {text(`${(u.release.size / 1024 / 1024).toFixed(1)} MB · Android`, {
+              color: c.muted,
+            })}
+            {button(
+              u.downloaded === u.release.sha256
+                ? "Instalar atualização"
+                : "Atualizar aplicativo",
+              u.update,
+            )}
+            {text(
+              "Baixa o APK, verifica tamanho, SHA-256, aplicativo, assinatura e versão, e abre o instalador. O Android pode pedir “Permitir desta fonte” e sua confirmação para instalar.",
+              { color: c.muted, fontSize: 13 },
+            )}
+            {text(u.release.notes)}
           </View>
         )}
-        <Pressable
-          disabled={!!busy}
-          accessibilityRole="button"
-          onPress={() =>
-            run("Removendo acesso…", async () => {
-              await SecureStore.deleteItemAsync(KEY);
-              setToken("");
-              setRepository("");
-              setSaved(false);
-              setRelease(null);
-              setDownloaded(false);
-              setMessage(
-                "Acesso removido deste Android. Seus registros financeiros continuam disponíveis.",
-              );
-            })
-          }
-          style={s.back}
-        >
-          <Text style={{ color: c.red, fontFamily: "SoraSemi" }}>
-            Remover acesso ao GitHub
-          </Text>
-        </Pressable>
+        {text(
+          "As consultas enviam ao GitHub apenas os pedidos de versão e download. Seus registros financeiros ficam no aparelho. A verificação não roda quando o app está fechado; não há instalação silenciosa nesta versão.",
+          { color: c.muted, fontSize: 13 },
+        )}
       </ScrollView>
     </View>
   );
 }
-const s = StyleSheet.create({
-  header: {
-    flexDirection: "row",
-    gap: 16,
-    padding: 16,
-    alignItems: "center",
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  back: { minHeight: 48, justifyContent: "center", paddingHorizontal: 8 },
-  body: { fontFamily: "Sora", fontSize: 13, lineHeight: 21 },
-  label: { fontFamily: "SoraSemi", fontSize: 14, marginBottom: 10 },
-  input: {
-    minHeight: 54,
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
-    fontFamily: "Sora",
-    fontSize: 14,
-  },
-  button: {
-    minHeight: 52,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 12,
-    padding: 14,
-  },
-  box: { padding: 20, borderRadius: 16 },
-});

@@ -22,6 +22,7 @@ import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
 import Feather from "@expo/vector-icons/Feather";
 import UpdatesPanel from "./src/UpdatesPanel";
+import usePublicUpdates from "./src/usePublicUpdates";
 import PlanningPanel, { planningOptions } from "./src/PlanningPanel";
 import { categoryNames } from "./src/planning.mjs";
 import * as Application from "expo-application";
@@ -51,6 +52,8 @@ import {
   contribute,
   reserved,
   validateBackup,
+  totalBalance,
+  accountBalanceHidden,
 } from "./src/finance.mjs";
 
 type Icon = React.ComponentProps<typeof Feather>["name"];
@@ -129,6 +132,7 @@ function FinanceApp() {
     SoraBold: require("./assets/fonts/Sora_700Bold.ttf"),
   });
   const c = state.settings.dark ? palette.dark : palette.light;
+  const updates = usePublicUpdates(loaded && !locked);
   const { width } = useWindowDimensions();
   const wide = width >= 700;
   useEffect(() => {
@@ -292,6 +296,8 @@ function FinanceApp() {
               bankProfile(f.profileId)?.holderType || f.holderType || "PF",
             initial,
             color: f.color || "#311E0D",
+            hideBalance: !!f.hideBalance,
+            includeInTotal: f.includeInTotal !== false,
           };
           return {
             ...s,
@@ -815,10 +821,7 @@ function FinanceApp() {
     );
   }
   const summary = totals(state, month);
-  const accountTotal = state.accounts.reduce(
-    (n: number, a: any) => n + balance(state, a.id),
-    0,
-  );
+  const accountTotal = totalBalance(state);
   const monthly = state.transactions
     .filter((t: any) => monthKey(t.date) === month)
     .sort((a: any, b: any) => b.date.localeCompare(a.date));
@@ -847,37 +850,75 @@ function FinanceApp() {
       ) : (
         <Box style={{ paddingVertical: 0 }}>
           {state.accounts.map((a: any) => (
-            <Pressable
+            <View
               key={a.id}
-              accessibilityRole="button"
-              accessibilityLabel={`Editar ${a.name}`}
-              onPress={() =>
-                open("account", {
-                  ...a,
-                  initial: (a.initial / 100).toFixed(2).replace(".", ","),
-                })
-              }
-              style={[styles.accountRow, { borderBottomColor: c.line }]}
+              style={[styles.accountRow, { borderBottomColor: c.line, gap: 4 }]}
             >
-              <View style={[styles.bank, { backgroundColor: a.color }]}>
-                <I name="briefcase" color="#FFFFFF" />
-              </View>
-              <View style={{ flex: 1, gap: 4 }}>
-                <T style={{ fontFamily: "SoraSemi", fontSize: 13 }}>{a.name}</T>
-                <T style={{ fontSize: 11, color: c.muted }}>
-                  {a.institution || "Carteira"}
-                </T>
-              </View>
-              <View style={{ alignItems: "flex-end", gap: 5 }}>
-                <T style={{ fontFamily: "SoraSemi", fontSize: 14 }}>
-                  {showMoney(balance(state, a.id))}
-                </T>
-                <T style={{ fontSize: 10, color: c.muted }}>
-                  Disponível{" "}
-                  {showMoney(balance(state, a.id) - reserved(state, a.id))}
-                </T>
-              </View>
-            </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Editar ${a.name}`}
+                onPress={() =>
+                  open("account", {
+                    ...a,
+                    initial: (a.initial / 100).toFixed(2).replace(".", ","),
+                  })
+                }
+                style={({ pressed }) => ({
+                  flex: 1,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 12,
+                  opacity: pressed ? 0.75 : 1,
+                })}
+              >
+                <View style={[styles.bank, { backgroundColor: a.color }]}>
+                  <I name="briefcase" color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <T style={{ fontFamily: "SoraSemi", fontSize: 13 }}>
+                    {a.name}
+                  </T>
+                  <T style={{ fontSize: 11, color: c.muted }}>
+                    {a.institution || "Carteira"}
+                  </T>
+                  {a.includeInTotal === false && (
+                    <T style={{ fontSize: 11, color: c.muted }}>
+                      Fora do saldo geral
+                    </T>
+                  )}
+                </View>
+                <View style={{ alignItems: "flex-end", gap: 5 }}>
+                  <T style={{ fontFamily: "SoraSemi", fontSize: 14 }}>
+                    {accountBalanceHidden(state, a.id)
+                      ? "R$ ••••"
+                      : money(balance(state, a.id))}
+                  </T>
+                  <T style={{ fontSize: 10, color: c.muted }}>
+                    Disponível{" "}
+                    {accountBalanceHidden(state, a.id)
+                      ? "R$ ••••"
+                      : money(balance(state, a.id) - reserved(state, a.id))}
+                  </T>
+                </View>
+              </Pressable>
+              <IconButton
+                name={a.hideBalance ? "eye-off" : "eye"}
+                label={`${a.hideBalance ? "Mostrar" : "Ocultar"} saldo de ${a.name}`}
+                onPress={() => {
+                  perform(
+                    (s: any) => ({
+                      ...s,
+                      accounts: s.accounts.map((x: any) =>
+                        x.id === a.id
+                          ? { ...x, hideBalance: !x.hideBalance }
+                          : x,
+                      ),
+                    }),
+                    "Visibilidade da conta alterada",
+                  );
+                }}
+              />
+            </View>
           ))}
         </Box>
       )}
@@ -1006,6 +1047,23 @@ function FinanceApp() {
               />
             </View>
           </View>
+          {!!updates.release && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setShowUpdates(true)}
+              style={({ pressed }) => ({
+                padding: 14,
+                marginHorizontal: 20,
+                borderRadius: 14,
+                backgroundColor: c.soft,
+                opacity: pressed ? 0.75 : 1,
+              })}
+            >
+              <T style={{ fontFamily: "SoraSemi" }}>
+                Nova versão {updates.release.version} disponível · Atualizar
+              </T>
+            </Pressable>
+          )}
           {screen !== "more" && (
             <View style={styles.month}>
               <IconButton
@@ -1082,7 +1140,7 @@ function FinanceApp() {
                     {showMoney(accountTotal)}
                   </T>
                   <T style={{ color: c.heroText, fontSize: 12, marginTop: 4 }}>
-                    Saldo atual de todas as contas
+                    Saldo atual das contas incluídas
                   </T>
                 </View>
                 <View style={{ flexDirection: "row", gap: 12, marginTop: 12 }}>
@@ -1842,8 +1900,8 @@ function FinanceApp() {
                 <Section title="Atualizações do aplicativo" />
                 <Box>
                   <T style={{ color: c.muted, fontSize: 13, marginBottom: 16 }}>
-                    Novas versões pelo seu GitHub privado. Seu token fica
-                    protegido neste Android.
+                    Novas versões pelo GitHub público, sem login ou token. O
+                    Floco verifica automaticamente enquanto estiver aberto.
                   </T>
                   <Button
                     title="Abrir atualizações"
@@ -1984,12 +2042,16 @@ function FinanceApp() {
         />
       )}
       <Modal
-        visible={showUpdates}
+        visible={showUpdates && !locked}
         animationType="slide"
         onRequestClose={() => setShowUpdates(false)}
       >
         <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
-          <UpdatesPanel c={c} onBack={() => setShowUpdates(false)} />
+          <UpdatesPanel
+            c={c}
+            updates={updates}
+            onBack={() => setShowUpdates(false)}
+          />
         </SafeAreaView>
       </Modal>
       <Modal
@@ -2280,6 +2342,38 @@ function FinanceApp() {
                         O saldo atual é calculado a partir deste valor e dos
                         lançamentos confirmados. Deixe vazio para começar com
                         zero.
+                      </T>
+                      <View style={styles.setting}>
+                        <T style={{ flex: 1 }}>Ocultar saldo desta conta</T>
+                        <Switch
+                          accessibilityLabel="Ocultar saldo desta conta"
+                          value={!!form.hideBalance}
+                          onValueChange={(v) => update("hideBalance", v)}
+                          trackColor={{ false: c.line, true: c.primary }}
+                          thumbColor={form.hideBalance ? c.accent : c.muted}
+                        />
+                      </View>
+                      <T style={styles.muted}>
+                        Este saldo e o disponível permanecem ocultos mesmo ao
+                        mostrar os valores gerais. O botão de olho da conta
+                        também altera esta preferência.
+                      </T>
+                      <View style={styles.setting}>
+                        <T style={{ flex: 1 }}>Incluir no saldo geral</T>
+                        <Switch
+                          accessibilityLabel="Incluir conta no saldo geral"
+                          value={form.includeInTotal !== false}
+                          onValueChange={(v) => update("includeInTotal", v)}
+                          trackColor={{ false: c.line, true: c.primary }}
+                          thumbColor={
+                            form.includeInTotal !== false ? c.accent : c.muted
+                          }
+                        />
+                      </View>
+                      <T style={styles.muted}>
+                        Desative para dinheiro que não é seu. A conta fica fora
+                        do saldo geral e das projeções, mas seus registros
+                        continuam nos relatórios e no histórico.
                       </T>
                       <Choice
                         label="Cor da conta"

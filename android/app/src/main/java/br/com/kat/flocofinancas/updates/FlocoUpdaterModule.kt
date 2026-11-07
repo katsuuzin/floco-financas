@@ -36,20 +36,20 @@ class FlocoUpdaterModule(private val context: ReactApplicationContext) : ReactCo
   }
   @ReactMethod fun canInstall(promise: Promise) { promise.resolve(Build.VERSION.SDK_INT<26||context.packageManager.canRequestPackageInstalls()) }
   @ReactMethod fun openInstallSettings(promise: Promise) { try { if(Build.VERSION.SDK_INT>=26)context.startActivity(Intent("android.settings.MANAGE_UNKNOWN_APP_SOURCES",Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));promise.resolve(null) }catch(e: Exception){promise.reject("INSTALL_PERMISSION","Abra as configurações do Android e permita instalações para o Floco Finanças.")} }
-  @ReactMethod fun download(repository: String,assetId: Double,token: String,expectedHash: String,expectedSize: Double,promise: Promise){
+  @ReactMethod fun download(version: String,expectedHash: String,expectedSize: Double,promise: Promise){
     if(!busy.compareAndSet(false,true)){promise.reject("BUSY","Um download já está em andamento.");return}
     executor.execute {
       val partial=File(apk.parentFile,"download.part")
       try {
-        if(!Regex("^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9_.-]{1,100}$").matches(repository)||assetId<=0||assetId%1.0!=0.0||!Regex("^[a-f0-9]{64}$").matches(expectedHash)||expectedSize<=0||expectedSize>250*1024*1024)throw Exception("Metadados da atualização inválidos.")
-        var url=URL("https://api.github.com/repos/$repository/releases/assets/${assetId.toLong()}")
+        if(!Regex("^v?[0-9]+[.][0-9]+[.][0-9]+$").matches(version)||!Regex("^[a-f0-9]{64}$").matches(expectedHash)||expectedSize<=0||expectedSize>250*1024*1024)throw Exception("Metadados da atualização inválidos.")
+        var url=URL("https://github.com/katsuuzin/floco-financas/releases/download/$version/Floco-Financas.apk")
         var connection: HttpURLConnection?=null
         for(attempt in 0..5){
           if(url.protocol!="https"||!(url.host=="api.github.com"||url.host=="github.com"||url.host.endsWith(".githubusercontent.com")))throw Exception("O GitHub redirecionou para uma origem não permitida.")
-          val current=(url.openConnection() as HttpURLConnection).apply{instanceFollowRedirects=false;connectTimeout=20000;readTimeout=60000;setRequestProperty("Accept","application/octet-stream");setRequestProperty("User-Agent","Floco-Financas-Android");if(url.host=="api.github.com")setRequestProperty("Authorization","Bearer $token")}
+          val current=(url.openConnection() as HttpURLConnection).apply{instanceFollowRedirects=false;connectTimeout=20000;readTimeout=60000;setRequestProperty("Accept","application/octet-stream");setRequestProperty("User-Agent","Floco-Financas-Android")}
           val code=current.responseCode
           if(code in listOf(301,302,303,307,308)){val location=current.getHeaderField("Location")?:throw Exception("Redirecionamento inválido.");current.disconnect();url=URL(url,location);continue}
-          if(code!=200){current.disconnect();throw Exception("O download não está disponível (HTTP $code). Confira seu token e a release.")}
+          if(code!=200){current.disconnect();throw Exception("O download não está disponível (HTTP $code). Tente novamente mais tarde.")}
           connection=current;break
         }
         val active=connection?:throw Exception("Excesso de redirecionamentos no download.")

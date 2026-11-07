@@ -75,6 +75,14 @@ export function balance(state, id) {
       )
   );
 }
+export const includedAccounts = (state) =>
+  state.accounts.filter((a) => a.includeInTotal !== false);
+export const totalBalance = (state) =>
+  includedAccounts(state).reduce((n, a) => n + balance(state, a.id), 0);
+export const accountBalanceHidden = (state, id) =>
+  Boolean(
+    state.settings.hide || state.accounts.find((a) => a.id === id)?.hideBalance,
+  );
 export function totals(state, month) {
   const tx = state.transactions.filter(
     (t) =>
@@ -422,7 +430,12 @@ export function validateBackup(value) {
     }
   }
   for (const a of value.accounts)
-    if (typeof a.name !== "string" || !integer(a.initial))
+    if (
+      typeof a.name !== "string" ||
+      !integer(a.initial) ||
+      (a.hideBalance !== undefined && typeof a.hideBalance !== "boolean") ||
+      (a.includeInTotal !== undefined && typeof a.includeInTotal !== "boolean")
+    )
       throw Error("Conta inválida.");
   for (const c of value.cards)
     if (

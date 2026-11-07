@@ -1,5 +1,15 @@
 # Estado da implementação — 6 de novembro de 2026
 
+## v1.1.1 — privacidade por conta e atualizações públicas
+
+29 testes e TypeScript passaram. Contas permitem ocultar saldo e disponível individualmente; a opção separada de inclusão afeta saldo geral e projeções, sem apagar lançamentos. Testes cobrem transferências entre contas incluídas/excluídas e preservação/migração de preferências no backup.
+
+No Android 15, conta Nubank PJ fictícia configurada com R$500: saldo e disponível permaneceram ocultos ao alternar o olho global duas vezes, e a conta Nubank existente manteve o valor visível. A conta excluída aparece identificada como fora do saldo geral.
+
+Repositório tornado público por solicitação do usuário. Revisão local do histórico: 92 blobs, sem caminhos de assinatura/credenciais/backups/auditoria e sem padrões de tokens ou chaves privadas. Apenas código, recursos do Floco e APKs assinados são públicos. A chave de assinatura continua no computador.
+
+Consulta pública real, sem Authorization, retornou a release disponível. Novo atualizador remove a credencial antiga, mantém verificação automática com intervalo de 15 minutos em primeiro plano, aviso de nova versão e botões de verificar/atualizar. Não promete instalação silenciosa ou detecção enquanto o app está fechado. APK 1.1.1/code 4 compilado com sucesso e certificado igual às versões anteriores.
+
 - Floco Finanças Android 1.0.0, pacote br.com.kat.flocofinancas, compilado em release com assinatura própria. APK ARM64 + x86_64 gerado com sucesso.
 - 13 testes passaram: regras financeiras, datas, parcelas, transferências, pagamentos, reservas, backup e validação de releases. TypeScript passou.
 - Implementação anterior dos fluxos financeiros foi executada em emulador Android 15: navegação, digitação, salvamento, busca e persistência após force-stop/reabertura. A rolagem entre abas foi corrigida e conferida.
