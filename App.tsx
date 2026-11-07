@@ -299,16 +299,15 @@ function Shell({ onPinChange, unlocked, protectedApp }: { onPinChange: () => voi
     <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }} edges={["top", "bottom"]}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         {top?.name !== "form" && (
-          <View style={[s.header, { backgroundColor: c.surface }]}>
+          <View style={[s.header, { backgroundColor: c.bg }]}>
             {top ? (
               <IconButton name="arrow-left" label="Voltar" onPress={nav.back} />
-            ) : (
+            ) : nav.tab === "home" ? (
               <Image source={require("./assets/icon.png")} accessibilityLabel="Mascote Floco" style={s.logo} />
-            )}
-            <View style={{ flex: 1 }}>
-              {!top && <T style={{ fontSize: 12, fontFamily: "SoraSemi", color: c.primary }}>Floco Finanças</T>}
-              <T accessibilityRole="header" style={k.pageTitle}>
-                {title}
+            ) : null}
+            <View style={{ flex: 1, paddingLeft: top || nav.tab === "home" ? 0 : 4 }}>
+              <T accessibilityRole="header" numberOfLines={1} style={[k.pageTitle, { fontSize: top ? 19 : 22 }]}>
+                {!top && nav.tab === "home" ? "Floco Finanças" : title}
               </T>
             </View>
             {!top && <IconButton name="settings" label="Abrir configurações" onPress={() => nav.push({ name: "settings" })} />}
@@ -495,8 +494,8 @@ function Snackbar({ notice, onClose }: { notice: string; onClose: () => void }) 
 }
 
 const s = StyleSheet.create({
-  header: { paddingHorizontal: 16, paddingVertical: 12, flexDirection: "row", alignItems: "center", gap: 12 },
-  logo: { width: 44, height: 44, borderRadius: 12 },
+  header: { paddingHorizontal: 12, minHeight: 60, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 10 },
+  logo: { width: 36, height: 36, borderRadius: 10, marginLeft: 4 },
   banner: { padding: 14, marginHorizontal: 20, marginTop: 8, borderRadius: 14 },
   bottomNav: { flexDirection: "row", borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 6, paddingBottom: 4, alignItems: "center" },
   tab: { flex: 1, alignItems: "center", justifyContent: "center", minHeight: 60, gap: 2 },

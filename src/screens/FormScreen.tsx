@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { View, Pressable } from "react-native";
-import { T, Muted, Field, Choice, Toggle, Button, IconButton, Section, styles as k } from "../ui/kit";
+import { T, Muted, I, Field, Choice, Toggle, Button, IconButton, Segmented, AmountField, styles as k } from "../ui/kit";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
@@ -89,17 +89,13 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
 
       {tx && (
         <>
-          {!form.editId && form.type !== "transfer" && (
-            <Button title="Ler de um comprovante (foto ou PDF)" secondary icon="camera" onPress={() => nav.replace({ name: "receipt" })} />
-          )}
           {!form.editId && (
-            <Choice
-              label="Tipo"
+            <Segmented
               values={[
                 ["expense", "Despesa"],
-                ["card", "Despesa no cartão"],
+                ["card", "Cartão"],
                 ["income", "Receita"],
-                ["transfer", "Transferência"],
+                ["transfer", "Transferir"],
               ]}
               value={form.type === "expense" && form.cardId ? "card" : form.type}
               onChange={(v) =>
@@ -113,7 +109,37 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
               }
             />
           )}
-          <Field label="Valor (R$)" value={form.amount} onChange={(v) => set("amount", v)} numeric placeholder="0,00" autoFocus={!form.editId} />
+          <AmountField
+            value={form.amount}
+            onChange={(v) => set("amount", v)}
+            autoFocus={!form.editId}
+            color={form.type === "income" ? c.green : undefined}
+          />
+          {!form.editId && form.type !== "transfer" && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => nav.replace({ name: "receipt" })}
+              style={[k.row, { minHeight: 44, gap: 8, alignSelf: "flex-start" }]}
+            >
+              <I name="camera" size={16} color={c.primary} />
+              <T style={{ color: c.primary, fontSize: 13, fontFamily: "SoraSemi" }}>Preencher a partir de um comprovante</T>
+            </Pressable>
+          )}
+          <View style={[k.row, { alignItems: "flex-end", gap: 8 }]}>
+            <View style={{ flex: 1.6 }}>
+              <Field label="Data" value={form.date} onChange={(v) => set("date", v)} placeholder={today()} maxLength={10} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Field label="Hora" value={form.time} onChange={(v) => set("time", v)} placeholder="HH:MM" maxLength={5} />
+            </View>
+          </View>
+          <View style={[k.row, { marginTop: -8, gap: 4 }]}>
+            <IconButton name="chevron-left" label="Dia anterior" onPress={() => set("date", shiftDay(form.date, -1))} />
+            <Pressable accessibilityRole="button" onPress={() => set("date", today())} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 8 }}>
+              <T style={{ fontSize: 13, color: c.primary }}>Hoje</T>
+            </Pressable>
+            <IconButton name="chevron-right" label="Próximo dia" onPress={() => set("date", shiftDay(form.date, 1))} />
+          </View>
           {!form.cardId && form.type !== "transfer" && (
             <Toggle
               label={form.type === "income" ? "Já recebido" : "Já pago"}
@@ -122,14 +148,6 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
               hint={form.confirmed ? undefined : "Pendente: não altera o saldo até você confirmar."}
             />
           )}
-          <View style={[k.row, { alignItems: "flex-end" }]}>
-            <View style={{ flex: 1 }}>
-              <Field label="Data (AAAA-MM-DD)" value={form.date} onChange={(v) => set("date", v)} placeholder={today()} />
-            </View>
-            <IconButton name="chevron-left" label="Dia anterior" onPress={() => set("date", shiftDay(form.date, -1))} />
-            <IconButton name="chevron-right" label="Próximo dia" onPress={() => set("date", shiftDay(form.date, 1))} />
-          </View>
-          <Field label="Horário (opcional)" value={form.time} onChange={(v) => set("time", v)} placeholder="HH:MM" maxLength={5} />
           <Field
             label="Descrição (opcional)"
             value={form.description}

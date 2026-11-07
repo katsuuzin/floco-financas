@@ -365,9 +365,9 @@ export default function HomeScreen() {
       <>
         <Section title="Lançamentos recentes" action="Ver todos" onPress={() => nav.setTab("transactions")} />
         {recent.length ? (
-          <Box style={{ paddingVertical: 0 }}>
-            {recent.slice(0, 5).map((t: any) => (
-              <TransactionRow key={t.id} t={t} />
+          <Box style={{ padding: 0, overflow: "hidden" }}>
+            {recent.slice(0, 5).map((t: any, i: number, all: any[]) => (
+              <TransactionRow key={t.id} t={t} withDate last={i === all.length - 1} />
             ))}
           </Box>
         ) : (

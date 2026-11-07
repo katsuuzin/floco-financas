@@ -31,7 +31,7 @@ export function editInitial(state: any, t: any) {
   };
 }
 
-export default function TransactionRow({ t }: { t: any }) {
+export default function TransactionRow({ t, withDate = false, last = false }: { t: any; withDate?: boolean; last?: boolean }) {
   const { c } = useTheme();
   const { state, perform, confirm, show } = useStore();
   const nav = useNav();
@@ -94,6 +94,16 @@ export default function TransactionRow({ t }: { t: any }) {
     );
   const income = t.type === "income" || t.refund;
   const d = displayOf(state);
+  const shortDate = new Date(t.date + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", "");
+  const meta = [
+    withDate ? shortDate : "",
+    d.showTime && t.time ? t.time : "",
+    d.showCategory === "category" ? t.category : "",
+    card?.name || account?.name,
+    t.installments > 1 ? `${t.installment}/${t.installments}` : "",
+    d.showTags && tags.length ? tags.map((x: string) => "#" + x).join(" ") : "",
+  ].filter(Boolean);
+  const badges = [!t.confirmed ? "Pendente" : "", t.refund ? "Estorno" : "", t.ignored ? "Fora da análise" : ""].filter(Boolean);
   return (
     <Pressable
       accessibilityRole="button"
@@ -101,61 +111,51 @@ export default function TransactionRow({ t }: { t: any }) {
         t.confirmed ? "" : ", pendente"
       }. Abrir opções`}
       onPress={options}
-      style={({ pressed }) => [row.tx, k.hairline, { borderBottomColor: c.line, opacity: pressed ? 0.75 : 1 }]}
+      android_ripple={{ color: c.soft }}
+      style={({ pressed }) => [row.tx, !last && k.hairline, { borderBottomColor: c.line, backgroundColor: pressed ? c.soft : "transparent" }]}
     >
-      <View style={[row.icon, { backgroundColor: c.soft }]}>
+      <View style={[row.icon, { backgroundColor: income ? c.soft : c.bg }]} importantForAccessibility="no">
         <I
-          name={
-            t.type === "transfer"
-              ? "repeat"
-              : income
-                ? "arrow-down-left"
-                : t.cardId
-                  ? "credit-card"
-                  : "arrow-up-right"
-          }
+          name={t.type === "transfer" ? "repeat" : income ? "arrow-down-left" : t.cardId ? "credit-card" : "arrow-up-right"}
+          size={18}
           color={income ? c.green : c.primary}
         />
       </View>
-      <View style={{ flex: 1, gap: 3 }}>
-        <T numberOfLines={2} style={{ fontFamily: "SoraSemi", fontSize: 13 }}>
+      <View style={{ flex: 1, gap: 2 }}>
+        <T numberOfLines={1} style={{ fontFamily: "SoraSemi", fontSize: 14 }}>
           {t.description}
         </T>
-        <Muted style={{ fontSize: 11 }}>
-          {d.showCategory === "category" ? `${t.category} · ` : ""}
-          {card?.name || account?.name}
-          {t.installments > 1 ? ` · ${t.installment}/${t.installments}` : ""}
-          {d.showTags && tags.length ? " · " + tags.map((x: string) => "#" + x).join(" ") : ""}
-        </Muted>
+        <Muted numberOfLines={1}>{meta.join(" · ")}</Muted>
         {d.showNotes && !!t.notes && (
-          <Muted style={{ fontSize: 11 }} numberOfLines={2}>
+          <Muted numberOfLines={1} style={{ fontStyle: "italic" }}>
             {t.notes}
           </Muted>
         )}
-        <Muted style={{ fontSize: 10, color: !t.confirmed && d.highlightPending ? c.amber : undefined }}>
-          {br(t.date)}
-          {d.showTime && t.time ? " · " + t.time : ""}
-          {!t.confirmed ? " · Pendente" : t.cardId ? " · Na fatura" : ""}
-          {t.refund ? " · Estorno" : ""}
-          {t.ignored ? " · Fora da análise" : ""}
-        </Muted>
       </View>
-      <T
-        style={{
-          fontFamily: "SoraSemi",
-          fontSize: 13,
-          color: income ? c.green : t.type === "transfer" ? c.muted : c.text,
-          opacity: t.confirmed ? 1 : 0.7,
-        }}
-      >
-        {t.type === "transfer" ? "" : income ? "+" : "−"}
-        {show(t.amount)}
-      </T>
+      <View style={{ alignItems: "flex-end", gap: 4 }}>
+        <T
+          style={{
+            fontFamily: "SoraSemi",
+            fontSize: 14,
+            fontVariant: ["tabular-nums"],
+            color: income ? c.green : t.type === "transfer" ? c.muted : c.text,
+          }}
+        >
+          {t.type === "transfer" ? "" : income ? "+" : "−"}
+          {show(t.amount)}
+        </T>
+        {badges.map((b) => (
+          <View key={b} style={[row.badge, { backgroundColor: b === "Pendente" && d.highlightPending ? c.accent : c.soft }]}>
+            <T style={{ fontSize: 10.5, color: c.heroText, fontFamily: "SoraSemi" }}>{b}</T>
+          </View>
+        ))}
+      </View>
     </Pressable>
   );
 }
 
 const row = StyleSheet.create({
-  tx: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 15, minHeight: 80 },
-  icon: { width: 37, height: 37, borderRadius: 12, justifyContent: "center", alignItems: "center" },
+  tx: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, paddingHorizontal: 14, minHeight: 64 },
+  icon: { width: 38, height: 38, borderRadius: 12, justifyContent: "center", alignItems: "center" },
+  badge: { borderRadius: 8, paddingHorizontal: 7, paddingVertical: 1 },
 });

@@ -148,9 +148,9 @@ export function CardsScreen({ cardId }: { cardId?: string }) {
         />
       </Box>
       <Section title="Compras desta fatura" />
-      <Box style={{ paddingVertical: 0 }}>
+      <Box style={{ padding: 0, overflow: "hidden" }}>
         {bill.purchases.length ? (
-          bill.purchases.map((t: any) => <TransactionRow key={t.id} t={t} />)
+          bill.purchases.map((t: any, i: number) => <TransactionRow key={t.id} t={t} withDate last={i === bill.purchases.length - 1} />)
         ) : (
           <Empty title="Nenhuma compra nesta fatura" body="As compras entram na fatura conforme o fechamento do cartão." />
         )}

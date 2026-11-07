@@ -120,9 +120,9 @@ export default function TransactionsScreen() {
                     : (net >= 0 ? "+" : "−") + show(Math.abs(net))}
                 </Muted>
               </View>
-              <Box style={{ paddingVertical: 0, marginBottom: 4 }}>
-                {rows.map((t: any) => (
-                  <TransactionRow key={t.id} t={t} />
+              <Box style={{ padding: 0, marginBottom: 4, overflow: "hidden" }}>
+                {rows.map((t: any, i: number) => (
+                  <TransactionRow key={t.id} t={t} last={i === rows.length - 1} />
                 ))}
               </Box>
             </View>

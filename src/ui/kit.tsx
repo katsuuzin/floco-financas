@@ -7,6 +7,7 @@ import {
   Pressable,
   StyleSheet,
   TextInput,
+  ScrollView,
   Switch,
   TextProps,
   ViewStyle,
@@ -269,19 +270,28 @@ export function Toggle({
   const { c } = useTheme();
   return (
     <View style={{ gap: 4 }}>
-      <View style={styles.setting}>
+      {/* A linha inteira alterna o valor (alvo de toque maior que a chave sozinha). */}
+      <Pressable
+        accessibilityRole="switch"
+        accessibilityLabel={label}
+        accessibilityState={{ checked: value }}
+        accessibilityHint={hint}
+        onPress={() => onChange(!value)}
+        android_ripple={{ color: c.soft }}
+        style={styles.setting}
+      >
         <View style={[styles.row, { flex: 1 }]}>
           {icon && <I name={icon} />}
           <T style={{ flexShrink: 1 }}>{label}</T>
         </View>
         <Switch
-          accessibilityLabel={label}
+          importantForAccessibility="no-hide-descendants"
           value={value}
           onValueChange={onChange}
           thumbColor={value ? c.accent : c.muted}
           trackColor={{ false: c.line, true: c.primary }}
         />
-      </View>
+      </Pressable>
       {!!hint && <Muted>{hint}</Muted>}
     </View>
   );
@@ -306,9 +316,14 @@ export function ListItem({
       accessibilityRole="button"
       accessibilityLabel={detail ? `${label}, ${detail}` : label}
       onPress={onPress}
-      style={({ pressed }) => [styles.listItem, { backgroundColor: c.surface, opacity: pressed ? 0.75 : 1 }]}
+      android_ripple={{ color: c.soft }}
+      style={({ pressed }) => [styles.listItem, { backgroundColor: pressed ? c.soft : c.surface }]}
     >
-      {icon && <I name={icon} />}
+      {icon && (
+        <View style={[styles.rowIcon, { backgroundColor: c.soft }]} importantForAccessibility="no">
+          <I name={icon} size={18} color={c.primary} />
+        </View>
+      )}
       <View style={{ flex: 1, gap: 2 }}>
         <T>{label}</T>
         {!!detail && <Muted>{detail}</Muted>}
@@ -318,6 +333,7 @@ export function ListItem({
   );
 }
 
+// Filtros em uma única linha rolável: chips compactos com área de toque de 48dp (via hitSlop).
 export function Chips<K extends string>({
   values,
   value,
@@ -329,7 +345,14 @@ export function Chips<K extends string>({
 }) {
   const { c } = useTheme();
   return (
-    <View style={styles.chips} accessibilityRole="tablist">
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      accessibilityRole="tablist"
+      contentContainerStyle={{ gap: space.sm, paddingVertical: space.sm }}
+      style={{ flexGrow: 0, marginHorizontal: -space.lg }}
+    >
+      <View style={{ width: space.lg - space.sm }} />
       {values.map(([key, label]) => {
         const on = key === value;
         return (
@@ -338,25 +361,173 @@ export function Chips<K extends string>({
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
             onPress={() => onChange(key)}
-            style={[styles.chip, { backgroundColor: on ? c.primary : c.surface }]}
+            hitSlop={{ top: 4, bottom: 4 }}
+            android_ripple={{ color: c.soft, borderless: false }}
+            style={[styles.compactChip, { backgroundColor: on ? c.primary : c.surface, borderColor: on ? c.primary : c.line }]}
           >
-            <T style={{ fontSize: 12, color: on ? c.onPrimary : c.muted }}>{label}</T>
+            <T style={{ fontSize: 13, fontFamily: on ? "SoraSemi" : "Sora", color: on ? c.onPrimary : c.text }}>{label}</T>
           </Pressable>
         );
       })}
+      <View style={{ width: space.lg - space.sm }} />
+    </ScrollView>
+  );
+}
+
+// Seletor segmentado (2 a 4 opções curtas) — uma linha, sem quebra.
+export function Segmented<K extends string>({
+  label,
+  values,
+  value,
+  onChange,
+}: {
+  label?: string;
+  values: [K, string][];
+  value: K;
+  onChange: (v: K) => void;
+}) {
+  const { c } = useTheme();
+  return (
+    <View style={{ gap: space.sm }}>
+      {!!label && <T style={styles.label}>{label}</T>}
+      <View accessibilityRole="radiogroup" accessibilityLabel={label} style={[styles.segmented, { backgroundColor: c.soft }]}>
+        {values.map(([key, name]) => {
+          const on = key === value;
+          return (
+            <Pressable
+              key={key}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: on }}
+              accessibilityLabel={name}
+              onPress={() => onChange(key)}
+              style={[styles.segment, on && { backgroundColor: c.surface, elevation: 1 }]}
+            >
+              <T numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: 12, fontFamily: on ? "SoraSemi" : "Sora", color: on ? c.text : c.muted }}>
+                {name}
+              </T>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
 
+// Valor em destaque no topo dos formulários de lançamento.
+export function AmountField({
+  value,
+  onChange,
+  color,
+  autoFocus,
+  label = "Valor",
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  color?: string;
+  autoFocus?: boolean;
+  label?: string;
+}) {
+  const { c } = useTheme();
+  return (
+    <View style={[styles.amountBox, { backgroundColor: c.surface }]}>
+      <Muted>{label}</Muted>
+      <View style={[styles.row, { gap: space.sm }]}>
+        <T style={{ fontSize: 22, fontFamily: "SoraSemi", color: color || c.text }}>R$</T>
+        <TextInput
+          accessibilityLabel={`${label} em reais`}
+          value={value}
+          onChangeText={onChange}
+          placeholder="0,00"
+          placeholderTextColor={c.muted}
+          keyboardType="decimal-pad"
+          autoFocus={autoFocus}
+          maxLength={16}
+          style={{ flex: 1, fontSize: 34, fontFamily: "SoraBold", color: color || c.text, paddingVertical: space.xs }}
+        />
+      </View>
+    </View>
+  );
+}
+
+// Grupo de itens num único cartão, com divisórias (listas de menu e configurações).
+export function Group({ title, children }: { title?: string; children: React.ReactNode }) {
+  const { c } = useTheme();
+  const items = React.Children.toArray(children).filter(Boolean);
+  return (
+    <View style={{ marginTop: space.lg }}>
+      {!!title && (
+        <Muted accessibilityRole="header" style={{ fontFamily: "SoraSemi", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: space.sm, marginLeft: space.xs }}>
+          {title}
+        </Muted>
+      )}
+      <View style={{ backgroundColor: c.surface, borderRadius: radius.lg, overflow: "hidden" }}>
+        {items.map((child, i) => (
+          <View key={i} style={i < items.length - 1 ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.line } : null}>
+            {child}
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// Linha de menu dentro de um Group.
+export function Row({
+  icon,
+  label,
+  detail,
+  onPress,
+  right,
+  danger,
+}: {
+  icon?: Icon;
+  label: string;
+  detail?: string;
+  onPress: () => void;
+  right?: React.ReactNode;
+  danger?: boolean;
+}) {
+  const { c } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={detail ? `${label}, ${detail}` : label}
+      onPress={onPress}
+      android_ripple={{ color: c.soft }}
+      style={({ pressed }) => [styles.row, { minHeight: 56, paddingHorizontal: space.lg, paddingVertical: space.md, backgroundColor: pressed ? c.soft : "transparent" }]}
+    >
+      {icon && (
+        <View style={[styles.rowIcon, { backgroundColor: c.soft }]} importantForAccessibility="no">
+          <I name={icon} size={18} color={danger ? c.red : c.primary} />
+        </View>
+      )}
+      <View style={{ flex: 1, gap: 2 }}>
+        <T style={{ color: danger ? c.red : c.text }}>{label}</T>
+        {!!detail && <Muted numberOfLines={2}>{detail}</Muted>}
+      </View>
+      {right ?? <I name="chevron-right" size={18} />}
+    </Pressable>
+  );
+}
+
+// Escala de espaçamento (ritmo de 4/8dp) e raios.
+export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
+export const radius = { sm: 10, md: 14, lg: 18, pill: 999 };
+
 export const styles = StyleSheet.create({
-  text: { fontSize: 14, lineHeight: 21 },
-  muted: { fontSize: 12, lineHeight: 19 },
+  text: { fontSize: 15, lineHeight: 22 },
+  muted: { fontSize: 12.5, lineHeight: 18 },
+  compactChip: { minHeight: 40, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1, justifyContent: "center" },
+  segmented: { flexDirection: "row", borderRadius: 14, padding: 4, gap: 4 },
+  segment: { flex: 1, minHeight: 44, borderRadius: 11, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
+  amountBox: { borderRadius: 18, paddingHorizontal: 18, paddingVertical: 14, gap: 2 },
+  rowIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   label: { fontFamily: "SoraSemi", fontSize: 13 },
   flex: { flex: 1 },
   row: { flexDirection: "row", alignItems: "center", gap: 12 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 28, gap: 24 },
   pageTitle: { fontSize: 22, lineHeight: 30, fontFamily: "SoraBold" },
-  content: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 120 },
+  content: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 120 },
   box: { padding: 18, borderRadius: 14, marginBottom: 12 },
   section: {
     flexDirection: "row",
@@ -384,17 +555,19 @@ export const styles = StyleSheet.create({
   emptyIcon: { width: 64, height: 64, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 15, paddingVertical: 14, fontSize: 15, minHeight: 52 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginVertical: 4 },
-  chip: { minHeight: 48, paddingHorizontal: 15, paddingVertical: 13, borderRadius: 24, justifyContent: "center" },
+  chip: { minHeight: 44, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 22, justifyContent: "center" },
   track: { height: 7, borderRadius: 4, overflow: "hidden" },
   setting: { minHeight: 60, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
   listItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
-    minHeight: 60,
-    padding: 16,
-    borderRadius: 16,
+    gap: 12,
+    minHeight: 56,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 18,
     marginBottom: 8,
+    overflow: "hidden",
   },
   hairline: { borderBottomWidth: StyleSheet.hairlineWidth },
 });

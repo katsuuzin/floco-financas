@@ -1,11 +1,11 @@
 import React from "react";
-import { Section, ListItem, Muted, Box, T } from "../ui/kit";
+import { Group, Row, Muted, Box, T } from "../ui/kit";
 import type { Icon } from "../ui/kit";
 import { useNav, Route } from "../app/nav";
 import { useStore } from "../app/store";
 import { layoutOf } from "../layout.mjs";
 
-type Item = { label: string; icon: Icon; route: Route };
+type Item = { label: string; icon: Icon; route: Route; detail?: string };
 const groups: [string, Item[]][] = [
   [
     "Organizar",
@@ -38,7 +38,7 @@ const groups: [string, Item[]][] = [
     "Analisar",
     [
       { label: "Relatório personalizado", icon: "sliders", route: { name: "tool", id: "reports" } },
-      { label: "Relatórios avançados", icon: "bar-chart-2", route: { name: "reports" } },
+      { label: "Relatórios avançados", icon: "bar-chart-2", route: { name: "reports" }, detail: "Fluxo de caixa, comparações, PDF" },
     ],
   ],
   [
@@ -58,20 +58,21 @@ export default function MoreScreen() {
   const { state } = useStore();
   return (
     <>
-      <ListItem icon="settings" label="Configurações" detail="Aparência, segurança, backup e dados" onPress={() => nav.push({ name: "settings" })} />
-      <ListItem icon="message-circle" label="Assistente" detail="Saúde financeira, destaques e plano de ação" onPress={() => nav.push({ name: "assistant" })} />
-      {layoutOf(state).tab4 !== "analysis" && <ListItem icon="bar-chart-2" label="Análise" onPress={() => nav.setTab("analysis")} />}
+      <Group>
+        <Row icon="message-circle" label="Assistente" detail="Saúde financeira, destaques e plano de ação" onPress={() => nav.push({ name: "assistant" })} />
+        {layoutOf(state).tab4 !== "analysis" && <Row icon="bar-chart-2" label="Análise" onPress={() => nav.setTab("analysis")} />}
+        <Row icon="settings" label="Configurações" detail="Aparência, segurança, backup e dados" onPress={() => nav.push({ name: "settings" })} />
+      </Group>
       {groups.map(([title, items]) => (
-        <React.Fragment key={title}>
-          <Section title={title} />
+        <Group key={title} title={title}>
           {items.map((item) => (
-            <ListItem key={item.label} icon={item.icon} label={item.label} onPress={() => nav.push(item.route)} />
+            <Row key={item.label} icon={item.icon} label={item.label} detail={item.detail} onPress={() => nav.push(item.route)} />
           ))}
-        </React.Fragment>
+        </Group>
       ))}
-      <Box style={{ marginTop: 20 }}>
+      <Box style={{ marginTop: 24 }}>
         <T style={{ fontFamily: "SoraSemi" }}>Sempre livre</T>
-        <Muted style={{ marginTop: 6 }}>Todas as funções do Floco, sem plano pago e sem limite comercial.</Muted>
+        <Muted style={{ marginTop: 4 }}>Todas as funções do Floco, sem plano pago e sem limite comercial.</Muted>
       </Box>
     </>
   );
