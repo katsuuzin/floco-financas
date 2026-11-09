@@ -137,6 +137,25 @@ export function ContractsScreen({ type }: { type: "financing" | "loan" }) {
                     />
                   </>
                 )}
+                {(f.amortizations || []).length > 0 && (
+                  <>
+                    <Section title="Histórico de abatimentos" />
+                    {[...f.amortizations].reverse().map((a: any) => (
+                      <View key={a.id} style={[k.row, k.hairline, { borderBottomColor: c.line, paddingVertical: 8, alignItems: "flex-start" }]}>
+                        <View style={{ flex: 1, gap: 2 }}>
+                          <T style={{ fontSize: 13 }}>
+                            {br(a.date)} · {show(a.amount)} · {a.mode === "payment" ? "reduziu a parcela" : "reduziu o prazo"}
+                          </T>
+                          <Muted>
+                            Saldo devedor {show(a.debtBefore)} → {show(a.debtAfter)}
+                            {a.offApp ? " · sem movimentar conta" : ""}
+                            {a.note ? ` · ${a.note}` : ""}
+                          </Muted>
+                        </View>
+                      </View>
+                    ))}
+                  </>
+                )}
                 <Section title="Cronograma" />
                 {rows.slice(0, 60).map((t: any) => (
                   <View key={t.id} style={[k.row, k.hairline, { borderBottomColor: c.line, paddingVertical: 8 }]}>

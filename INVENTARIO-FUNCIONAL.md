@@ -12,9 +12,14 @@ As colunas "Floco" das tabelas abaixo guardam o diagnóstico da F1. Esta tabela 
 
 | Situação | IDs |
 |---|---|
-| ✅ Feito | N1, N2, N3, L2, L3, L4, L5, L6, L7, L8, L9, L10, L14, O2, O3, P1, P4, P5, P6, A1, A2, D1, D2, D3, R1–R10, F2, F3, F4, F5, F6, F7, F8, S2, S3, S4, S5, S7, S8, S12, H1, H2, H4, **L1** (calculadora no valor), **L12** (calendário no extrato), **L13** (conta/cartão, categoria, tag, faixa de valor e ordem), **O4/O5** (ícone e cor), **P2/P3** (meta × caixinha, arquivar e movimento por mês), **S11** (lixeira de 30 dias), **F1** (PDF do Nubank e PDF genérico com conferência de saldo; testado com textos de exemplo, não com PDFs reais de outros bancos), **S1** (6 cores de destaque), **S10** (4 ícones: Solar, Grafite, Creme, Céu), **W1** (6 widgets: saldo, próximas contas, lançar rápido, botão +, faturas, orçamentos; links testados, aparência na tela inicial não conferida) |
+| ✅ Feito | N1, N2, N3, L2, L3, L4, L5, L6, L7, L8, L9, L10, L14, O2, O3, P1, P4, P5, P6, A1, A2, D1, D2, D3, R1–R10, F2, F3, F4, F5, F6, F7, F8, S2, S3, S4, S5, S7, S8, S12, H1, H2, H4, **L1** (calculadora no valor), **O6** (ajustar saldo, 9/11), **L12** (calendário no extrato), **L13** (conta/cartão, categoria, tag, faixa de valor e ordem), **O4/O5** (ícone e cor), **P2/P3** (meta × caixinha, arquivar e movimento por mês), **S11** (lixeira de 30 dias), **F1** (PDF do Nubank e PDF genérico com conferência de saldo; testado com textos de exemplo, não com PDFs reais de outros bancos), **S1** (6 cores de destaque), **S10** (4 ícones: Solar, Grafite, Creme, Céu), **W1** (6 widgets: saldo, próximas contas, lançar rápido, botão +, faturas, orçamentos; links testados, aparência na tela inicial não conferida) |
 | 🟡 Parcial | **L11** (o comprovante abre o leitor, não preenche o formulário aberto) · **O1** (reordenar por setas e arquivar; sem arraste nem relatório por conta) · **S6** (extrato e saldo; sem vibração ou teclado) · **S9** (backup criptografado sim; Drive e sincronização não) · **H3** (lembretes entram pelos primeiros passos) |
-| ❌ Não feito | — |
+| ❌ Não feito | Da auditoria de 9/11 (fichas em `FICHAS-FUNCIONAIS.md`): **H5** (momento de progresso, opcional) |
+| 🟡 Parcial (auditoria 9/11) | **P3a**: rendimento feito; faltam reserva de emergência, limite garantido e "já guardado" na criação |
+| 🟡 Parcial (auditoria 9/11) | **D1a**: abatimento, histórico e prévia feitos; faltam editar contrato (reagendar, mudar total) e PDF |
+| 🟡 Parcial (auditoria 9/11) | **P2a**: depósitos, previsão e concluir feitos; falta transformar em caixinha |
+| 🟡 Parcial (auditoria 9/11) | **O3a**: mínimo, ajuste do total, análise e escolha da fatura feitos; faltam seleção de itens e faixa de competências |
+| 🔎 Parcial, a confirmar | Da auditoria de 9/11: **O7** (detalhe da conta com Disponível), **O8** (relatório por conta/caixinha), **P1a** (detalhe e saldo previsto do orçamento), **F8a** (fatores e histórico da saúde), **S6a** (preferências por grupo), **H4a** (apresentação em 3 perguntas) |
 
 **Duplicatas de notificação (1.3.5):** a mesma compra por app e SMS (até 10 min) ou em dois SMS iguais (até 5 min) aparece marcada como *possível duplicata*, sem descarte automático. Testado no emulador com SMS reais do console.
 
@@ -142,6 +147,25 @@ Drive e sincronização (S9) precisam de um projeto OAuth do Google registrado e
 | H3 | Convite para lembretes | Cartão na Home oferecendo ativar lembretes, com "agora não". | ❌ |
 | H4 | Apresentação | Boas-vindas, primeira conta, primeira transação, primeira meta e conclusão. | ❌ |
 | W1 | Widgets | Seis widgets declarados no APK: lançar rápido, botão de lançar, saldo do mês, fatura, próximas contas e orçamentos. Não foram abertos nesta auditoria. | ❌ |
+
+## Auditoria de 9/11/2026 (Kontto 1.0.83)
+
+Inventário de rotas com REA: 117 telas, idênticas às do 1.0.82. 83 já tinham sido vistas na F1. Desta vez foram observadas, com dados fictícios, 15 das 19 que faltavam. As outras 4 são PRO ou não abrem sem apagar os dados do app. As fichas completas (regras, estados, edição/exclusão, persistência e aceite) estão em `FICHAS-FUNCIONAIS.md`. O status do Floco abaixo vem da leitura do código e ainda não foi testado.
+
+| ID | Função | Resumo | Floco |
+|---|---|---|---|
+| O6 | Ajustar saldo | Informa o saldo real; a diferença vira receita, só ajuste (fora dos relatórios) ou transferência. | ✅ 9/11: `src/adjust.mjs`, 8 testes, conferido no emulador (receita, só ajustar e transferência) |
+| O7 | Detalhe da conta | Disponível = saldo − reservado; ações relatório, ajustar e caixinha; extrato do mês com ordem e busca. | 🟡❔ |
+| O8 | Relatório por conta/caixinha *(PRO, deduzido)* | Categorias, comparação com o mês anterior e PDF, filtrado pela conta. | 🟡 |
+| P3a | Caixinha: rendimento e opções | Rendimento por valor ou saldo atual (soma à caixinha e ao saldo total, o Disponível fica igual); resgate volta ao Disponível; reserva de emergência; limite garantido no cartão; "já guardado" sai do saldo. | 🟡 rendimento ✅ 9/11 (6 testes, emulador, desfazer); faltam reserva de emergência, limite garantido e "já guardado" |
+| P2a | Meta: depósitos e previsão | Depósitos com histórico, previsão em meses pela média, concluir/reabrir, transformar em caixinha. | 🟡 9/11: depósitos, previsão e concluir/reabrir ✅ (8 testes, emulador); falta transformar em caixinha |
+| P1a | Orçamento: detalhe e previsto | Gráfico de 6 meses com teto, transações do ciclo; o que falta gastar sai do saldo previsto, sem desconto duplo. | 🟡❔ |
+| O3a | Fatura por cartão | Três competências, pagamento mínimo, status parcial, ajustar total, análise por categoria/tag, forçar fatura anterior/próxima, parcela atual k de N. | 🟡 9/11: mínimo, ajustar total, análise e escolha da fatura ✅ (7 testes, emulador); faltam seleção de itens e faixa de 3 competências |
+| D1a | Financiamento: detalhe | Editar com prévia e reagendamento; abater prazo/parcela com saldo editável e opção sem movimentar conta (FGTS); histórico de abatimentos; PDF. | 🟡 9/11: abatimento sem conta, saldo editável, histórico e prévia ✅ (8 testes, emulador); faltam editar contrato com reagendamento e PDF |
+| F8a | Saúde financeira | Seis fatores (poupança, reserva, dívidas, orçamento, regularidade, fontes de renda); pontos fortes e a melhorar; histórico com atual, melhor, média e períodos. | 🟡 |
+| S6a | Preferências por grupo | Prévia ao vivo; início do mês personalizado; "quem me deve" no saldo; parcelamento pelo total; cartão no mês de fechamento; orçamento pela fatura; caixinha no +; vibração por aba; moeda só símbolo; formato de data. | 🟡 |
+| H4a | Apresentação | Banco (sem conexão), objetivos múltiplos, primeiro gasto; "já uso, restaurar". | 🟡❔ |
+| H5 | Momento de progresso | Marco com dias de uso, lançamentos e contas quitadas, sem venda. | ❌ opcional |
 
 ## Fora do escopo
 

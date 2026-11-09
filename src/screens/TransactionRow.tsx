@@ -5,6 +5,7 @@ import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
 import { money } from "../finance.mjs";
+import { invoiceShiftOf } from "../invoices.mjs";
 import { trashTransaction } from "../trash.mjs";
 import { lookOf } from "../looks.mjs";
 import { toInput } from "../app/forms";
@@ -29,6 +30,7 @@ export function editInitial(state: any, t: any) {
     refund: !!first.refund,
     ignored: !!first.ignored,
     cardId: first.cardId || "",
+    invoiceShift: invoiceShiftOf(state.cards.find((c: any) => c.id === first.cardId), first),
     accountId: first.accountId || state.accounts[0]?.id || "",
   };
 }
@@ -68,10 +70,10 @@ export default function TransactionRow({ t, withDate = false, last = false }: { 
               },
             ]
           : []),
-        ...(!t.invoicePayment && !t.loanSettlement && !t.financingId
+        ...(!t.invoicePayment && !t.loanSettlement && !t.financingId && !t.adjustment && !t.boxYield
           ? [{ text: "Editar", onPress: () => nav.push({ name: "form", kind: "transaction", initial: editInitial(state, t) }) }]
           : []),
-        ...(!t.loanSettlement && !t.financingId
+        ...(!t.loanSettlement && !t.financingId && !t.boxYield
           ? [
               {
                 text: "Excluir",
@@ -109,7 +111,7 @@ export default function TransactionRow({ t, withDate = false, last = false }: { 
     t.installments > 1 ? `${t.installment}/${t.installments}` : "",
     d.showTags && tags.length ? tags.map((x: string) => "#" + x).join(" ") : "",
   ].filter(Boolean);
-  const badges = [!t.confirmed ? "Pendente" : "", t.refund ? "Estorno" : "", t.ignored ? "Fora da análise" : ""].filter(Boolean);
+  const badges = [!t.confirmed ? "Pendente" : "", t.refund ? "Estorno" : "", t.adjustment ? "Ajuste" : "", t.boxYield ? "Rendimento" : "", t.ignored ? "Fora da análise" : ""].filter(Boolean);
   return (
     <Pressable
       accessibilityRole="button"

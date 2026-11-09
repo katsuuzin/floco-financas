@@ -137,11 +137,14 @@ export function invoice(state, cardId, month) {
   const purchases = state.transactions.filter(
     (t) => t.cardId === cardId && t.invoiceMonth === month,
   );
-  const total = purchases.reduce((a, t) => a + t.amount, 0);
+  const purchasesTotal = purchases.reduce((a, t) => a + t.amount, 0);
+  // O total ajustado à mão (O3a) vale no lugar da soma das compras, até ser removido.
+  const manual = state.cards.find((c) => c.id === cardId)?.manualTotals?.[month];
+  const total = manual ?? purchasesTotal;
   const paid = state.transactions
     .filter((t) => t.invoicePayment === `${cardId}:${month}`)
     .reduce((a, t) => a + t.amount, 0);
-  return { purchases, total, paid, due: Math.max(0, total - paid) };
+  return { purchases, total, paid, due: Math.max(0, total - paid), purchasesTotal, manual: manual !== undefined, adjustment: total - purchasesTotal };
 }
 export function addTransaction(state, input) {
   const { type, amount, date, description, accountId, destinationId, cardId } =
@@ -186,7 +189,10 @@ export function addTransaction(state, input) {
     base = Math.floor(amount / count),
     remainder = amount % count;
   const card = state.cards.find((c) => c.id === cardId);
-  const first = card ? invoiceMonth(date, card) : null;
+  if (input.invoiceMonth && !/^\d{4}-(0[1-9]|1[0-2])$/.test(input.invoiceMonth))
+    throw Error("Fatura inválida.");
+  // A fatura pode ser escolhida à mão; sem escolha, vale a regra de fechamento do cartão.
+  const first = card ? input.invoiceMonth || invoiceMonth(date, card) : null;
   const rows = Array.from({ length: count }, (_, i) => ({
     id: uid(),
     groupId,
@@ -218,6 +224,8 @@ export function addTransaction(state, input) {
 export function deleteTransaction(state, id) {
   const target = state.transactions.find((t) => t.id === id);
   if (!target) throw Error("Lançamento não encontrado.");
+  if (target.boxYield)
+    throw Error("Desfaça este rendimento na caixinha para manter a reserva correta.");
   if (target.loanSettlement)
     throw Error(
       "Desfaça este recebimento em Quem me deve para manter o histórico da dívida correto.",
@@ -546,7 +554,11 @@ export function validateBackup(value) {
       c.closingDay > 31 ||
       !Number.isInteger(c.dueDay) ||
       c.dueDay < 1 ||
-      c.dueDay > 31
+      c.dueDay > 31 ||
+      (c.manualTotals !== undefined &&
+        (!c.manualTotals ||
+          typeof c.manualTotals !== "object" ||
+          Object.entries(c.manualTotals).some(([m, v]) => !/^\d{4}-\d{2}$/.test(m) || !integer(v) || v <= 0)))
     )
       throw Error("Cartão inválido.");
   for (const t of value.transactions) {
@@ -590,11 +602,23 @@ export function validateBackup(value) {
           g.history.some(
             (h) =>
               !h ||
-              !["deposit", "withdrawal"].includes(h.type) ||
+              !["deposit", "withdrawal", "yield"].includes(h.type) ||
               !integer(h.amount) ||
               h.amount <= 0 ||
               !isDate(h.date) ||
               !value.accounts.some((a) => a.id === h.accountId),
+          ))) ||
+      (g.completedAt && !isDate(g.completedAt)) ||
+      (g.moves !== undefined &&
+        (!Array.isArray(g.moves) ||
+          g.moves.some(
+            (m) =>
+              !m ||
+              !["deposit", "adjust"].includes(m.type) ||
+              !integer(m.amount) ||
+              m.amount === 0 ||
+              (m.type === "deposit" && m.amount < 0) ||
+              !isDate(m.date),
           ))) ||
       typeof g.name !== "string" ||
       !integer(g.target) ||

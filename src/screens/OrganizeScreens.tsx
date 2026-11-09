@@ -1,14 +1,15 @@
 // Contas, Cartões, Orçamento e Metas — telas empilhadas a partir de Mais.
 import React, { useState } from "react";
 import { View, Pressable, ScrollView } from "react-native";
-import { T, Muted, I, Box, Section, Button, Empty, IconButton, Progress, styles as k } from "../ui/kit";
+import { T, Muted, I, Box, Section, Button, Empty, IconButton, Progress, Segmented, styles as k } from "../ui/kit";
+import { minimumPayment, invoiceBreakdown } from "../invoices.mjs";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
 import { invoice, invoiceDueDate, totalBalance, today, monthKey, moveItem } from "../finance.mjs";
 import { normalizeBudget, budgetUsage, budgetHistory } from "../analysis.mjs";
 import { toInput } from "../app/forms";
-import { archiveGoal, boxReport, isBox } from "../goals.mjs";
+import { archiveGoal, boxReport, isBox, undoYield, yieldAccount, goalForecast, completeGoal, removeGoalMove } from "../goals.mjs";
 import TransactionRow from "./TransactionRow";
 import MonthBar from "./MonthBar";
 import { AccountList } from "./HomeScreen";
@@ -89,6 +90,7 @@ export function CardsScreen({ cardId }: { cardId?: string }) {
   const { month } = nav;
   const active = state.cards.filter((x: any) => !x.archived);
   const [selected, setSelected] = useState(cardId || active[0]?.id || "");
+  const [by, setBy] = useState<"category" | "tag">("category");
   const card = active.find((x: any) => x.id === selected) || active[0];
   if (!card)
     return (
@@ -162,9 +164,16 @@ export function CardsScreen({ cardId }: { cardId?: string }) {
           <Muted>Total {show(bill.total)}</Muted>
         </View>
         <Progress value={used} max={card.limit} color={used > card.limit ? c.red : undefined} />
-        <Muted style={{ marginTop: 10, marginBottom: 18 }}>
+        <Muted style={{ marginTop: 10, marginBottom: 8 }}>
           Limite usado {show(Math.max(0, used))} de {show(card.limit)}
         </Muted>
+        {bill.manual && (
+          <Muted style={{ marginBottom: 8 }}>
+            Total ajustado à mão · as compras somam {show(bill.purchasesTotal)} ({bill.adjustment > 0 ? "+" : "−"}
+            {show(Math.abs(bill.adjustment))})
+          </Muted>
+        )}
+        {minimumPayment(bill) > 0 && <Muted style={{ marginBottom: 14 }}>Pagamento mínimo estimado {show(minimumPayment(bill))} (15% do total)</Muted>}
         <Button
           title={bill.due ? "Pagar fatura" : "Fatura sem saldo a pagar"}
           disabled={!bill.due}
@@ -177,7 +186,45 @@ export function CardsScreen({ cardId }: { cardId?: string }) {
             })
           }
         />
+        <View style={{ height: 8 }} />
+        <Button
+          title={bill.manual ? "Mudar ou remover o ajuste do total" : "Ajustar total da fatura"}
+          secondary
+          icon="sliders"
+          onPress={() =>
+            nav.push({ name: "form", kind: "invoiceTotal", initial: { cardId: card.id, month, amount: bill.manual ? toInput(bill.total) : "" } })
+          }
+        />
       </Box>
+      {bill.total > 0 && (
+        <>
+          <Section title="Análise da fatura" />
+          <Box>
+            <Segmented
+              values={[
+                ["category", "Categoria"],
+                ["tag", "Tag"],
+              ]}
+              value={by}
+              onChange={(v) => setBy(v as "category" | "tag")}
+            />
+            <View style={{ gap: 12, marginTop: 14 }}>
+              {invoiceBreakdown(state, card.id, month, by).map((r: any) => (
+                <View key={r.name} style={{ gap: 4 }}>
+                  <View style={[k.row, { justifyContent: "space-between" }]}>
+                    <T style={{ fontSize: 13 }}>{r.name}</T>
+                    <T style={{ fontSize: 13, fontFamily: "SoraSemi" }}>
+                      {show(r.amount)} · {Math.round(r.share * 100)}%
+                    </T>
+                  </View>
+                  <Progress value={Math.max(0, r.amount)} max={Math.max(1, bill.total)} />
+                </View>
+              ))}
+            </View>
+            {by === "tag" && <Muted style={{ marginTop: 10 }}>Compra com mais de uma tag aparece em cada uma, então a soma pode passar do total.</Muted>}
+          </Box>
+        </>
+      )}
       <Section title="Compras desta fatura" />
       <Box style={{ padding: 0, overflow: "hidden" }}>
         {bill.purchases.length ? (
@@ -344,6 +391,14 @@ export function GoalsScreen() {
             <View style={{ gap: 8 }}>
               <Button title="Guardar dinheiro" icon="plus" onPress={() => nav.push({ name: "form", kind: "deposit", initial: { goalId: g.id } })} />
               {g.saved > 0 && (
+                <Button
+                  title="Registrar rendimento"
+                  secondary
+                  icon="trending-up"
+                  onPress={() => nav.push({ name: "form", kind: "yield", initial: { goalId: g.id, accountId: yieldAccount(g), description: "" } })}
+                />
+              )}
+              {g.saved > 0 && (
                 <Button title="Retirar" secondary icon="minus" onPress={() => nav.push({ name: "form", kind: "withdraw", initial: { goalId: g.id } })} />
               )}
               {g.saved > 0 && boxes.length > 1 && (
@@ -366,11 +421,25 @@ export function GoalsScreen() {
                 <Muted style={{ fontFamily: "SoraSemi" }}>Movimento por mês</Muted>
                 {report.map((r: any) => (
                   <Muted key={r.month}>
-                    {r.month.split("-").reverse().join("/")} · guardou {show(r.deposits)} · retirou {show(r.withdrawals)}
+                    {r.month.split("-").reverse().join("/")} · guardou {show(r.deposits)} · retirou {show(r.withdrawals)}{r.yields ? ` · rendeu ${show(r.yields)}` : ""}
                   </Muted>
                 ))}
               </View>
             )}
+            {(g.history || []).filter((h: any) => h.type === "yield").slice(-3).reverse().map((h: any) => (
+              <View key={h.id} style={[k.row, { justifyContent: "space-between", minHeight: 44 }]}>
+                <Muted style={{ flex: 1 }}>
+                  Rendimento {h.date.split("-").reverse().join("/")} · +{show(h.amount)}
+                </Muted>
+                <Button
+                  title="Desfazer"
+                  secondary
+                  onPress={() =>
+                    confirm("Desfazer rendimento?", `Remove a receita de ${show(h.amount)} e tira esse valor da caixinha.`, () => perform((s: any) => undoYield(s, g.id, h.id), "Rendimento desfeito"), "Desfazer")
+                  }
+                />
+              </View>
+            ))}
             <View style={[k.row, { gap: 8, marginTop: 12 }]}>
               {g.saved === 0 && (
                 <View style={{ flex: 1 }}>
@@ -387,15 +456,71 @@ export function GoalsScreen() {
       <Section title="Metas" />
       <Muted style={{ marginBottom: 12 }}>Metas acompanham um objetivo sem separar dinheiro.</Muted>
       {metas.length === 0 && <Muted style={{ marginBottom: 12 }}>Nenhuma meta. Toque em Criar e escolha Meta.</Muted>}
-      {metas.map((g: any) => (
+      {metas.map((g: any) => {
+        const fc = goalForecast(g);
+        const moves = [...(g.moves || [])].sort((a: any, b: any) => b.date.localeCompare(a.date)).slice(0, 5);
+        return (
         <Box key={g.id}>
           {header(g)}
+          {g.completedAt && <T style={{ color: c.green, fontFamily: "SoraSemi", marginBottom: 6 }}>Concluída em {g.completedAt.split("-").reverse().join("/")}</T>}
+          {!g.completedAt && (
+            <View style={{ marginBottom: 10, gap: 2 }}>
+              {fc.reached ? (
+                <Muted>Valor atingido. Toque em Concluir para encerrar.</Muted>
+              ) : (
+                <>
+                  <Muted>Falta {show(fc.remaining)}</Muted>
+                  {fc.months !== null ? (
+                    <Muted>
+                      Média {show(fc.average)} por mês · previsão em {fc.months} {fc.months === 1 ? "mês" : "meses"} ({fc.date.split("-").reverse().slice(1).join("/")})
+                      {fc.noPrazo === false ? " · passa do prazo" : fc.noPrazo ? " · dentro do prazo" : ""}
+                    </Muted>
+                  ) : (
+                    <Muted>Faça um depósito para ver a média e a previsão.</Muted>
+                  )}
+                  {fc.neededMonthly !== null && fc.noPrazo === false && <Muted>Para chegar no prazo: {show(fc.neededMonthly)} por mês.</Muted>}
+                </>
+              )}
+            </View>
+          )}
           <View style={{ gap: 8 }}>
             <Button
-              title="Atualizar progresso"
-              icon="trending-up"
+              title="Depositar"
+              icon="plus"
+              onPress={() => nav.push({ name: "form", kind: "goalDeposit", initial: { goalId: g.id, description: "" } })}
+            />
+            <Button
+              title={g.completedAt ? "Reabrir" : "Concluir"}
+              secondary
+              icon={g.completedAt ? "rotate-ccw" : "check-circle"}
+              onPress={() => perform((s: any) => completeGoal(s, g.id, !g.completedAt), g.completedAt ? "Meta reaberta" : "Meta concluída")}
+            />
+            <Button
+              title="Corrigir progresso"
+              secondary
+              icon="edit-3"
               onPress={() => nav.push({ name: "form", kind: "goalProgress", initial: { goalId: g.id, amount: toInput(g.saved) } })}
             />
+            {moves.length > 0 && (
+              <View style={{ gap: 2 }}>
+                <Muted style={{ fontFamily: "SoraSemi" }}>Histórico</Muted>
+                {moves.map((m: any) => (
+                  <View key={m.id} style={[k.row, { justifyContent: "space-between", minHeight: 44 }]}>
+                    <Muted style={{ flex: 1 }}>
+                      {m.date.split("-").reverse().join("/")} · {m.type === "deposit" ? "depósito" : "ajuste"} {m.amount > 0 ? "+" : "−"}{show(Math.abs(m.amount))}
+                      {m.note ? ` · ${m.note}` : ""}
+                    </Muted>
+                    <Button
+                      title="Excluir"
+                      secondary
+                      onPress={() =>
+                        confirm("Excluir movimento?", "O progresso da meta volta ao valor de antes.", () => perform((s: any) => removeGoalMove(s, g.id, m.id), "Movimento excluído"), "Excluir")
+                      }
+                    />
+                  </View>
+                ))}
+              </View>
+            )}
             <View style={[k.row, { gap: 8 }]}>
               <View style={{ flex: 1 }}>
                 <Button title="Arquivar" secondary icon="archive" onPress={() => perform((s: any) => archiveGoal(s, g.id), "Meta arquivada")} />
@@ -406,7 +531,8 @@ export function GoalsScreen() {
             </View>
           </View>
         </Box>
-      ))}
+        );
+      })}
       {archived.length > 0 && (
         <>
           <Section title={`Arquivadas (${archived.length})`} action={showArchived ? "Ocultar" : "Mostrar"} onPress={() => setShowArchived(!showArchived)} />

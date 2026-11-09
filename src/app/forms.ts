@@ -17,7 +17,9 @@ import { saveContract, changeMethod, payPart, addLateFee, extraAmortization, set
 import { expenseOwed } from "../commitments.mjs";
 import { saveBudget } from "../analysis.mjs";
 import { bankProfile } from "../banks.mjs";
-import { setGoalProgress } from "../goals.mjs";
+import { setGoalProgress, registerYield, addGoalDeposit } from "../goals.mjs";
+import { adjustBalance, parseSignedMoney } from "../adjust.mjs";
+import { setInvoiceTotal, chosenInvoiceMonth } from "../invoices.mjs";
 
 export const toInput = (cents: number) => (cents / 100).toFixed(2).replace(".", ",");
 const optionalMoney = (text: string) =>
@@ -40,14 +42,18 @@ export const formTitles: Record<string, (f: any) => string> = {
             ? "Nova despesa no cartão"
             : "Nova despesa",
   account: (f) => (f.id ? "Editar conta" : "Nova conta"),
+  adjustBalance: () => "Ajustar saldo",
   card: (f) => (f.id ? "Editar cartão" : "Novo cartão"),
   budget: (f) => (f.id ? "Editar orçamento" : "Novo orçamento"),
   goal: (f) => (f.id ? (f.goalKind === "goal" ? "Editar meta" : "Editar caixinha") : "Nova meta ou caixinha"),
-  goalProgress: () => "Atualizar progresso",
+  goalProgress: () => "Corrigir progresso",
+  goalDeposit: () => "Depositar na meta",
   deposit: () => "Guardar dinheiro",
   withdraw: () => "Retirar reserva",
+  yield: () => "Registrar rendimento",
   reserveTransfer: () => "Transferir reserva",
   payment: () => "Pagar fatura",
+  invoiceTotal: () => "Ajustar total da fatura",
   contract: (f) => (f.type === "loan" ? "Novo empréstimo" : "Novo financiamento"),
   recurrence: (f) => (f.id ? "Editar recorrência" : "Nova recorrência"),
   contractPay: () => "Pagar parcela",
@@ -105,6 +111,13 @@ export function defaults(kind: string, state: any, initial: any = {}) {
     person: "",
     endDate: "",
     mode: "term",
+    invoiceShift: 0,
+    yieldMode: "amount",
+    offApp: false,
+    newDebt: "",
+    adjustMode: "only",
+    negative: false,
+    sourceId: "",
     ...initial,
   };
 }
@@ -135,6 +148,11 @@ export function buildChange(f: any, month: string): (s: any) => any {
           return expenseOwed(base, { ...f, amount, confirmed: true });
         return addTransaction(base, {
           ...f,
+          // Fatura escolhida à mão (±N meses da automática); sem escolha vale o fechamento do cartão.
+          invoiceMonth:
+            f.cardId && f.invoiceShift
+              ? chosenInvoiceMonth(s.cards.find((x: any) => x.id === f.cardId), f.date, Number(f.invoiceShift))
+              : undefined,
           amount,
           installments: f.repeat === "installments" && f.cardId ? Number(f.installments) : 1,
           confirmed: f.cardId ? true : f.confirmed,
@@ -161,6 +179,16 @@ export function buildChange(f: any, month: string): (s: any) => any {
           accounts: f.id ? s.accounts.map((a: any) => (a.id === f.id ? row : a)) : [...s.accounts, row],
         };
       }
+      case "adjustBalance":
+        return adjustBalance(s, {
+          accountId: f.accountId,
+          newBalance: parseSignedMoney(`${f.negative ? "-" : ""}${f.amount}`),
+          mode: f.adjustMode,
+          sourceId: f.sourceId,
+          category: f.category,
+          description: f.description,
+          date: f.date,
+        });
       case "card": {
         if (!f.name.trim()) throw Error("Informe o nome do cartão.");
         if (f.lastFour && !/^\d{4}$/.test(f.lastFour)) throw Error("Informe os 4 últimos dígitos ou deixe em branco.");
@@ -204,12 +232,23 @@ export function buildChange(f: any, month: string): (s: any) => any {
         };
         return { ...s, goals: prev ? s.goals.map((g: any) => (g.id === f.id ? row : g)) : [...s.goals, row] };
       }
+      case "goalDeposit":
+        return addGoalDeposit(s, f.goalId, { amount: parseMoney(f.amount), date: f.date, note: f.description });
       case "goalProgress":
         return setGoalProgress(s, f.goalId, f.amount);
       case "deposit":
         return contribute(s, f.goalId, parseMoney(f.amount), f.accountId, f.date);
       case "withdraw":
         return withdrawGoal(s, f.goalId, parseMoney(f.amount), f.accountId, f.date);
+      case "yield": {
+        const typed = parseMoney(f.amount);
+        return registerYield(s, f.goalId, {
+          ...(f.yieldMode === "total" ? { newSaved: typed } : { amount: typed }),
+          accountId: f.accountId,
+          date: f.date,
+          note: f.description,
+        });
+      }
       case "reserveTransfer":
         return transferGoal(s, f.goalId, f.destinationGoalId, parseMoney(f.amount), f.accountId, f.date);
       case "contract":
@@ -241,7 +280,11 @@ export function buildChange(f: any, month: string): (s: any) => any {
       case "lateFee":
         return addLateFee(s, f.txId, parseMoney(f.amount));
       case "extraAmort":
-        return extraAmortization(s, f.contractId, parseMoney(f.amount), f.accountId, f.date, f.mode || "term");
+        return extraAmortization(s, f.contractId, parseMoney(f.amount), f.offApp ? null : f.accountId, f.date, f.mode || "term", {
+          offApp: !!f.offApp,
+          newDebt: f.newDebt?.trim() ? parseMoney(f.newDebt) : undefined,
+          note: f.description,
+        });
       case "settle":
         return settleContract(s, f.contractId, f.accountId, f.date, f.amount?.trim() ? parseMoney(f.amount) : undefined);
       case "changeMethod":
@@ -252,6 +295,8 @@ export function buildChange(f: any, month: string): (s: any) => any {
           installment: f.amount?.trim() ? parseMoney(f.amount) : 0,
           insurance: optionalMoney(f.insurance),
         });
+      case "invoiceTotal":
+        return setInvoiceTotal(s, f.cardId, f.month || month, f.amount?.trim() ? parseMoney(f.amount) : null);
       case "payment":
         return payInvoice(
           s,

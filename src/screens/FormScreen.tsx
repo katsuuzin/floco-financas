@@ -9,6 +9,10 @@ import { categoryNames } from "../planning.mjs";
 import { bankProfiles, bankProfile } from "../banks.mjs";
 import { invoice, balance, reserved, today, addMonths, ACCOUNT_TYPES } from "../finance.mjs";
 import { categorize } from "../rules.mjs";
+import { parseSignedMoney } from "../adjust.mjs";
+import { parseMoney } from "../finance.mjs";
+import { minimumPayment, chosenInvoiceMonth } from "../invoices.mjs";
+import { previewOf, contractStatus } from "../contracts.mjs";
 
 const COLORS: [string, string][] = [
   ["#311E0D", "Marrom"],
@@ -167,6 +171,23 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
               onChange={(v) => setForm((f: any) => ({ ...f, category: v, categoryTouched: true }))}
             />
           )}
+          {form.cardId && (() => {
+            const card = state.cards.find((x: any) => x.id === form.cardId);
+            const month = card ? chosenInvoiceMonth(card, form.date, Number(form.invoiceShift) || 0) : "";
+            if (!month) return null;
+            const label = new Date(`${month}-15T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+            return (
+              <View style={{ gap: 4 }}>
+                <T style={k.label}>Entra na fatura de</T>
+                <View style={[k.row, { gap: 4 }]}>
+                  <IconButton name="chevron-left" label="Fatura anterior" onPress={() => set("invoiceShift", (Number(form.invoiceShift) || 0) - 1)} />
+                  <T style={{ flex: 1, textAlign: "center", fontFamily: "SoraSemi" }}>{label}</T>
+                  <IconButton name="chevron-right" label="Próxima fatura" onPress={() => set("invoiceShift", (Number(form.invoiceShift) || 0) + 1)} />
+                </View>
+                {!!Number(form.invoiceShift) && <Muted>Escolhida por você. O cartão fecharia essa compra em outra fatura.</Muted>}
+              </View>
+            );
+          })()}
           {form.cardId ? (
             <Choice label="Cartão" values={cards.map((x: any) => [x.id, x.name])} value={form.cardId} onChange={(v) => set("cardId", v)} empty="Cadastre um cartão em Mais › Cartões." />
           ) : (
@@ -334,6 +355,25 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
             placeholder="0,00"
             hint="O saldo atual é calculado a partir deste valor e dos lançamentos confirmados."
           />
+          {form.id && (
+            <Button
+              title="Ajustar saldo"
+              secondary
+              icon="sliders"
+              onPress={() =>
+                nav.push({
+                  name: "form",
+                  kind: "adjustBalance",
+                  initial: {
+                    accountId: form.id,
+                    sourceId: state.accounts.find((a: any) => !a.archived && a.id !== form.id)?.id || "",
+                    category: "Outros",
+                    description: "",
+                  },
+                })
+              }
+            />
+          )}
           <Choice label="Cor" values={COLORS} value={form.color || "#311E0D"} onChange={(v) => set("color", v)} />
           <Toggle label="Ocultar saldo desta conta" value={!!form.hideBalance} onChange={(v) => set("hideBalance", v)} />
           <Toggle
@@ -485,8 +525,93 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
         </>
       )}
 
+      {form.kind === "adjustBalance" && (() => {
+        const account = state.accounts.find((a: any) => a.id === form.accountId);
+        const current = balance(state, form.accountId);
+        let diff: number | null = null;
+        try {
+          diff = parseSignedMoney(`${form.negative ? "-" : ""}${form.amount}`) - current;
+        } catch {
+          diff = null;
+        }
+        const up = diff !== null && diff > 0;
+        const others = state.accounts.filter((a: any) => !a.archived && a.id !== form.accountId);
+        return (
+          <>
+            <Muted>
+              {account?.name} · saldo atual {show(current)}
+            </Muted>
+            <Field
+              label="Saldo real (R$)"
+              value={form.amount}
+              onChange={(v) => set("amount", v)}
+              numeric
+              autoFocus
+              hint="O valor que a conta tem de verdade agora, como no app do banco."
+            />
+            <Toggle label="Saldo negativo (conta no vermelho)" value={!!form.negative} onChange={(v) => set("negative", v)} />
+            {diff !== null && (
+              <T style={{ fontFamily: "SoraSemi", color: diff === 0 ? c.muted : up ? c.green : c.red }}>
+                {diff === 0 ? "Sem diferença: o saldo já é esse." : `Diferença: ${up ? "+" : "−"}${show(Math.abs(diff))}`}
+              </T>
+            )}
+            <Choice
+              label={diff === null ? "De onde veio a diferença?" : up ? "De onde vieram essas entradas?" : "Para onde foi a diferença?"}
+              values={[
+                ["income", up || diff === null ? "Lançar como receita" : "Lançar como despesa"],
+                ["only", "Só ajustar (fora dos relatórios)"],
+                ["transfer", "Foi transferência"],
+              ]}
+              value={form.adjustMode}
+              onChange={(v) => set("adjustMode", v)}
+            />
+            <Muted>
+              {form.adjustMode === "income"
+                ? "Conta nos relatórios e nos totais do mês."
+                : form.adjustMode === "only"
+                  ? "Corrige o saldo sem entrar em receitas, despesas nem relatórios."
+                  : "Move o valor entre duas contas suas. Os totais do mês não mudam."}
+            </Muted>
+            {form.adjustMode === "income" && (
+              <Choice
+                label="Categoria"
+                values={categoryNames(state).map((x: string) => [x, x])}
+                value={form.category}
+                onChange={(v) => set("category", v)}
+              />
+            )}
+            {form.adjustMode === "transfer" && (
+              <Choice
+                label={up ? "Veio de qual conta?" : "Foi para qual conta?"}
+                values={others.map((a: any) => [a.id, a.name])}
+                value={form.sourceId}
+                onChange={(v) => set("sourceId", v)}
+                empty="Cadastre outra conta para registrar uma transferência."
+              />
+            )}
+            <Field label="Data (AAAA-MM-DD)" value={form.date} onChange={(v) => set("date", v)} maxLength={10} />
+            <Field label="Motivo (opcional)" value={form.description} onChange={(v) => set("description", v)} placeholder="Ex.: dinheiro esquecido na carteira" />
+          </>
+        );
+      })()}
+
       {form.kind === "goalProgress" && (
-        <Field label="Quanto você já juntou? (R$)" value={form.amount} onChange={(v) => set("amount", v)} numeric autoFocus />
+        <>
+          <Field label="Quanto você já juntou? (R$)" value={form.amount} onChange={(v) => set("amount", v)} numeric autoFocus />
+          <Muted>Corrige o total. A diferença fica no histórico como ajuste e não conta no ritmo dos depósitos.</Muted>
+        </>
+      )}
+
+      {form.kind === "goalDeposit" && (
+        <>
+          <Muted>
+            {state.goals.find((g: any) => g.id === form.goalId)?.name} · juntou {show(state.goals.find((g: any) => g.id === form.goalId)?.saved || 0)}
+          </Muted>
+          <Field label="Valor (R$)" value={form.amount} onChange={(v) => set("amount", v)} numeric autoFocus />
+          <Muted>O depósito só marca o progresso da meta. Nenhuma conta muda.</Muted>
+          <Field label="Data (AAAA-MM-DD)" value={form.date} onChange={(v) => set("date", v)} maxLength={10} />
+          <Field label="Observação (opcional)" value={form.description} onChange={(v) => set("description", v)} placeholder="Ex.: salário de março" />
+        </>
       )}
 
       {["deposit", "withdraw", "reserveTransfer"].includes(form.kind) && (
@@ -510,10 +635,90 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
         </>
       )}
 
+      {form.kind === "yield" && (() => {
+        const goal = state.goals.find((g: any) => g.id === form.goalId);
+        const ids = [...new Set<string>((goal?.deposits || []).map((d: any) => d.accountId))];
+        let gain: number | null = null;
+        try {
+          const typed = parseMoney(form.amount);
+          gain = form.yieldMode === "total" ? typed - (goal?.saved || 0) : typed;
+        } catch {
+          gain = null;
+        }
+        return (
+          <>
+            <Muted>
+              {goal?.name} · guardado {show(goal?.saved || 0)}
+            </Muted>
+            <Choice
+              label="Como informar"
+              values={[
+                ["amount", "Quanto rendeu"],
+                ["total", "Saldo atual da caixinha"],
+              ]}
+              value={form.yieldMode}
+              onChange={(v) => set("yieldMode", v)}
+            />
+            <Field
+              label={form.yieldMode === "total" ? "Saldo atual da caixinha (R$)" : "Quanto rendeu (R$)"}
+              value={form.amount}
+              onChange={(v) => set("amount", v)}
+              numeric
+              autoFocus
+            />
+            {gain !== null && (
+              <T style={{ fontFamily: "SoraSemi", color: gain > 0 ? c.green : c.red }}>
+                {gain > 0 ? `Rendimento: +${show(gain)} · caixinha passa a ${show((goal?.saved || 0) + gain)}` : "O valor precisa ser maior que o guardado."}
+              </T>
+            )}
+            {ids.length > 1 && (
+              <Choice
+                label="Entra em qual conta?"
+                values={ids.map((id) => [id, state.accounts.find((a: any) => a.id === id)?.name || id])}
+                value={form.accountId}
+                onChange={(v) => set("accountId", v)}
+              />
+            )}
+            <Muted>O rendimento sobe o saldo da conta e a caixinha. O disponível não muda e a receita entra nos relatórios.</Muted>
+            <Field label="Data (AAAA-MM-DD)" value={form.date} onChange={(v) => set("date", v)} maxLength={10} />
+            <Field label="Observação (opcional)" value={form.description} onChange={(v) => set("description", v)} placeholder="Ex.: rendimento do mês" />
+          </>
+        );
+      })()}
+
+      {form.kind === "invoiceTotal" && (() => {
+        const inv = invoice(state, form.cardId, form.month || nav.month);
+        return (
+          <>
+            <Muted>
+              Compras lançadas: {show(inv.purchasesTotal)}
+              {inv.manual ? ` · total ajustado: ${show(inv.total)}` : ""}
+            </Muted>
+            <Field
+              label="Total da fatura no banco (R$)"
+              value={form.amount}
+              onChange={(v) => set("amount", v)}
+              numeric
+              autoFocus
+              hint="Deixe vazio e salve para voltar à soma das compras. O ajuste vale só para esta fatura e não pode ficar abaixo do que já foi pago."
+            />
+          </>
+        );
+      })()}
+
       {form.kind === "payment" && (
         <>
           <T style={[k.balanceValue, { fontSize: 30 }]}>{show(invoice(state, form.cardId, form.month || nav.month).due)}</T>
           <Muted>O pagamento sai da conta e abate a fatura. A despesa não é contada duas vezes.</Muted>
+          {(() => {
+            const min = minimumPayment(invoice(state, form.cardId, form.month || nav.month));
+            return min > 0 ? (
+              <View style={[k.row, { justifyContent: "space-between" }]}>
+                <Muted style={{ flex: 1 }}>Pagamento mínimo estimado: {show(min)} (15% do total; confira no banco)</Muted>
+                <Button title="Usar" secondary onPress={() => set("amount", (min / 100).toFixed(2).replace(".", ","))} />
+              </View>
+            ) : null;
+          })()}
           <Field
             label="Valor a pagar (R$)"
             value={form.amount}
@@ -653,7 +858,7 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
             />
           )}
           <Field
-            label={form.kind === "settle" ? "Valor da quitação (R$)" : "Valor (R$)"}
+            label={form.kind === "settle" ? "Valor da quitação (R$)" : form.kind === "extraAmort" ? "Valor pago (R$)" : "Valor (R$)"}
             value={form.amount}
             onChange={(v) => set("amount", v)}
             numeric
@@ -666,14 +871,57 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
                   : undefined
             }
           />
+          {form.kind === "extraAmort" && (
+            <>
+              <Field
+                label="Novo saldo devedor (R$)"
+                value={form.newDebt}
+                onChange={(v) => set("newDebt", v)}
+                numeric
+                hint="Deixe vazio para usar o calculado (saldo atual menos o valor pago). Informe o valor do banco se ele for diferente."
+              />
+              <Toggle
+                label="Sem movimentar conta"
+                value={!!form.offApp}
+                onChange={(v) => set("offApp", v)}
+                hint="Pago com FGTS ou outro recurso de fora: entra só no histórico do contrato e não debita nenhuma conta."
+              />
+            </>
+          )}
           {form.kind !== "lateFee" && (
             <>
-              <Choice label="Pagar com" values={accounts.map((a: any) => [a.id, a.name])} value={form.accountId} onChange={(v) => set("accountId", v)} />
+              {!(form.kind === "extraAmort" && form.offApp) && (
+                <Choice label="Pagar com" values={accounts.map((a: any) => [a.id, a.name])} value={form.accountId} onChange={(v) => set("accountId", v)} />
+              )}
               <Field label="Data (AAAA-MM-DD)" value={form.date} onChange={(v) => set("date", v)} />
             </>
           )}
+          {form.kind === "extraAmort" && (
+            <Field label="Observação (opcional)" value={form.description} onChange={(v) => set("description", v)} placeholder="Ex.: FGTS, bônus" />
+          )}
         </>
       )}
+
+      {["extraAmort", "changeMethod"].includes(form.kind) && form.contractId && (() => {
+        let text = "";
+        try {
+          const next = buildChange(form, nav.month)(state);
+          const p = previewOf(next, form.contractId);
+          const last = p.lastDate ? p.lastDate.split("-").reverse().join("/") : "—";
+          text = `Vai ficar assim: ${p.openCount} parcelas restantes · última em ${last} · ${show(p.total)} a pagar em parcelas · saldo devedor ${show(p.debt)}`;
+        } catch (e: any) {
+          if (form.kind === "extraAmort" && form.amount?.trim()) text = e?.message || "";
+        }
+        if (!text) {
+          try {
+            const now = contractStatus(state, form.contractId);
+            text = `Agora: ${now.openCount} parcelas restantes · saldo devedor ${show(now.debt)}`;
+          } catch {
+            text = "";
+          }
+        }
+        return text ? <Muted accessibilityLiveRegion="polite">{text}</Muted> : null;
+      })()}
 
       {!!error && (
         <T accessibilityRole="alert" style={{ color: c.red }}>

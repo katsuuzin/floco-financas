@@ -151,7 +151,8 @@ export function contractStatus(s, id) {
   );
   return {
     contract: { method: "fixed", rate: 0, insurance: 0, ...c },
-    paidCount: (c.paid || 0) + done.length,
+    // Abatimento e quitação são pagamentos extras: contam em "já pago", não como parcela paga.
+    paidCount: (c.paid || 0) + done.filter((t) => !t.extra && !t.settlement).length,
     openCount: open.length,
     debt: Math.max(0, debt),
     paidTotal: done.reduce((n, t) => n + t.amount, 0) + parts.reduce((n, t) => n + t.amount, 0),
@@ -242,15 +243,37 @@ export function addLateFee(s, txId, amount) {
   };
 }
 
-// Amortização extraordinária: paga `amount` do saldo devedor hoje.
+// Amortização extraordinária: abate o saldo devedor com o valor pago (`amount`).
 // mode "term": mantém a parcela e elimina as últimas; "payment": mantém o prazo e reduz a parcela.
-export function extraAmortization(s, id, amount, accountId, date = today(), mode = "term") {
+// opts.offApp: o dinheiro veio de fora (FGTS etc.): vale para o contrato, mas nenhuma conta é debitada.
+// opts.newDebt: saldo devedor informado pelo banco; sem ele, vale saldo atual − valor pago.
+// Cada abatimento fica em `contract.amortizations`, para o histórico do contrato.
+/** @param {any} [opts] */
+export function extraAmortization(s, id, amount, accountId, date = today(), mode = "term", opts = {}) {
   const st = contractStatus(s, id);
   const c = st.contract;
-  if (!cents(amount) || !amount || amount >= st.debt) fail("Para pagar todo o saldo, use Quitar contrato.");
-  if (!s.accounts.some((a) => a.id === accountId)) fail("Selecione a conta.");
+  const offApp = !!opts.offApp;
+  const informed = opts.newDebt !== undefined && opts.newDebt !== null;
+  if (!cents(amount) || !amount) fail("Informe o valor pago no abatimento.");
+  if (!isDate(date)) fail("Confira a data do abatimento.");
+  if (informed) {
+    if (!cents(opts.newDebt) || !opts.newDebt || opts.newDebt >= st.debt)
+      fail("O novo saldo devedor precisa ser maior que zero e menor que o atual. Para zerar, use Quitar contrato.");
+  } else if (amount >= st.debt) fail("Para pagar todo o saldo, use Quitar contrato.");
+  if (!offApp && !s.accounts.some((a) => a.id === accountId)) fail("Selecione a conta.");
   const open = contractRows(s, id).filter((t) => !t.confirmed);
   if (open.some((t) => t.paidPart)) fail("Conclua o pagamento parcial em aberto antes.");
+  const entry = {
+    id: uid(),
+    date,
+    amount,
+    mode,
+    offApp,
+    ...(offApp ? {} : { accountId }),
+    debtBefore: st.debt,
+    debtAfter: informed ? opts.newDebt : st.debt - amount,
+    ...(opts.note?.trim() ? { note: opts.note.trim().slice(0, 200) } : {}),
+  };
   const payment = {
     id: uid(),
     financingId: id,
@@ -263,7 +286,10 @@ export function extraAmortization(s, id, amount, accountId, date = today(), mode
     category: c.category,
     confirmed: true,
   };
-  const remainingDebt = st.debt - amount;
+  const remainingDebt = entry.debtAfter;
+  const tail = offApp ? [] : [payment];
+  const withHistory = (fs, count) =>
+    fs.map((f) => (f.id === id ? { ...f, ...(count ? { count } : {}), amortizations: [...(f.amortizations || []), entry] } : f));
   let rows;
   if (c.method === "fixed") {
     // Sem taxa: abate parcelas inteiras do fim (prazo) ou divide o restante (parcela).
@@ -276,13 +302,13 @@ export function extraAmortization(s, id, amount, accountId, date = today(), mode
         amortization: k === keep - 1 ? remainingDebt - per * (keep - 1) : per,
       }));
       const drop = new Set(open.map((t) => t.id));
-      return { ...s, transactions: [...s.transactions.filter((t) => !drop.has(t.id)), ...rows, payment] };
+      return { ...s, financings: withHistory(s.financings), transactions: [...s.transactions.filter((t) => !drop.has(t.id)), ...rows, ...tail] };
     }
     const n = open.length;
     const base = Math.floor(remainingDebt / n), extra = remainingDebt % n;
     rows = open.map((t, k) => ({ ...t, amount: base + (k < extra ? 1 : 0) + (c.insurance || 0), amortization: base + (k < extra ? 1 : 0) }));
     const drop = new Set(open.map((t) => t.id));
-    return { ...s, transactions: [...s.transactions.filter((t) => !drop.has(t.id)), ...rows, payment] };
+    return { ...s, financings: withHistory(s.financings), transactions: [...s.transactions.filter((t) => !drop.has(t.id)), ...rows, ...tail] };
   }
   const i = c.rate / 100;
   const pmt = open[0].amount - (c.insurance || 0);
@@ -309,8 +335,8 @@ export function extraAmortization(s, id, amount, accountId, date = today(), mode
     const drop = new Set(open.map((t) => t.id));
     return {
       ...s,
-      financings: s.financings.map((f) => (f.id === id ? { ...f, count: next.count } : f)),
-      transactions: [...s.transactions.filter((t) => !drop.has(t.id)), ...sched.map((r) => installmentTx(next, r)), payment],
+      financings: withHistory(s.financings, next.count),
+      transactions: [...s.transactions.filter((t) => !drop.has(t.id)), ...sched.map((r) => installmentTx(next, r)), ...tail],
     };
   }
   const sched = schedule({
@@ -326,8 +352,21 @@ export function extraAmortization(s, id, amount, accountId, date = today(), mode
   const drop = new Set(open.map((t) => t.id));
   return {
     ...s,
-    financings: s.financings.map((f) => (f.id === id ? { ...f, count: next.count } : f)),
-    transactions: [...s.transactions.filter((t) => !drop.has(t.id)), ...sched.map((r) => installmentTx(next, r)), payment],
+    financings: withHistory(s.financings, next.count),
+    transactions: [...s.transactions.filter((t) => !drop.has(t.id)), ...sched.map((r) => installmentTx(next, r)), ...tail],
+  };
+}
+
+// Prévia "vai ficar assim" de uma alteração já aplicada a uma cópia do estado: quantas parcelas
+// restam, quando é a última e quanto falta pagar.
+export function previewOf(s, id) {
+  const open = contractRows(s, id).filter((t) => !t.confirmed);
+  return {
+    openCount: open.length,
+    lastDate: open.at(-1)?.date || "",
+    total: open.reduce((n, t) => n + t.amount - (t.paidPart || 0), 0),
+    next: open[0] ? open[0].amount - (open[0].paidPart || 0) : 0,
+    debt: contractStatus(s, id).debt,
   };
 }
 
