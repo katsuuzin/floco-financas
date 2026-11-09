@@ -8,6 +8,8 @@ import { totals, monthKey, addMonths, analysisAmount, totalBalance, signedAmount
 import { report } from "../planning.mjs";
 import { layoutOf } from "../layout.mjs";
 import MonthBar from "./MonthBar";
+import SpendingCalendar from "./SpendingCalendar";
+import SpendingDonut from "./SpendingDonut";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const lastDay = (m: string) => new Date(Number(m.slice(0, 4)), Number(m.slice(5)), 0).getDate();
@@ -95,6 +97,8 @@ export default function AnalysisScreen() {
         </Box>
       </>
     ),
+    calendar: () => <SpendingCalendar />,
+    donut: () => <SpendingDonut />,
     categories: () => {
       const { rows, total } = categoryBreakdown(state, month);
       return (

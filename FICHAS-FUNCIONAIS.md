@@ -254,6 +254,34 @@ O status do Floco vem de leitura do código, sem teste: ✅ tem · 🟡 parcial 
 
 **Critério de aceite (emulador):** pendente Pix escolheu Alimentação › Restaurante e o extrato mostrou "Alimentação › Restaurante · Conta Nubank"; compra do YouTube veio sugerida como Assinaturas › Streaming (regra antiga atualizada); lista de pendentes sem logo, com setas e cartão; novo lançamento permitiu escolher Assinaturas › Streaming. 12 testes novos.
 
+## A2 — Calendário de gastos e rosca de categorias (inspirado no Calen) ✅ (feito em 9/11/2026, `src/spending.mjs`, `src/screens/SpendingCalendar.tsx`, `SpendingDonut.tsx`, `src/ui/Donut.tsx`)
+
+**Evidências e limites da análise (Calen, pacote `br.com.usecalen.mobile`, app React Native/Expo)**
+- **REA:** `inspect-artifact` leu o APK e devolveu só o inventário do zip. `inspect-android-package` falhou por falta do JADX (`REA_JADX_MCP_JAR`), e o código está em bytecode Hermes (`index.android.bundle`), que o REA não decompila. As ferramentas MCP do REA não estavam conectadas nesta sessão (a CLI funcionou).
+- **App web (`app.usecalen.com.br`, Vite/React):** os trechos de código públicos de `CategoryDonut`, `AnimatedCategoryDonut`, `calendar-projection`, `pace` e `MonthCalendarGrid` mostram a lógica; o aplicativo de celular foi observado no emulador, já com a conta do usuário. Nenhum valor real foi gravado em arquivo versionado; capturas ficam em `analysis\` (ignorado pelo Git).
+- **Não deu para ver:** fórmula exata do saldo previsto do servidor, legenda das cores de cada dia (deduzida), modos do botão de visualização das células (o toque não mudou nada na tela) e a tela de limites. O que está abaixo é nosso desenho, não cópia.
+
+**Como o Calen funciona (observado)**
+- **Calendário (Início):** grade do mês (D S T Q Q S S), navegável por mês, com resumo acima (resultado, entrada, saída, saldo previsto). Dias coloridos (com saída, só entrada, vencimento, saldo negativo previsto). Toque abre folha do dia com receita, despesa e lista por conta com categoria. Aba "Calendário" separada com faixa de semana, Dia/Mês, busca, ordenação, filtro, "Projeção até hoje" e saldo do banco. Filtro por banco/conta no topo.
+- **Rosca (Categorias):** anel grosso com arcos arredondados e folga, ícone de cada categoria sobre o arco, total no centro ("gasto até hoje · N categorias"), alternância despesa/receita, mês navegável, filtro, "Ocultos por padrão (N)" (ex.: Transferências), lista abaixo com busca, "Por fatura", R$ ou %, ordenação, barra de progresso e limite por categoria. Subcategorias somam na principal; ignorados e informativos ficam de fora. Estado vazio: "Sem gastos categorizados pra exibir."
+
+**Regras do Floco (nossas)**
+- **Calendário:** por dia, entrada e saída confirmadas (sem transferência, pagamento de fatura, recebimento de dívida e itens ignorados; estorno abate; compra no cartão conta no dia da compra). Saldo até hoje é o realizado (saldo atual menos o que veio depois); depois de hoje é o previsto, com pendentes, recorrências e faturas a vencer (as mesmas de Projeções, até 24 meses; além disso, sem saldo). Resultado = entrada − saída do mês. Intensidade do vermelho em 3 níveis pelo gasto do dia contra o maior do mês. Contorno de destaque: fatura vence; contorno vermelho: saldo previsto negativo. Modos de célula: Cor, Gasto, Saldo (valores curtos: 85, 1,2 mil, 1,5 mi; ocultos com "•••" se os valores estiverem escondidos). Folha do dia: receita e despesa, itens (categoria › subcategoria, pendente, cartão, fora da análise) e "Previsto".
+- **Rosca:** despesa ou receita do mês pela categoria principal; ordena do maior ao menor; fração = valor ÷ total visível; "Ocultar do gráfico" por categoria (guardado em `settings.donutHidden`, vale para o app todo e volta por "Mostrar no gráfico"); ocultas ficam na lista, esmaecidas. Centro: total (contagem animada) e "gasto até hoje · N categorias" (mês atual) ou "gasto no mês". Folga de 0,05 rad entre arcos, pontas arredondadas encolhidas para a folga aparecer, fatia pequena vira ponto, fatia única fecha o anel. Anima por traço (arco a arco); com "reduzir animações" ligado, aparece pronta. Vazio: "Sem gastos categorizados neste mês."; tudo oculto: aviso para mostrar alguma.
+- **Layout:** blocos "Calendário de gastos" e "Rosca de gastos" entram logo depois do "Balanço do mês" (também em quem já tinha ordem salva); "Despesas por categoria" (barras) passa a vir oculto por padrão em instalações novas, pois a rosca já traz a lista.
+
+**Outras funções do Calen que valem para o Floco (por prioridade)**
+1. **Insights do mês:** "a fatura de X não cabe no saldo" e "gasto fora do padrão" (valor ÷ média da categoria, ex.: 3,5×). Usa só dados que já temos.
+2. **Ritmo do mês com limite diário:** gasto ÷ dia × dias do mês e "quanto posso gastar por dia"; o Floco já tem ritmo, falta o limite diário.
+3. **Filtro por conta/cartão na Análise:** o Calen filtra tudo por banco; no Floco dá para refinar calendário e rosca por conta.
+4. **Detalhe da categoria com histórico de 6 meses** e "Seu mês com [comerciante]" (compras de um estabelecimento).
+5. **Tipo de gasto** (fixo, variável, assinatura etc.) e **assinaturas detectadas** com aviso de reajuste de preço.
+6. **Resumo mensal** como tela de fim de mês.
+7. **Limite por categoria direto na rosca** (toque na categoria define o limite; hoje o orçamento é outro fluxo).
+8. Fora de escopo por ora: Open Finance, assistente de IA/MCP, perfis compartilhados, trilha educativa e gamificação.
+
+**Não testado:** celular real, TalkBack (os rótulos de acessibilidade estão nas células, nos balões e nas linhas, mas não foram ouvidos), tema claro, modo "reduzir animações" e telas grandes/fonte aumentada. Testado no emulador (dados fictícios): calendário nos três modos, folha do dia, rosca de despesa e receita, ocultar e mostrar categoria, mês seguinte. 29 testes novos (spending e layout).
+
 ## F8a — Saúde financeira: fatores e histórico 🟡
 
 - **O que faz:** gera uma nota de 0 a 100 no aparelho, explica a composição e guarda o histórico.
