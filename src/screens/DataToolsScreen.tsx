@@ -79,8 +79,8 @@ export default function DataToolsScreen() {
       />
       <ListItem
         icon="file"
-        label="Extrato PDF Nubank"
-        detail="Conferência de movimentações e saldos"
+        label="Extrato em PDF"
+        detail="Nubank, Inter, Itaú e outros, com conferência dos saldos"
         onPress={() => nav.push({ name: "imports" })}
       />
       <ListItem
