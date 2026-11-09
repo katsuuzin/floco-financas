@@ -13,6 +13,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
+import { subsOf } from "./categories.mjs";
+import CategoryIcon from "./ui/CategoryIcon";
 import { ICONS, PALETTE, lookOf, setCategoryLook, setTagColor, tagColor } from "./looks.mjs";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
@@ -277,12 +279,8 @@ function LookPicker({ c, icon, color, withIcon, onIcon, onColor }: any) {
     </View>
   );
 }
-function LookBadge({ icon, color }: any) {
-  return (
-    <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: color, alignItems: "center", justifyContent: "center" }} importantForAccessibility="no">
-      <Feather name={icon} size={18} color="#311E0D" />
-    </View>
-  );
+function LookBadge({ icon, color, image }: any) {
+  return <CategoryIcon look={{ icon, color, image }} size={36} />;
 }
 function Card({ c, children }: any) {
   return (
@@ -584,6 +582,7 @@ export default function PlanningPanel({
                       c={c}
                       withIcon
                       icon={form.lookIcon || lookOf(s, form.name).icon}
+                      image={form.lookIcon ? "" : lookOf(s, form.name).image}
                       color={form.lookColor || lookOf(s, form.name).color}
                       onIcon={(v: string) => setForm({ ...form, lookIcon: v })}
                       onColor={(v: string) => setForm({ ...form, lookColor: v })}
@@ -596,6 +595,7 @@ export default function PlanningPanel({
                       c={c}
                       withIcon={form.kind === "category"}
                       icon={form.lookIcon || lookOf(s, form.name).icon}
+                      image={form.kind === "tag" || form.lookIcon ? "" : lookOf(s, form.name).image}
                       color={form.lookColor || (form.kind === "tag" ? tagColor(form) : lookOf(s, form.name).color)}
                       onIcon={(v: string) => setForm({ ...form, lookIcon: v })}
                       onColor={(v: string) => setForm({ ...form, lookColor: v })}
@@ -726,7 +726,7 @@ export default function PlanningPanel({
                     <Txt c={c} muted>
                       {page === "tags"
                         ? "Use várias tags em cada lançamento e filtre os relatórios."
-                        : "Crie categorias e subcategorias. Renomear uma categoria atualiza seus lançamentos e orçamentos."}
+                        : "As categorias já vêm com subcategorias (ex.: Assinaturas › Streaming). Crie as suas e escolha a categoria principal. Renomear atualiza lançamentos, regras e orçamentos."}
                     </Txt>
                     <Action
                       c={c}
@@ -752,6 +752,7 @@ export default function PlanningPanel({
                             >
                               <LookBadge {...lookOf(s, n)} />
                               <Text style={{ color: c.text, fontSize: 14 }}>{n}</Text>
+                              <Text style={{ color: c.muted, fontSize: 12 }}>{subsOf(s, n).length || ""}</Text>
                             </Pressable>
                           ))}
                         </View>

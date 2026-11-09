@@ -56,6 +56,7 @@ export function saveRule(s, input) {
     pattern,
     type: input.type === "income" ? "income" : "expense",
     category: input.category,
+    ...(input.subcategory ? { subcategory: input.subcategory } : {}),
     priority,
     active: input.active !== false,
   };
@@ -70,61 +71,86 @@ export function previewRules(s, scope = "all") {
     if (t.type === "transfer" || t.invoicePayment || t.financingId || t.loanSettlement || t.categoryLocked) continue;
     if (scope === "uncategorized" && t.category !== "Outros") continue;
     const r = categorize(s, t.description, t.type);
-    if (r && r.category !== t.category) out.push({ id: t.id, description: t.description, from: t.category, to: r.category });
+    if (r && (r.category !== t.category || (r.subcategory || "") !== (t.subcategory || ""))) out.push({ id: t.id, description: t.description, from: t.category, to: r.category, toSub: r.subcategory || "" });
   }
   return out;
 }
 
 export function applyRules(s, ids) {
-  const want = new Map(previewRules(s).map((p) => [p.id, p.to]));
+  const want = new Map(previewRules(s).map((p) => [p.id, { category: p.to, sub: p.toSub }]));
   const only = ids ? new Set(ids) : null;
   return {
     ...s,
-    transactions: s.transactions.map((t) => (want.has(t.id) && (!only || only.has(t.id)) ? { ...t, category: want.get(t.id) } : t)),
+    transactions: s.transactions.map((t) => (want.has(t.id) && (!only || only.has(t.id)) ? { ...t, category: want.get(t.id).category, ...(want.get(t.id).sub ? { subcategory: want.get(t.id).sub } : { subcategory: undefined }) } : t)),
   };
 }
 
-// Regras iniciais (categorias do Floco). Padrões de comerciantes comuns no Brasil.
+// Regras iniciais. [padrão, categoria, subcategoria, tipo]. Padrões de comerciantes comuns no Brasil.
 export const DEFAULT_RULES = [
-  ["UBER*|99*|99 POP*|CABIFY*", "Transporte"],
-  ["SHELL*|IPIRANGA*|POSTO*|BR MANIA*|PETROBRAS*", "Transporte"],
-  ["ESTAPAR*|SEM PARAR*|CONECTCAR*|VELOE*|PEDAGIO*", "Transporte"],
-  ["METRO*|CPTM*|BILHETE UNICO*|TOP*SPTRANS*", "Transporte"],
-  ["IFOOD*|IFD*|RAPPI*|ZE DELIVERY*|AIQFOME*", "Alimentação"],
-  ["MCDONALDS*|BURGER KING*|BK *|SUBWAY*|OUTBACK*|STARBUCKS*", "Alimentação"],
-  ["PADARIA*|PANIFICADORA*|RESTAURANTE*|LANCHONETE*", "Alimentação"],
-  ["MERCADO*|SUPERMERCADO*|CARREFOUR*|ASSAI*|ATACADAO*|EXTRA*|PAO DE ACUCAR*|DIA *|SONDA*|GUANABARA*|ZAFFARI*|SAVEGNAGO*", "Mercado"],
-  ["HORTIFRUTI*|SACOLAO*|ACOUGUE*|EMPORIO*", "Mercado"],
-  ["NETFLIX*|SPOTIFY*|DISNEY*|HBO*|MAX*|PRIME VIDEO*|AMAZON PRIME*|GLOBOPLAY*|DEEZER*|YOUTUBE*|PARAMOUNT*|CRUNCHYROLL*", "Assinaturas"],
-  ["GOOGLE*STORAGE|GOOGLE ONE*|ICLOUD*|APPLE.COM*|MICROSOFT*365*|DROPBOX*|CHATGPT*|OPENAI*", "Assinaturas"],
-  ["DROGASIL*|DROGA RAIA*|RAIA*|DROGARIA*|FARMACIA*|PAGUE MENOS*|PANVEL*|PACHECO*", "Saúde"],
-  ["UNIMED*|AMIL*|BRADESCO SAUDE*|SULAMERICA*|HAPVIDA*|LABORATORIO*|CLINICA*|ODONTO*", "Saúde"],
+  ["UBER*|99*|99 POP*|CABIFY*", "Transporte", "Uber / 99"],
+  ["SHELL*|IPIRANGA*|POSTO*|BR MANIA*|PETROBRAS*", "Transporte", "Combustível"],
+  ["ESTAPAR*|SEM PARAR*|CONECTCAR*|VELOE*|PEDAGIO*", "Transporte", "Estacionamento / Pedágio"],
+  ["METRO*|CPTM*|BILHETE UNICO*|TOP*SPTRANS*", "Transporte", "Transporte Público"],
+  ["IFOOD*|IFD*|RAPPI*|ZE DELIVERY*|AIQFOME*", "Alimentação", "Delivery"],
+  ["MCDONALDS*|BURGER KING*|BK *|SUBWAY*|OUTBACK*|STARBUCKS*", "Alimentação", "Restaurante"],
+  ["PADARIA*|PANIFICADORA*|RESTAURANTE*|LANCHONETE*", "Alimentação", "Restaurante"],
+  ["MERCADO*|SUPERMERCADO*|CARREFOUR*|ASSAI*|ATACADAO*|EXTRA*|PAO DE ACUCAR*|DIA *|SONDA*|GUANABARA*|ZAFFARI*|SAVEGNAGO*", "Alimentação", "Supermercado"],
+  ["HORTIFRUTI*|SACOLAO*|ACOUGUE*|EMPORIO*", "Alimentação", "Supermercado"],
+  ["NETFLIX*|SPOTIFY*|DISNEY*|HBO*|MAX*|PRIME VIDEO*|AMAZON PRIME*|GLOBOPLAY*|DEEZER*|YOUTUBE*|PARAMOUNT*|CRUNCHYROLL*", "Assinaturas", "Streaming"],
+  ["GOOGLE*STORAGE|GOOGLE ONE*|ICLOUD*|APPLE.COM*|MICROSOFT*365*|DROPBOX*", "Assinaturas", "Apps / Softwares"],
+  ["CHATGPT*|OPENAI*|CLAUDE*|ANTHROPIC*", "Assinaturas", "Assinaturas de IA"],
+  ["DROGASIL*|DROGA RAIA*|RAIA*|DROGARIA*|FARMACIA*|PAGUE MENOS*|PANVEL*|PACHECO*", "Saúde", "Medicamentos"],
+  ["UNIMED*|AMIL*|BRADESCO SAUDE*|SULAMERICA*|HAPVIDA*", "Saúde", "Plano de Saúde"],
+  ["LABORATORIO*|CLINICA*|ODONTO*", "Saúde", "Consultas / Exames"],
   ["SMART FIT*|BLUEFIT*|ACADEMIA*|GYMPASS*|WELLHUB*|TOTALPASS*", "Saúde"],
-  ["ENEL*|LIGHT *|CEMIG*|COPEL*|CPFL*|ELETROPAULO*|EQUATORIAL*|ENERGISA*|CELESC*", "Moradia"],
-  ["SABESP*|CEDAE*|COPASA*|SANEPAR*|EMBASA*|COMPESA*|CORSAN*", "Moradia"],
-  ["COMGAS*|NATURGY*|ULTRAGAZ*|LIQUIGAS*|SUPERGASBRAS*", "Moradia"],
-  ["VIVO*|CLARO*|TIM *|OI *|NET *|SKY *", "Moradia"],
-  ["ALUGUEL*|CONDOMINIO*|IPTU*|QUINTOANDAR*", "Moradia"],
-  ["CINEMA*|CINEMARK*|INGRESSO*|SYMPLA*|EVENTIM*|STEAM*|PLAYSTATION*|XBOX*|NINTENDO*", "Lazer"],
-  ["BOOKING*|AIRBNB*|DECOLAR*|LATAM*|GOL *|AZUL *|HOTEL*", "Lazer"],
-  ["ESCOLA*|COLEGIO*|FACULDADE*|UNIVERSIDADE*|CURSO*|UDEMY*|ALURA*|DUOLINGO*", "Educação"],
-  ["SALARIO*|PAGTO SALARIO*|FOLHA*|PROVENTOS*", "Salário", "income"],
+  ["ENEL*|LIGHT *|CEMIG*|COPEL*|CPFL*|ELETROPAULO*|EQUATORIAL*|ENERGISA*|CELESC*", "Moradia", "Energia / Água / Gás"],
+  ["SABESP*|CEDAE*|COPASA*|SANEPAR*|EMBASA*|COMPESA*|CORSAN*", "Moradia", "Energia / Água / Gás"],
+  ["COMGAS*|NATURGY*|ULTRAGAZ*|LIQUIGAS*|SUPERGASBRAS*", "Moradia", "Energia / Água / Gás"],
+  ["VIVO*|CLARO*|TIM *|OI *|NET *|SKY *", "Serviços", "Telefonia / TV"],
+  ["ALUGUEL*|QUINTOANDAR*", "Moradia", "Aluguel"],
+  ["CONDOMINIO*", "Moradia", "Condomínio"],
+  ["IPTU*", "Impostos e Taxas", "IPTU"],
+  ["CINEMA*|CINEMARK*|INGRESSO*|SYMPLA*|EVENTIM*", "Lazer", "Cinema / Eventos"],
+  ["STEAM*|PLAYSTATION*|XBOX*|NINTENDO*", "Lazer", "Hobbies"],
+  ["BOOKING*|AIRBNB*|DECOLAR*|LATAM*|GOL *|AZUL *|HOTEL*", "Lazer", "Viagens"],
+  ["ESCOLA*|COLEGIO*|FACULDADE*|UNIVERSIDADE*", "Educação", "Escola / Faculdade"],
+  ["CURSO*|UDEMY*|ALURA*|DUOLINGO*", "Educação", "Cursos Online"],
+  ["SALARIO*|PAGTO SALARIO*|FOLHA*|PROVENTOS*", "Salário", "", "income"],
 ];
 
 export function seedRules(s) {
   if ((s.rules || []).length) return s;
   return {
     ...s,
-    rules: DEFAULT_RULES.map(([pattern, category, type]) => ({
+    rules: DEFAULT_RULES.map(([pattern, category, subcategory, type]) => ({
       id: uid(),
       pattern,
       category,
+      ...(subcategory ? { subcategory } : {}),
       type: type || "expense",
       priority: 10,
       active: true,
       builtIn: true,
     })),
   };
+}
+
+// Regras sugeridas antigas (sem subcategoria) ganham a subcategoria nova, uma única vez e só
+// se o usuário não mexeu na categoria. "Mercado" vira Alimentação › Supermercado; o
+// provedor de telefonia que era "Moradia" vira Serviços › Telefonia / TV.
+const OLD_CATEGORY_OF = { "Alimentação|Supermercado": "Mercado", "Serviços|Telefonia / TV": "Moradia" };
+export function upgradeBuiltInRules(s) {
+  let changed = false;
+  const rules = (s.rules || []).map((r) => {
+    if (!r.builtIn || r.subcategory) return r;
+    const d = DEFAULT_RULES.find(([pattern]) => pattern === r.pattern);
+    if (!d || !d[2]) return r;
+    const old = OLD_CATEGORY_OF[d[1] + "|" + d[2]] || d[1];
+    if (r.category !== old) return r;
+    changed = true;
+    return { ...r, category: d[1], subcategory: d[2] };
+  });
+  return changed ? { ...s, rules } : s;
 }
 
 // ---------- Conferência de fatura (F2) ----------

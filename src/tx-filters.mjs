@@ -1,3 +1,4 @@
+import { inCategory } from "./categories.mjs";
 // Filtros avançados do extrato (L13): conta/cartão, categoria, tags, faixa de valor e ordem.
 // Origem: "a:<id>" para conta, "c:<id>" para cartão. Listas vazias não filtram.
 
@@ -34,7 +35,7 @@ export function applyFilters(rows, f) {
       if (t.type === "transfer" && t.destinationId) own.push("a:" + t.destinationId);
       if (!own.some((s) => f.sources.includes(s))) return false;
     }
-    if (f.categories.length && !f.categories.includes(t.category)) return false;
+    if (f.categories.length && !f.categories.some((n) => inCategory(t, n))) return false;
     if (f.tags.length && !(t.tags || []).some((id) => f.tags.includes(id))) return false;
     if (min != null && t.amount < min) return false;
     if (max != null && t.amount > max) return false;

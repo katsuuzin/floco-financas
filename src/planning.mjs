@@ -1,4 +1,6 @@
 import { renameLook } from "./looks.mjs";
+import { categoryNames as allCategoryNames, subsOf } from "./categories.mjs";
+export { categoryNames } from "./categories.mjs";
 import {
   uid,
   today,
@@ -25,23 +27,6 @@ const amountOK = (n) => Number.isSafeInteger(n) && n > 0 && n <= 99999999999;
 const fail = (message) => {
   throw Error(message);
 };
-export function categoryNames(s) {
-  return [
-    ...new Set([
-      "Alimentação",
-      "Mercado",
-      "Transporte",
-      "Moradia",
-      "Saúde",
-      "Lazer",
-      "Assinaturas",
-      "Educação",
-      "Salário",
-      "Outros",
-      ...(s.customCategories || []).map((c) => c.name),
-    ]),
-  ];
-}
 export function saveLabel(s, list, input) {
   if (!["tags", "customCategories"].includes(list)) fail("Cadastro inválido.");
   const name = input.name?.trim();
@@ -54,7 +39,7 @@ export function saveLabel(s, list, input) {
         r.name.toLocaleLowerCase("pt-BR") === name.toLocaleLowerCase("pt-BR"),
     ) ||
     (list === "customCategories" &&
-      categoryNames({ ...s, customCategories: [] }).some(
+      allCategoryNames({ ...s, customCategories: [] }).some(
         (n) => n.toLocaleLowerCase("pt-BR") === name.toLocaleLowerCase("pt-BR"),
       ))
   )
@@ -62,12 +47,14 @@ export function saveLabel(s, list, input) {
   if (
     input.parent &&
     (input.parent === name ||
-      !categoryNames(s).includes(input.parent) ||
+      !allCategoryNames(s).includes(input.parent) ||
       (s.customCategories || []).some(
         (c) => c.name === input.parent && c.parent,
       ))
   )
     fail("Escolha uma categoria principal.");
+  if (list === "customCategories" && input.parent && subsOf({ ...s, customCategories: [] }, input.parent).some((n) => n.toLocaleLowerCase("pt-BR") === name.toLocaleLowerCase("pt-BR")))
+    fail("Essa subcategoria já existe nesta categoria.");
   const previous = rows.find((r) => r.id === input.id);
   if (
     previous &&
@@ -83,9 +70,17 @@ export function saveLabel(s, list, input) {
   let next = { ...s, [list]: [...rows.filter((r) => r.id !== row.id), row] };
   if (previous && previous.name !== name) {
     if (list === "customCategories") {
-      next.transactions = s.transactions.map((t) =>
-        t.category === previous.name ? { ...t, category: name } : t,
-      );
+      next.transactions = s.transactions.map((t) => {
+        const cat = t.category === previous.name ? { category: name } : {};
+        const sub = t.subcategory === previous.name ? { subcategory: name } : {};
+        return Object.keys(cat).length || Object.keys(sub).length ? { ...t, ...cat, ...sub } : t;
+      });
+      if (s.rules)
+        next.rules = s.rules.map((r) => ({
+          ...r,
+          ...(r.category === previous.name ? { category: name } : {}),
+          ...(r.subcategory === previous.name ? { subcategory: name } : {}),
+        }));
       next.budgets = s.budgets.map((b) =>
         b.category === previous.name ? { ...b, category: name } : b,
       );
@@ -108,7 +103,7 @@ export function removeLabel(s, list, id) {
   if (!row) fail("Cadastro não encontrado.");
   if (list === "customCategories") {
     if (
-      s.transactions.some((t) => t.category === row.name) ||
+      s.transactions.some((t) => t.category === row.name || t.subcategory === row.name) ||
       s.budgets.some((t) => t.category === row.name) ||
       (s.recurrences || []).some((t) => t.category === row.name) ||
       (s.customCategories || []).some((t) => t.parent === row.name) ||
@@ -176,6 +171,7 @@ export function saveRecurrence(s, input) {
         frequency: input.frequency,
         accountId: input.accountId,
         category: input.category || "Outros",
+        ...(input.subcategory ? { subcategory: input.subcategory } : {}),
         type: input.type,
         active: existing?.active ?? true,
       },

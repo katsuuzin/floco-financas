@@ -122,11 +122,13 @@ test("dividendo, JCP e 'rendeu' são rendimentos; Pix recebido continua Pix", ()
   assert.equal(mk("Você recebeu um Pix de R$ 50,00 de MARIA SOUZA.").kind, "pixIn");
 });
 
-test("rendimento usa a categoria do usuário parecida com rendimentos", () => {
-  const s = { ...emptyState(), customCategories: [{ id: "c1", name: "Rendimentos" }] };
-  const d = draftFromNotification(s, { id: "y2", bank: "Inter", title: "Rendimentos", text: "Você recebeu R$ 0,41 de rendimentos do ativo GARE11", postedAt: at });
-  assert.equal(d.category, "Rendimentos");
-  assert.equal(draftFromNotification(emptyState(), { id: "y3", bank: "Inter", title: "Rendimentos", text: "Você recebeu R$ 0,41 de rendimentos do ativo GARE11", postedAt: at }).category, "Outros");
+test("rendimento: categoria do usuário parecida, senão Investimentos › Juros / Rendimentos/Dividendos", () => {
+  const row = (text) => ({ id: "y2", bank: "Inter", title: "Rendimentos", text, postedAt: at });
+  const s = { ...emptyState(), customCategories: [{ id: "c1", name: "Rendimentos de fundos" }] };
+  assert.equal(draftFromNotification(s, row("Você recebeu R$ 0,41 de rendimentos do ativo GARE11")).category, "Rendimentos de fundos");
+  const d = draftFromNotification(emptyState(), row("Você recebeu R$ 0,41 de rendimentos do ativo GARE11"));
+  assert.deepEqual([d.category, d.subcategory], ["Investimentos", "Juros / Rendimentos"]);
+  assert.equal(draftFromNotification(emptyState(), row("Dividendos de PETR4: R$ 12,30 creditados na sua conta.")).subcategory, "Dividendos");
 });
 
 test("compra negada é reconhecida e não confunde com compra aprovada", () => {
@@ -179,4 +181,11 @@ test("não registrar compras negadas vem ligado e o backup aceita a preferência
   const s = { ...emptyState(), settings: { ...emptyState().settings, notify: { banks: ["br.com.intermedium"], ignored: [], sms: false, ignoreDenied: false } } };
   assert.equal(notifySettings(s).ignoreDenied, false);
   validateBackup(JSON.parse(JSON.stringify(s)));
+});
+
+test("sem nome do outro lado, a descrição é o tipo (não o título com valor)", () => {
+  const s = suggestNotification({ id: "p", bank: "Nubank", title: "Pix de R$ 1.000,00 enviado", text: "Você fez um Pix de R$ 1.000,00.", postedAt: at });
+  assert.equal(s.kind, "pixOut");
+  assert.equal(s.description, "Pix enviado");
+  assert.equal(suggestNotification({ id: "q", bank: "Nubank", title: "Compra aprovada", text: "Compra de R$ 4,30 APROVADA em PISTA 4 para o cartão com final 5179.", postedAt: at }).description, "PISTA 4");
 });

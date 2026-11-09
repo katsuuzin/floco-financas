@@ -3,7 +3,7 @@ import { Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { emptyState, money } from "../finance.mjs";
 import { loadState, saveState, replaceState, LEGACY_KEY } from "../sqliteStore";
-import { seedRules } from "../rules.mjs";
+import { seedRules, upgradeBuiltInRules } from "../rules.mjs";
 
 type Change = any | ((s: any) => any);
 type Store = {
@@ -33,7 +33,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       try {
         const { state: loadedState, fresh, migrated } = await loadState();
         // Regras de categorização sugeridas entram uma única vez (o campo passa a existir).
-        const restored = loadedState.rules === undefined ? seedRules(loadedState) : loadedState;
+        const restored = upgradeBuiltInRules(loadedState.rules === undefined ? seedRules(loadedState) : loadedState);
         if (restored !== loadedState) saveState(loadedState, restored);
         if (!fresh || restored !== loadedState) {
           ref.current = restored;

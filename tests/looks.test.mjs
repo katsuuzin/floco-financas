@@ -14,7 +14,7 @@ test("O4 categorias padrão têm ícone; cor estável sem escolha", () => {
 test("O4 escolha de ícone e cor vale, valida e acompanha renomear", () => {
   let s = { ...emptyState(), customCategories: [{ id: "p", name: "Pets", parent: "" }] };
   s = setCategoryLook(s, "Pets", { icon: "heart", color: PALETTE[3] });
-  assert.deepEqual(lookOf(s, "Pets"), { icon: "heart", color: PALETTE[3] });
+  assert.deepEqual(lookOf(s, "Pets"), { icon: "heart", color: PALETTE[3], image: "" });
   assert.throws(() => setCategoryLook(s, "Pets", { icon: "nao-existe" }));
   assert.throws(() => setCategoryLook(s, "Pets", { color: "#000000" }));
   s = saveLabel(s, "customCategories", { id: "p", name: "Bichos" });

@@ -31,6 +31,7 @@ export function addMonths(date, count) {
   const result = new Date(y, m - 1 + count, Math.min(d, last), 12);
   return `${result.getFullYear()}-${String(result.getMonth() + 1).padStart(2, "0")}-${String(result.getDate()).padStart(2, "0")}`;
 }
+import { migrateSubcategories, LEGACY_ROOTS, CATALOG } from "./categories.mjs";
 export const categories = [
   "Alimentação",
   "Mercado",
@@ -209,6 +210,7 @@ export function addTransaction(state, input) {
     cardId: cardId || null,
     invoiceMonth: card ? monthKey(addMonths(first + "-01", i)) : null,
     category: input.category || "Outros",
+    ...(input.subcategory ? { subcategory: String(input.subcategory).slice(0, 80) } : {}),
     confirmed: cardId ? true : Boolean(input.confirmed),
     installment: i + 1,
     installments: count,
@@ -587,7 +589,7 @@ export function validateBackup(value) {
   }
   for (const b of value.budgets)
     if (
-      ![...categories, ...value.customCategories.map((c) => c.name)].includes(
+      ![...categories, ...LEGACY_ROOTS, ...CATALOG.map((c) => c.name), ...value.customCategories.map((c) => c.name)].includes(
         b.category,
       ) ||
       !integer(b.amount) ||
@@ -658,6 +660,8 @@ export function validateBackup(value) {
         (row.parent === row.name ||
           ![
             ...categories,
+            ...LEGACY_ROOTS,
+            ...CATALOG.map((c) => c.name),
             ...value.customCategories
               .filter((c) => !c.parent)
               .map((c) => c.name),
@@ -758,7 +762,7 @@ export function validateBackup(value) {
   }
   if (value.transactions.some((t) => t.loanSettlement && !linked.has(t.id)))
     throw Error("Recebimento sem histórico da dívida.");
-  return {
+  return migrateSubcategories({
     ...value,
     // Preferências (layout, extrato, lembretes, cor...) seguem junto. O bloqueio biométrico
     // nunca vem de um backup; quem lê o armazenamento local o devolve (sqliteStore).
@@ -768,7 +772,7 @@ export function validateBackup(value) {
       hide: !!value.settings?.hide,
       biometric: false,
     },
-  };
+  });
 }
 
 // O1: move um item ativo (não arquivado) uma posição para cima (-1) ou para baixo (+1).

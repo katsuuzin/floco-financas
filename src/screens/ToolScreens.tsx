@@ -7,7 +7,8 @@ import { T, Muted, Box, Section, Button, Field, Choice, Chips, IconButton, Toggl
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
-import { categoryNames } from "../planning.mjs";
+import { CategoryRow } from "../ui/pickers";
+import { categoryLabel } from "../categories.mjs";
 import { saveRule, categorize, previewRules, applyRules, seedRules, reconcileInvoice } from "../rules.mjs";
 import { parseOFX, parseCSV } from "../imports.mjs";
 import { money, addTransaction } from "../finance.mjs";
@@ -20,7 +21,7 @@ export function RulesScreen() {
   const { state, perform, confirm } = useStore();
   const [type, setType] = useState<"expense" | "income">("expense");
   const [probe, setProbe] = useState("");
-  const [draft, setDraft] = useState({ id: "", pattern: "", category: "Outros", priority: "10" });
+  const [draft, setDraft] = useState({ id: "", pattern: "", category: "Outros", subcategory: "", priority: "10" });
   const [scope, setScope] = useState<"all" | "uncategorized">("uncategorized");
   const [preview, setPreview] = useState<any[] | null>(null);
   const rules = (state.rules || []).filter((r: any) => r.type === type);
@@ -29,7 +30,7 @@ export function RulesScreen() {
     perform(
       (s: any) => saveRule(s, { ...draft, id: draft.id || undefined, type, priority: Number(draft.priority) }),
       draft.id ? "Regra atualizada" : "Regra criada",
-    ).then((ok) => ok && setDraft({ id: "", pattern: "", category: draft.category, priority: "10" }));
+    ).then((ok) => ok && setDraft({ id: "", pattern: "", category: draft.category, subcategory: draft.subcategory, priority: "10" }));
   return (
     <>
       <Chips
@@ -43,17 +44,17 @@ export function RulesScreen() {
       <Box style={{ gap: 8 }}>
         <Field label="Testar uma descrição" value={probe} onChange={setProbe} placeholder="Ex.: UBER *TRIP" />
         {!!probe.trim() && (
-          <T style={{ color: hit ? c.green : c.muted }}>{hit ? `→ ${hit.category} (regra “${hit.pattern}”)` : "Nenhuma regra se aplica."}</T>
+          <T style={{ color: hit ? c.green : c.muted }}>{hit ? `→ ${categoryLabel(hit.category, hit.subcategory)} (regra “${hit.pattern}”)` : "Nenhuma regra se aplica."}</T>
         )}
         <Muted>Acentos e pontuação são ignorados. Use * como coringa e | para alternativas.</Muted>
       </Box>
       <Section title={draft.id ? "Editar regra" : "Nova regra"} />
       <Box style={{ gap: 12 }}>
         <Field label="Padrão" value={draft.pattern} onChange={(v) => setDraft({ ...draft, pattern: v })} placeholder="PADARIA*|PANIFICADORA*" />
-        <Choice label="Categoria" values={categoryNames(state).map((x: string) => [x, x])} value={draft.category} onChange={(v) => setDraft({ ...draft, category: v })} />
+        <CategoryRow state={state} type={type} category={draft.category} subcategory={draft.subcategory} onChange={(cat, sub) => setDraft({ ...draft, category: cat, subcategory: sub })} />
         <Field label="Prioridade (0 a 100)" value={draft.priority} onChange={(v) => setDraft({ ...draft, priority: v })} numeric maxLength={3} />
         <Button title={draft.id ? "Salvar regra" : "Criar regra"} icon="check" onPress={save} disabled={!draft.pattern.trim()} />
-        {!!draft.id && <Button title="Cancelar edição" secondary onPress={() => setDraft({ id: "", pattern: "", category: "Outros", priority: "10" })} />}
+        {!!draft.id && <Button title="Cancelar edição" secondary onPress={() => setDraft({ id: "", pattern: "", category: "Outros", subcategory: "", priority: "10" })} />}
       </Box>
       <Section title="Aplicar no histórico" />
       <Box style={{ gap: 10 }}>
@@ -74,7 +75,7 @@ export function RulesScreen() {
             <Muted>{preview.length ? `${preview.length} lançamentos mudariam de categoria:` : "Nada mudaria."}</Muted>
             {preview.slice(0, 30).map((p) => (
               <Muted key={p.id}>
-                {p.description}: {p.from} → {p.to}
+                {p.description}: {p.from} → {categoryLabel(p.to, p.toSub)}
               </Muted>
             ))}
             {preview.length > 0 && (
@@ -104,11 +105,11 @@ export function RulesScreen() {
                 {r.pattern}
               </T>
               <Muted>
-                {r.category} · prioridade {r.priority}
+                {categoryLabel(r.category, r.subcategory)} · prioridade {r.priority}
                 {r.active ? "" : " · desligada"}
               </Muted>
             </View>
-            <IconButton name="edit-2" label={`Editar regra ${r.pattern}`} onPress={() => setDraft({ id: r.id, pattern: r.pattern, category: r.category, priority: String(r.priority) })} />
+            <IconButton name="edit-2" label={`Editar regra ${r.pattern}`} onPress={() => setDraft({ id: r.id, pattern: r.pattern, category: r.category, subcategory: r.subcategory || "", priority: String(r.priority) })} />
             <IconButton
               name={r.active ? "toggle-right" : "toggle-left"}
               label={r.active ? "Desligar regra" : "Ligar regra"}

@@ -2,6 +2,7 @@
 // relatórios avançados (R3–R6, R9). Valores em centavos.
 import { uid, isDate, monthKey, addMonths, analysisAmount, invoice, totals, today } from "./finance.mjs";
 import { recurrenceEvents, projection } from "./planning.mjs";
+import { inCategory } from "./categories.mjs";
 
 const fail = (m) => {
   throw Error(m);
@@ -68,7 +69,7 @@ export function budgetUsage(s, budget, date = today()) {
         t.type === b.type &&
         t.date >= start &&
         t.date <= end &&
-        b.categories.includes(t.category) &&
+        b.categories.some((name) => inCategory(t, name)) &&
         (!where.size || where.has(t.accountId) || where.has(t.cardId)),
     )
     .reduce((n, t) => n + analysisAmount(t), 0);

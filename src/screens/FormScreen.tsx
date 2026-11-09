@@ -6,6 +6,7 @@ import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
 import { buildChange, defaults, formTitles } from "../app/forms";
 import { categoryNames } from "../planning.mjs";
+import { CategoryRow } from "../ui/pickers";
 import { bankProfiles, bankProfile } from "../banks.mjs";
 import { invoice, balance, reserved, today, addMonths, ACCOUNT_TYPES } from "../finance.mjs";
 import { categorize } from "../rules.mjs";
@@ -158,17 +159,18 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
             onChange={(v) =>
               setForm((f: any) => {
                 const rule = !f.categoryTouched && form.type !== "transfer" ? categorize(state, v, f.type) : null;
-                return { ...f, description: v, ...(rule ? { category: rule.category } : {}) };
+                return { ...f, description: v, ...(rule ? { category: rule.category, subcategory: rule.subcategory || "" } : {}) };
               })
             }
             hint="Sem descrição, o lançamento usa o nome da categoria. As regras de categorização sugerem a categoria."
           />
           {form.type !== "transfer" && (
-            <Choice
-              label="Categoria"
-              values={categoryNames(state).map((x: string) => [x, x])}
-              value={form.category}
-              onChange={(v) => setForm((f: any) => ({ ...f, category: v, categoryTouched: true }))}
+            <CategoryRow
+              state={state}
+              type={form.type === "income" ? "income" : "expense"}
+              category={form.category}
+              subcategory={form.subcategory}
+              onChange={(cat, sub) => setForm((f: any) => ({ ...f, category: cat, subcategory: sub, categoryTouched: true }))}
             />
           )}
           {form.cardId && (() => {
@@ -837,7 +839,13 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
           />
           <Field label="Primeira data (AAAA-MM-DD)" value={form.date} onChange={(v) => set("date", v)} />
           <Field label="Término (opcional)" value={form.endDate} onChange={(v) => set("endDate", v)} placeholder="AAAA-MM-DD" />
-          <Choice label="Categoria" values={categoryNames(state).map((x: string) => [x, x])} value={form.category} onChange={(v) => set("category", v)} />
+          <CategoryRow
+            state={state}
+            type={form.type === "income" ? "income" : "expense"}
+            category={form.category}
+            subcategory={form.subcategory}
+            onChange={(cat, sub) => setForm((f: any) => ({ ...f, category: cat, subcategory: sub }))}
+          />
           <Choice label="Conta" values={accounts.map((a: any) => [a.id, a.name])} value={form.accountId} onChange={(v) => set("accountId", v)} />
           <Muted>As ocorrências até hoje entram como pendentes para você confirmar. As futuras aparecem nas projeções.</Muted>
         </>

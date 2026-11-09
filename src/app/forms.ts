@@ -78,6 +78,7 @@ export function defaults(kind: string, state: any, initial: any = {}) {
     description: "",
     notes: "",
     category: "Alimentação",
+    subcategory: "",
     accountId: state.accounts.find((a: any) => !a.archived)?.id || "",
     destinationId: state.accounts.filter((a: any) => !a.archived)[1]?.id || "",
     cardId: "",
@@ -140,6 +141,7 @@ export function buildChange(f: any, month: string): (s: any) => any {
             frequency: f.frequency,
             accountId: f.accountId,
             category: f.category,
+            subcategory: f.subcategory,
             type: f.type,
           });
           return generateRecurrences(withRule, f.date < today() ? today() : f.date);
@@ -271,6 +273,7 @@ export function buildChange(f: any, month: string): (s: any) => any {
           frequency: f.frequency,
           accountId: f.accountId,
           category: f.category,
+          subcategory: f.subcategory,
           type: f.type === "income" ? "income" : "expense",
         });
         return generateRecurrences(next, today());

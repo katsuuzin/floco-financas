@@ -1,6 +1,6 @@
 import { addTransaction, parseMoney } from "./finance.mjs";
 import { categorize } from "./rules.mjs";
-import { categoryNames } from "./planning.mjs";
+import { categoryNames, CATALOG } from "./categories.mjs";
 
 // Tipos lidos do texto do banco.
 export const KIND_LABEL = {
@@ -14,6 +14,21 @@ export const KIND_LABEL = {
   income: "Entrada",
   expense: "Saída",
   yield: "Rendimento recebido",
+  denied: "Compra negada",
+};
+
+// Texto do tipo na folha de confirmação (direção da operação).
+export const KIND_DETAIL = {
+  card: "Compra no cartão de crédito",
+  debit: "Compra no débito",
+  pixOut: "Pix enviado",
+  pixIn: "Pix recebido",
+  transferOut: "Transferência enviada",
+  transferIn: "Entrada na conta",
+  bill: "Pagamento de conta",
+  income: "Entrada na conta",
+  expense: "Saída da conta",
+  yield: "Entrada na conta",
   denied: "Compra negada",
 };
 
@@ -83,7 +98,7 @@ export function suggestNotification(row) {
   return {
     kind,
     kindLabel: KIND_LABEL[kind],
-    description: who || cut(row.title) || row.bank,
+    description: who || (/R\$/.test(row.title || "") ? KIND_LABEL[kind] : cut(row.title)) || row.bank,
     amount,
     type: income ? "income" : "expense",
     date,
@@ -119,9 +134,19 @@ export function draftFromNotification(s, row) {
   const sug = suggestNotification(row);
   const targets = guessTargets(s, row, sug);
   const rule = categorize(s, sug.description, sug.type);
-  // Rendimento: usa a categoria do usuário que se pareça com "rendimentos/investimentos", se houver.
-  const own = sug.kind === "yield" ? categoryNames(s).find((n) => /rendiment|invest|dividend/i.test(n)) : "";
-  return { ...sug, ...targets, category: rule?.category || own || "Outros", installments: "1", tags: [] };
+  // Rendimento: categoria do usuário que se pareça com rendimentos; sem ela, Investimentos › Juros / Rendimentos
+  // (ou Dividendos, quando o aviso fala em dividendo).
+  let category = rule?.category || "Outros";
+  let subcategory = rule?.subcategory || "";
+  if (sug.kind === "yield" && !rule) {
+    const own = categoryNames(s).find((n) => /rendiment|dividend/i.test(n) && !CATALOG.some((c) => c.name === n));
+    if (own) category = own;
+    else {
+      category = "Investimentos";
+      subcategory = /dividend|jcp|juros sobre capital/i.test(sug.notes) ? "Dividendos" : "Juros / Rendimentos";
+    }
+  }
+  return { ...sug, ...targets, category, subcategory, suggested: !!rule, installments: "1", tags: [] };
 }
 
 // A mesma operação pode chegar pelo app do banco e por SMS (mesmo valor, tipo e

@@ -8,6 +8,8 @@ import { money } from "../finance.mjs";
 import { invoiceShiftOf } from "../invoices.mjs";
 import { trashTransaction } from "../trash.mjs";
 import { lookOf } from "../looks.mjs";
+import CategoryIcon from "../ui/CategoryIcon";
+import { categoryLabel } from "../categories.mjs";
 import { toInput } from "../app/forms";
 import { displayOf } from "./PersonalizeScreens";
 
@@ -93,7 +95,7 @@ export default function TransactionRow({ t, withDate = false, last = false }: { 
     ];
     Alert.alert(
       t.description,
-      `${money(t.amount)} · ${br(t.date)}${t.time ? " " + t.time : ""}\n${t.category || "Outros"}${
+      `${money(t.amount)} · ${br(t.date)}${t.time ? " " + t.time : ""}\n${categoryLabel(t.category, t.subcategory)}${
         t.installments > 1 ? ` · ${t.installment}/${t.installments}` : ""
       }${t.notes ? "\n\n" + t.notes : ""}`,
       actions.length >= 3 ? actions : [{ text: "Fechar", style: "cancel" }, ...actions],
@@ -106,7 +108,7 @@ export default function TransactionRow({ t, withDate = false, last = false }: { 
   const meta = [
     withDate ? shortDate : "",
     d.showTime && t.time ? t.time : "",
-    d.showCategory === "category" ? t.category : "",
+    d.showCategory === "category" ? categoryLabel(t.category, t.subcategory) : "",
     card?.name || account?.name,
     t.installments > 1 ? `${t.installment}/${t.installments}` : "",
     d.showTags && tags.length ? tags.map((x: string) => "#" + x).join(" ") : "",
@@ -127,9 +129,7 @@ export default function TransactionRow({ t, withDate = false, last = false }: { 
           <I name="repeat" size={18} color={c.primary} />
         </View>
       ) : (
-        <View style={[row.icon, { backgroundColor: lookOf(state, t.category || "Outros").color }]} importantForAccessibility="no">
-          <I name={lookOf(state, t.category || "Outros").icon as any} size={18} color="#311E0D" />
-        </View>
+        <CategoryIcon look={lookOf(state, t.category || "Outros")} size={38} />
       )}
       <View style={{ flex: 1, gap: 2 }}>
         <T numberOfLines={1} style={{ fontFamily: "SoraSemi", fontSize: 14 }}>
@@ -156,7 +156,7 @@ export default function TransactionRow({ t, withDate = false, last = false }: { 
         </T>
         {badges.map((b) => (
           <View key={b} style={[row.badge, { backgroundColor: b === "Pendente" && d.highlightPending ? c.accent : c.soft }]}>
-            <T style={{ fontSize: 10.5, color: c.heroText, fontFamily: "SoraSemi" }}>{b}</T>
+            <T style={{ fontSize: 10.5, color: b === "Pendente" && d.highlightPending ? c.heroText : c.text, fontFamily: "SoraSemi" }}>{b}</T>
           </View>
         ))}
       </View>

@@ -234,6 +234,26 @@ O status do Floco vem de leitura do código, sem teste: ✅ tem · 🟡 parcial 
 
 **Critério de aceite (verificado no emulador, SMS de "INTER"):** rendimento de R$ 0,41 chegou como "Rendimento recebido" com descrição "Rendimentos do ativo GARE11" e conta com selo; confirmar somou 0,41 ao saldo e às receitas. Compra negada: com a opção ligada sumiu da fila; desligada, apareceu como "Compra negada" com "Descartar aviso". 7 testes novos.
 
+## C1 — Categorias com subcategorias e folha de pendentes compacta ✅ (feito em 9/11/2026, `src/categories.mjs`, `src/ui/pickers.tsx`, `src/screens/InboxSheet.tsx`)
+
+**Observado no Kontto:** a categoria aparece como "Assinaturas › Streaming" em linha única com seta; ao tocar, abre uma lista de categorias que se expandem em subcategorias. A folha de confirmação de notificação é um cartão de linhas com seta (Tipo, descrição, Cartão ou Conta com o logo do banco, Parcelas com − 1 +, Categoria, Tags, texto do banco com ✕); quando a categoria vem de uma regra aparece "Sugestão do app para esta loja · Trocar". A lista de pendentes é enxuta: seta vermelha (saída), seta verde (entrada) ou cartão (compra), sem logo de banco.
+
+**Regras do Floco**
+- **Modelo:** o lançamento guarda `category` (sempre a principal) e `subcategory` (opcional). Regras de categorização e recorrências também guardam `subcategory`.
+- **Conjunto inicial:** as 21 categorias do Kontto (16 de despesa e 6 de receita; "Outros" junta os dois lados) com 88 subcategorias. Receita mostra só categorias de receita; o que o usuário criou ou já usa aparece sempre. "Mercado" (antigo) só aparece se alguém usa.
+- **Subcategorias do usuário:** o cadastro de categorias já tinha "Categoria principal"; uma categoria com principal é uma subcategoria. Nome igual a uma subcategoria do catálogo na mesma categoria é recusado. Renomear atualiza lançamentos, regras e subcategoria; excluir exige que não esteja em uso.
+- **Migração (ao abrir o app e ao restaurar backup):** lançamento, recorrência, financiamento e regra que usavam uma subcategoria do usuário como categoria passam a ter `category` = principal e `subcategory` = nome. Orçamento por subcategoria antiga continua somando (`inCategory`: casa pela categoria ou pela subcategoria). Idempotente.
+- **Relatórios e orçamentos:** somam pela categoria principal. Filtro do extrato por categoria também acha pela subcategoria.
+- **Regras sugeridas:** agora trazem subcategoria (Netflix › Streaming, Uber › Uber / 99, iFood › Delivery, Mercado › Alimentação › Supermercado…). Quem já tinha as regras antigas recebe a subcategoria uma vez, se não mexeu na categoria; telefonia sai de "Moradia" para Serviços › Telefonia / TV.
+- **Rendimentos de notificação:** Investimentos › Juros / Rendimentos (ou Dividendos).
+- **Telas:** linha "Categoria" com seta em lançamento, recorrência e regras; lista de pendentes só com seta/cartão; folha de confirmação em linhas com seta (tipo, conta ou cartão com logo, categoria, tags), "Sugestão do app · Trocar", parcelas com − +.
+
+**Arte das categorias (9/11/2026):** as 22 categorias padrão usam o mesmo ícone e a mesma cor do Kontto. Os ícones são Phosphor, peso "fill" (nomes lidos do backup: house, fork-knife, car, heartbeat, graduation-cap, game-controller, t-shirt, user, repeat, wrench, baby, paw-print, receipt, shield, gift, dots-three, briefcase, laptop, chart-line-up, coins, buildings, plus-circle), em 22 PNGs de silhueta branca em `assets/categories`, pintados por cima da cor da categoria (`CategoryIcon`). Quem escolhe outro ícone ou cor em Categorias mantém a escolha; subcategorias do usuário herdam a imagem e a cor da categoria principal; "Mercado" (antigo) segue com o ícone anterior. A cor do ícone é escura em fundos claros e branca nos demais. Subcategorias do Kontto não têm ícone. Aparece no extrato, no seletor de categoria, na folha de pendentes e em Categorias. Também corrigi o texto dos selos "Ajuste", "Rendimento" e "Fora da análise" no tema escuro, que ficava quase invisível.
+
+**Fora desta rodada:** orçamento por subcategoria na tela, relatório detalhado por subcategoria, ícone próprio por subcategoria, "Cashback" e interruptores por tipo de notificação.
+
+**Critério de aceite (emulador):** pendente Pix escolheu Alimentação › Restaurante e o extrato mostrou "Alimentação › Restaurante · Conta Nubank"; compra do YouTube veio sugerida como Assinaturas › Streaming (regra antiga atualizada); lista de pendentes sem logo, com setas e cartão; novo lançamento permitiu escolher Assinaturas › Streaming. 12 testes novos.
+
 ## F8a — Saúde financeira: fatores e histórico 🟡
 
 - **O que faz:** gera uma nota de 0 a 100 no aparelho, explica a composição e guarda o histórico.

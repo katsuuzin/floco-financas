@@ -201,6 +201,24 @@ function FirstSteps() {
   );
 }
 
+// Lista de pendentes minimalista: seta para entrada/saída e cartão nas compras; o banco vai no texto.
+const INBOX_ICON: Record<string, any> = {
+  card: "credit-card",
+  debit: "credit-card",
+  pixIn: "arrow-down",
+  transferIn: "arrow-down",
+  income: "arrow-down",
+  pixOut: "arrow-up",
+  transferOut: "arrow-up",
+  expense: "arrow-up",
+  bill: "file-text",
+  yield: "trending-up",
+  denied: "slash",
+};
+
+// "SMS · NUBANK" → "Nubank" (o rótulo curto deixa mais espaço ao nome da compra).
+const bankName = (b: string) => String(b).replace(/^SMS · /, "").toLowerCase().replace(/(^|\s)\S/g, (m) => m.toUpperCase());
+
 function PendingInbox() {
   const { c } = useTheme();
   const { state } = useStore();
@@ -240,8 +258,9 @@ function PendingInbox() {
           {inbox.rows.slice(0, 12).map((row: any, i: number, all: any[]) => {
             const sug = suggestNotification(row);
             const income = sug.type === "income";
+            const tone = income ? c.green : c.red;
             return (
-              <View key={row.id} style={[k.row, i < all.length - 1 && k.hairline, { borderBottomColor: c.line, paddingLeft: 14, paddingRight: 4, minHeight: 64 }]}>
+              <View key={row.id} style={[k.row, i < all.length - 1 && k.hairline, { borderBottomColor: c.line, paddingLeft: 14, paddingRight: 4, minHeight: 72 }]}>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`${sug.kindLabel}: ${sug.description}, ${sug.amount ? "R$ " + sug.amount : "sem valor"}. Revisar e confirmar`}
@@ -249,17 +268,19 @@ function PendingInbox() {
                   android_ripple={{ color: c.soft }}
                   style={[k.row, { flex: 1, paddingVertical: 10 }]}
                 >
-                  <BankBadge name={row.bank} size={38} />
+                  <View importantForAccessibility="no" style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: String(tone).length === 7 ? tone + "26" : c.soft }}>
+                    <I name={INBOX_ICON[sug.kind] || (income ? "arrow-down" : "arrow-up")} size={19} color={tone} />
+                  </View>
                   <View style={{ flex: 1, gap: 2 }}>
-                    <T numberOfLines={1} style={{ fontFamily: "SoraSemi", fontSize: 14 }}>
+                    <T numberOfLines={2} style={{ fontFamily: "SoraSemi", fontSize: 14 }}>
                       {sug.description}
                     </T>
                     <Muted numberOfLines={1}>
-                      {sug.kindLabel} · {row.bank}
+                      {sug.kindLabel} · {bankName(row.bank)}
                     </Muted>
                     {inbox.possibleDuplicates.has(row.id) && <Muted>Possível duplicata — confira antes de registrar</Muted>}
                   </View>
-                  <T style={{ fontFamily: "SoraSemi", color: income ? c.green : c.red, fontVariant: ["tabular-nums"] }}>{sug.amount ? `R$ ${sug.amount}` : "—"}</T>
+                  <T style={{ fontFamily: "SoraSemi", color: tone, fontVariant: ["tabular-nums"] }}>{sug.amount ? `R$ ${sug.amount}` : "—"}</T>
                 </Pressable>
                 <IconButton name="x" label={`Descartar ${sug.description}`} onPress={() => inbox.dismiss(row.id)} />
               </View>
