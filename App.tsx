@@ -310,6 +310,9 @@ function Shell({
 }) {
   const { c } = useTheme();
   const { state, perform, notice, setNotice, storageError } = useStore();
+  // Estado atual para os links dos widgets (o efeito é registrado uma vez).
+  const stateRef = useRef(state);
+  stateRef.current = state;
   const nav = useNav();
   const updates = usePublicUpdates(unlocked);
   const [adding, setAdding] = useState(false);
@@ -327,13 +330,23 @@ function Shell({
       if (!url) return;
       const m = /^floco:\/\/([^/?#]+)(?:\/([^/?#]+))?/.exec(url);
       if (!m) return;
-      if (m[1] === "add")
+      if (m[1] === "add") {
+        const card = stateRef.current.cards.find((x: any) => !x.archived);
         nav.push({
           name: "form",
           kind: "transaction",
-          initial: { type: m[2] === "income" ? "income" : "expense" },
+          initial:
+            m[2] === "income"
+              ? { type: "income" }
+              : m[2] === "transfer"
+                ? { type: "transfer" }
+                : m[2] === "card" && card
+                  ? { type: "expense", cardId: card.id }
+                  : { type: "expense" },
         });
-      else if (m[1] === "bills") nav.push({ name: "reminders" });
+      } else if (m[1] === "bills") nav.push({ name: "reminders" });
+      else if (m[1] === "cards") nav.push({ name: "cards" });
+      else if (m[1] === "budgets") nav.push({ name: "budgets" });
       else nav.reset();
     };
     Linking.getInitialURL()

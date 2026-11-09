@@ -24,7 +24,7 @@ object FlocoWidgetData {
   }
   fun refreshAll(c: Context) {
     val m = AppWidgetManager.getInstance(c)
-    for (cls in listOf(FlocoSummaryWidget::class.java, FlocoBillsWidget::class.java)) {
+    for (cls in listOf(FlocoSummaryWidget::class.java, FlocoBillsWidget::class.java, FlocoQuickWidget::class.java, FlocoAddWidget::class.java, FlocoInvoiceWidget::class.java, FlocoBudgetsWidget::class.java)) {
       val ids = m.getAppWidgetIds(ComponentName(c, cls))
       if (ids.isNotEmpty()) c.sendBroadcast(Intent(c, cls).setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE).putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids))
     }
@@ -62,6 +62,46 @@ class FlocoBillsWidget : AppWidgetProvider() {
     }
   }
 }
+
+class FlocoQuickWidget : AppWidgetProvider() {
+  override fun onUpdate(c: Context, m: AppWidgetManager, ids: IntArray) {
+    for (id in ids) {
+      val v = RemoteViews(c.packageName, R.layout.floco_widget_quick)
+      v.setOnClickPendingIntent(R.id.w_quick_income, FlocoWidgetData.open(c, "floco://add/income", 30))
+      v.setOnClickPendingIntent(R.id.w_quick_expense, FlocoWidgetData.open(c, "floco://add/expense", 31))
+      v.setOnClickPendingIntent(R.id.w_quick_card, FlocoWidgetData.open(c, "floco://add/card", 32))
+      v.setOnClickPendingIntent(R.id.w_quick_transfer, FlocoWidgetData.open(c, "floco://add/transfer", 33))
+      m.updateAppWidget(id, v)
+    }
+  }
+}
+
+class FlocoAddWidget : AppWidgetProvider() {
+  override fun onUpdate(c: Context, m: AppWidgetManager, ids: IntArray) {
+    for (id in ids) {
+      val v = RemoteViews(c.packageName, R.layout.floco_widget_add)
+      v.setOnClickPendingIntent(R.id.w_add_button, FlocoWidgetData.open(c, "floco://add/expense", 40))
+      m.updateAppWidget(id, v)
+    }
+  }
+}
+
+// Faturas e orçamentos usam o mesmo layout de lista.
+abstract class FlocoListWidget(private val titleKey: String, private val bodyKey: String, private val uri: String, private val code: Int, private val fallback: String) : AppWidgetProvider() {
+  override fun onUpdate(c: Context, m: AppWidgetManager, ids: IntArray) {
+    val d = FlocoWidgetData.read(c)
+    for (id in ids) {
+      val v = RemoteViews(c.packageName, R.layout.floco_widget_list)
+      v.setTextViewText(R.id.w_list_title, d.optString(titleKey, fallback))
+      v.setTextViewText(R.id.w_list_body, d.optString(bodyKey, "Abra o Floco para atualizar."))
+      v.setOnClickPendingIntent(R.id.w_list_root, FlocoWidgetData.open(c, uri, code))
+      v.setOnClickPendingIntent(R.id.w_list_open, FlocoWidgetData.open(c, uri, code + 1))
+      m.updateAppWidget(id, v)
+    }
+  }
+}
+class FlocoInvoiceWidget : FlocoListWidget("invoiceTitle", "invoices", "floco://cards", 50, "Faturas")
+class FlocoBudgetsWidget : FlocoListWidget("budgetsTitle", "budgetsFull", "floco://budgets", 60, "Orçamentos")
 
 class FlocoWidgetsModule(private val context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
   override fun getName() = "FlocoWidgets"

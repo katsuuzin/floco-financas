@@ -5,4 +5,12 @@
   <string name="floco_widget_summary_desc">Saldo total, receitas e despesas do mês e botões de lançar.</string>
   <string name="floco_widget_bills_name">Próximas contas</string>
   <string name="floco_widget_bills_desc">Contas e faturas que vencem nos próximos dias e orçamentos.</string>
+  <string name="floco_widget_quick_name">Lançar rápido</string>
+  <string name="floco_widget_quick_desc">Atalhos para receita, despesa, cartão e transferência.</string>
+  <string name="floco_widget_add_name">Botão de lançar</string>
+  <string name="floco_widget_add_desc">Um toque para lançar uma despesa.</string>
+  <string name="floco_widget_invoice_name">Faturas</string>
+  <string name="floco_widget_invoice_desc">Fatura do mês de cada cartão e o vencimento.</string>
+  <string name="floco_widget_budgets_name">Orçamentos</string>
+  <string name="floco_widget_budgets_desc">Quanto já foi usado de cada orçamento e quanto ainda cabe.</string>
 </resources>

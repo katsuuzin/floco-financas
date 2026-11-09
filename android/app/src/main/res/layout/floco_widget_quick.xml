@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- W1: lançar rápido — quatro atalhos para o formulário. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/w_quick_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:padding="8dp"
+    android:gravity="center"
+    android:background="@drawable/floco_widget_bg">
+    <TextView android:id="@+id/w_quick_income" android:layout_width="0dp" android:layout_weight="1" android:layout_height="48dp"
+        android:layout_margin="3dp" android:gravity="center" android:text="Receita" android:contentDescription="Lançar receita"
+        android:textColor="#FFFFFF" android:textSize="12sp" android:textStyle="bold" android:background="@drawable/floco_widget_button" />
+    <TextView android:id="@+id/w_quick_expense" android:layout_width="0dp" android:layout_weight="1" android:layout_height="48dp"
+        android:layout_margin="3dp" android:gravity="center" android:text="Despesa" android:contentDescription="Lançar despesa"
+        android:textColor="#FFFFFF" android:textSize="12sp" android:textStyle="bold" android:background="@drawable/floco_widget_button" />
+    <TextView android:id="@+id/w_quick_card" android:layout_width="0dp" android:layout_weight="1" android:layout_height="48dp"
+        android:layout_margin="3dp" android:gravity="center" android:text="Cartão" android:contentDescription="Lançar despesa no cartão"
+        android:textColor="#FFFFFF" android:textSize="12sp" android:textStyle="bold" android:background="@drawable/floco_widget_button" />
+    <TextView android:id="@+id/w_quick_transfer" android:layout_width="0dp" android:layout_weight="1" android:layout_height="48dp"
+        android:layout_margin="3dp" android:gravity="center" android:text="Transferir" android:contentDescription="Lançar transferência"
+        android:textColor="#FFFFFF" android:textSize="12sp" android:textStyle="bold" android:background="@drawable/floco_widget_button" />
+</LinearLayout>

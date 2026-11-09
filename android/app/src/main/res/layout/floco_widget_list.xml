@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- W1: lista simples (faturas ou orçamentos): título, linhas e botão de abrir. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/w_list_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="14dp"
+    android:background="@drawable/floco_widget_bg">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+        <TextView android:id="@+id/w_list_title" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+            android:textColor="#311E0D" android:textSize="14sp" android:textStyle="bold" />
+        <TextView android:id="@+id/w_list_open" android:layout_width="40dp" android:layout_height="32dp" android:gravity="center"
+            android:text="›" android:contentDescription="Abrir no Floco" android:textColor="#FFFFFF" android:textSize="20sp" android:textStyle="bold"
+            android:background="@drawable/floco_widget_button" />
+    </LinearLayout>
+    <TextView android:id="@+id/w_list_body" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="6dp" android:textColor="#311E0D" android:textSize="12sp" android:lineSpacingExtra="2dp" />
+</LinearLayout>
