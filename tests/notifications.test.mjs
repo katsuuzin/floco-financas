@@ -90,3 +90,13 @@ test("duas compras próximas com mesmo valor pelo app continuam disponíveis", (
   assert.equal(r.unique.length, 2);
   assert.deepEqual(r.duplicates, []);
 });
+
+test("dois SMS idênticos em poucos minutos marcam o segundo", () => {
+  const a = { id: "s1", bank: "SMS · NUBANK", source: "sms", title: "NUBANK", text: "NUBANK: Compra de R$ 61,23 APROVADA em PADARIA.", postedAt: at };
+  const b = { ...a, id: "s2", text: "NUBANK: Compra de R$ 61,23 APROVADA em PADARIA.\n2 mensagens novas", postedAt: at + 4000 };
+  const later = { ...a, id: "s3", postedAt: at + 20 * 60000 };
+  const other = { ...a, id: "s4", text: "NUBANK: Compra de R$ 61,23 APROVADA em MERCADO.", postedAt: at + 8000 };
+  const r = dedupeInbox([b, later, a, other]);
+  assert.equal(r.unique.length, 4);
+  assert.deepEqual(r.duplicates, ["s2"]);
+});

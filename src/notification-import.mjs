@@ -101,22 +101,30 @@ export function draftFromNotification(s, row) {
   return { ...sug, ...targets, category: rule?.category || (sug.type === "income" ? "Outros" : "Outros"), installments: "1", tags: [] };
 }
 
-// A mesma operação pode chegar pelo app do banco e por SMS: mesmo valor e tipo,
-// mesmo banco, até 10 minutos de diferença. Marca para revisão, sem apagar:
-// duas operações legítimas podem ter o mesmo valor e comerciante.
+// A mesma operação pode chegar pelo app do banco e por SMS (mesmo valor, tipo e
+// banco, até 10 minutos) ou em dois SMS de texto idêntico (até 5 minutos).
+// Marca para revisão, sem apagar: duas operações legítimas podem ser iguais.
+// SMS em conversa trazem mensagens anteriores e um resumo; compara as linhas com valor.
+const moneyLines = (r) => new Set(String(r.text || "").split("\n").map((l) => l.trim().toLowerCase().replace(/\s+/g, " ")).filter((l) => l.includes("r$")));
+const shareLine = (a, b) => [...moneyLines(a)].some((l) => moneyLines(b).has(l));
+
 export function dedupeInbox(rows) {
-  const sorted = [...rows].sort((a, b) => (a.source === "sms") - (b.source === "sms") || b.postedAt - a.postedAt);
+  const sorted = [...rows].sort((a, b) => (a.source === "sms") - (b.source === "sms") || a.postedAt - b.postedAt);
   const kept = [];
   const duplicates = [];
   const bankOf = (r) => String(r.bank || "").toLowerCase().replace(/^sms · /, "");
   for (const r of sorted) {
     const s = suggestNotification(r);
-    const twin = kept.find(
-      (k) =>
+    const twin = kept.find((k) => {
+      if (bankOf(k.r) !== bankOf(r) || !k.s.amount) return false;
+      const gap = Math.abs(k.r.postedAt - r.postedAt);
+      if (k.r.source === "sms" && r.source === "sms") return gap <= 5 * 60 * 1000 && k.s.kind === s.kind && k.s.description === s.description && k.s.amount === s.amount && shareLine(k.r, r);
+      return (
         (k.r.source === "sms") !== (r.source === "sms") &&
         k.s.kind === s.kind && k.s.description === s.description &&
-        k.s.amount && k.s.amount === s.amount && k.s.type === s.type && bankOf(k.r) === bankOf(r) && Math.abs(k.r.postedAt - r.postedAt) <= 10 * 60 * 1000,
-    );
+        k.s.amount === s.amount && k.s.type === s.type && gap <= 10 * 60 * 1000
+      );
+    });
     if (twin) duplicates.push(r.id);
     else kept.push({ r, s });
   }
