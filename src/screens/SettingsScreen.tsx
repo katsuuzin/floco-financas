@@ -1,11 +1,12 @@
-import React from "react";
-import { Alert, Linking } from "react-native";
+import React, { useEffect, useState } from "react";
+import { Alert, Linking, View, Pressable, NativeModules, Image } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import * as DocumentPicker from "expo-document-picker";
 import * as LocalAuthentication from "expo-local-authentication";
 import * as Application from "expo-application";
-import { Section, Box, Toggle, Button, ListItem, Muted, T } from "../ui/kit";
+import { Section, Box, Toggle, Button, ListItem, Muted, T, I } from "../ui/kit";
+import { ACCENTS, accentOf, useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
 import { today, validateBackup, emptyState, demoState } from "../finance.mjs";
@@ -38,6 +39,20 @@ export async function exportCSV(state: any) {
 export default function SettingsScreen() {
   const { state, perform, confirm, current } = useStore();
   const nav = useNav();
+  const { c } = useTheme();
+  // S10: ícone do app (troca o atalho na tela inicial; o launcher pode levar alguns segundos).
+  const iconNative = NativeModules.FlocoAppIcon;
+  const [icon, setIcon] = useState("Solar");
+  useEffect(() => {
+    iconNative?.current().then(setIcon).catch(() => {});
+  }, []);
+  const chooseIcon = (name: string) =>
+    confirm(
+      "Trocar o ícone do app?",
+      "O atalho na tela inicial é recriado com o novo ícone. Se ele sumir, procure o Floco na lista de apps.",
+      () => iconNative?.set(name).then(setIcon).catch((e: any) => Alert.alert("Não foi possível trocar", e?.message || String(e))),
+      "Trocar",
+    );
 
   const backup = async () => {
     try {
@@ -91,6 +106,60 @@ export default function SettingsScreen() {
       <Box>
         <Toggle icon="moon" label="Tema escuro" value={!!state.settings.dark} onChange={setting("dark")} />
         <Toggle icon="eye-off" label="Ocultar valores" value={!!state.settings.hide} onChange={setting("hide")} />
+        <Muted style={{ marginTop: 12 }}>Cor de destaque</Muted>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 8 }}>
+          {ACCENTS.map(([hex, name]) => {
+            const on = accentOf(state.settings.accent) === hex;
+            return (
+              <Pressable
+                key={hex}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={`Destaque ${name}`}
+                onPress={() => setting("accent")(hex)}
+                style={{ alignItems: "center", gap: 4, width: 56 }}
+              >
+                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: hex, alignItems: "center", justifyContent: "center", borderWidth: on ? 3 : 0, borderColor: c.text }}>
+                  {on && <I name="check" size={18} color="#311E0D" />}
+                </View>
+                <Muted style={{ fontSize: 11 }}>{name}</Muted>
+              </Pressable>
+            );
+          })}
+        </View>
+        {!!iconNative && (
+          <>
+            <Muted style={{ marginTop: 12 }}>Ícone do app</Muted>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 8 }}>
+              {(
+                [
+                  ["Solar", require("../../assets/icon-solar.webp")],
+                  ["Grafite", require("../../assets/icon-grafite.webp")],
+                  ["Creme", require("../../assets/icon-creme.webp")],
+                  ["Ceu", require("../../assets/icon-ceu.webp")],
+                ] as [string, any][]
+              ).map(([name, img]) => {
+                const on = icon === name;
+                const label = name === "Ceu" ? "Céu" : name;
+                return (
+                  <Pressable
+                    key={name}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: on }}
+                    accessibilityLabel={`Ícone ${label}`}
+                    onPress={() => !on && chooseIcon(name)}
+                    style={{ alignItems: "center", gap: 4, width: 64 }}
+                  >
+                    <View style={{ width: 56, height: 56, borderRadius: 18, alignItems: "center", justifyContent: "center", borderWidth: on ? 3 : 0, borderColor: c.primary }}>
+                      <Image source={img} style={{ width: 64, height: 64 }} />
+                    </View>
+                    <Muted style={{ fontSize: 11 }}>{label}</Muted>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </>
+        )}
       </Box>
       <ListItem icon="layout" label="Personalizar início, análise e barra" onPress={() => nav.push({ name: "layout" })} />
       <ListItem icon="list" label="Preferências do extrato" onPress={() => nav.push({ name: "preferences" })} />

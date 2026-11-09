@@ -38,21 +38,40 @@ export const palette = {
 };
 export type Colors = typeof palette.light;
 
+// S1: cores de destaque. Todas claras o bastante para o texto marrom #311E0D por cima (≥ 8:1).
+export const ACCENTS: [string, string][] = [
+  ["#FFCB45", "Solar"],
+  ["#FFB074", "Laranja"],
+  ["#7FB3FF", "Céu"],
+  ["#C9A0FF", "Lilás"],
+  ["#F28DC0", "Rosa"],
+  ["#5FD4C8", "Turquesa"],
+];
+export const accentOf = (v?: string) => (ACCENTS.some(([hex]) => hex === v) ? (v as string) : ACCENTS[0][0]);
+
+function withAccent(base: Colors, dark: boolean, accent: string): Colors {
+  if (accent === ACCENTS[0][0]) return base;
+  // No escuro o destaque é a cor de ação; no claro ele colore o cartão de saldo.
+  return dark ? { ...base, primary: accent, accent, amber: accent } : { ...base, accent };
+}
+
 type Theme = { c: Colors; dark: boolean; fonts: boolean };
 const ThemeContext = createContext<Theme>({ c: palette.light, dark: false, fonts: false });
 
 export function ThemeProvider({
   dark,
   fonts,
+  accent,
   children,
 }: {
   dark: boolean;
   fonts: boolean;
+  accent?: string;
   children: React.ReactNode;
 }) {
   const value = React.useMemo(
-    () => ({ c: dark ? palette.dark : palette.light, dark, fonts }),
-    [dark, fonts],
+    () => ({ c: withAccent(dark ? palette.dark : palette.light, dark, accentOf(accent)), dark, fonts }),
+    [dark, fonts, accent],
   );
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

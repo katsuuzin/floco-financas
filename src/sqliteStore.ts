@@ -55,8 +55,13 @@ export type LoadResult = { state: any; migrated: boolean; fresh: boolean };
 // confere que o que foi gravado é idêntico ao original e só então passa a usar o SQLite.
 export async function loadState(): Promise<LoadResult> {
   const d = open();
-  if (hasData(d))
-    return { state: validateBackup(readAll(d)), migrated: false, fresh: false };
+  if (hasData(d)) {
+    const raw: any = readAll(d);
+    const state = validateBackup(raw);
+    // Dados do próprio aparelho: o bloqueio biométrico continua como estava.
+    state.settings.biometric = !!raw.settings?.biometric;
+    return { state, migrated: false, fresh: false };
+  }
 
   const legacy = await AsyncStorage.getItem(LEGACY_KEY);
   if (!legacy) {

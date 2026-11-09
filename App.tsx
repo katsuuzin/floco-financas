@@ -95,7 +95,7 @@ function Themed({
 }) {
   const { state } = useStore();
   return (
-    <ThemeProvider dark={!!state.settings.dark} fonts={fonts}>
+    <ThemeProvider dark={!!state.settings.dark} fonts={fonts} accent={state.settings.accent}>
       {children}
     </ThemeProvider>
   );

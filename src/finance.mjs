@@ -736,7 +736,10 @@ export function validateBackup(value) {
     throw Error("Recebimento sem histórico da dívida.");
   return {
     ...value,
+    // Preferências (layout, extrato, lembretes, cor...) seguem junto. O bloqueio biométrico
+    // nunca vem de um backup; quem lê o armazenamento local o devolve (sqliteStore).
     settings: {
+      ...(value.settings && typeof value.settings === "object" && !Array.isArray(value.settings) ? value.settings : {}),
       dark: !!value.settings?.dark,
       hide: !!value.settings?.hide,
       biometric: false,

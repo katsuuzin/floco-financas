@@ -367,7 +367,7 @@ export function Toggle({
           value={value}
           onValueChange={onChange}
           thumbColor={value ? c.accent : c.muted}
-          trackColor={{ false: c.line, true: dark ? "#6E5A1F" : c.primary }}
+          trackColor={{ false: c.line, true: dark ? c.accent + "66" : c.primary }}
         />
       </Pressable>
       {!!hint && <Muted>{hint}</Muted>}

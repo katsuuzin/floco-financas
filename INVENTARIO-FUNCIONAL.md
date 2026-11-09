@@ -8,15 +8,17 @@ Auditoria feita em 7 de novembro de 2026 no Kontto 1.0.83 (emulador Android 15, 
 
 ## Status atual (v1.3.5)
 
-As colunas "Floco" das tabelas abaixo guardam o diagnóstico da F1. Esta tabela é o estado atual, verificado por testes automatizados (134) e por uso no emulador.
+As colunas "Floco" das tabelas abaixo guardam o diagnóstico da F1. Esta tabela é o estado atual, verificado por testes automatizados (139) e por uso no emulador.
 
 | Situação | IDs |
 |---|---|
-| ✅ Feito | N1, N2, N3, L2, L3, L4, L5, L6, L7, L8, L9, L10, L14, O2, O3, P1, P4, P5, P6, A1, A2, D1, D2, D3, R1–R10, F2, F3, F4, F5, F6, F7, F8, S2, S3, S4, S5, S7, S8, S12, H1, H2, H4, **L1** (calculadora no valor), **L12** (calendário no extrato), **L13** (conta/cartão, categoria, tag, faixa de valor e ordem), **O4/O5** (ícone e cor), **P2/P3** (meta × caixinha, arquivar e movimento por mês), **S11** (lixeira de 30 dias), **F1** (PDF do Nubank e PDF genérico com conferência de saldo; testado com textos de exemplo, não com PDFs reais de outros bancos), **W1** (6 widgets: saldo, próximas contas, lançar rápido, botão +, faturas, orçamentos; links testados, aparência na tela inicial não conferida) |
-| 🟡 Parcial | **L11** (o comprovante abre o leitor, não preenche o formulário aberto) · **O1** (reordenar por setas e arquivar; sem arraste nem relatório por conta) · **S1** (tema claro/escuro; sem cores de destaque) · **S6** (extrato e saldo; sem vibração ou teclado) · **S9** (backup criptografado sim; Drive e sincronização não) · **H3** (lembretes entram pelos primeiros passos) |
-| ❌ Não feito | **S10** ícones alternativos do app |
+| ✅ Feito | N1, N2, N3, L2, L3, L4, L5, L6, L7, L8, L9, L10, L14, O2, O3, P1, P4, P5, P6, A1, A2, D1, D2, D3, R1–R10, F2, F3, F4, F5, F6, F7, F8, S2, S3, S4, S5, S7, S8, S12, H1, H2, H4, **L1** (calculadora no valor), **L12** (calendário no extrato), **L13** (conta/cartão, categoria, tag, faixa de valor e ordem), **O4/O5** (ícone e cor), **P2/P3** (meta × caixinha, arquivar e movimento por mês), **S11** (lixeira de 30 dias), **F1** (PDF do Nubank e PDF genérico com conferência de saldo; testado com textos de exemplo, não com PDFs reais de outros bancos), **S1** (6 cores de destaque), **S10** (4 ícones: Solar, Grafite, Creme, Céu), **W1** (6 widgets: saldo, próximas contas, lançar rápido, botão +, faturas, orçamentos; links testados, aparência na tela inicial não conferida) |
+| 🟡 Parcial | **L11** (o comprovante abre o leitor, não preenche o formulário aberto) · **O1** (reordenar por setas e arquivar; sem arraste nem relatório por conta) · **S6** (extrato e saldo; sem vibração ou teclado) · **S9** (backup criptografado sim; Drive e sincronização não) · **H3** (lembretes entram pelos primeiros passos) |
+| ❌ Não feito | — |
 
 **Duplicatas de notificação (1.3.5):** a mesma compra por app e SMS (até 10 min) ou em dois SMS iguais (até 5 min) aparece marcada como *possível duplicata*, sem descarte automático. Testado no emulador com SMS reais do console.
+
+**Correção (1.3.6):** ao abrir, o app perdia preferências (bloqueio biométrico, layout, lembretes, extrato). Agora elas são mantidas; só o backup restaurado continua sem trazer o bloqueio.
 
 Drive e sincronização (S9) precisam de um projeto OAuth do Google registrado em nome do dono do app. Isso não dá para criar sem a sua conta, por isso ficou de fora, e não é uma limitação técnica do app.
 

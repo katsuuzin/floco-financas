@@ -55,3 +55,13 @@ test("P2 meta com progresso manual sobrevive à validação ao reabrir", async (
   bad.goals[0].saved = 1;
   assert.throws(() => validateBackup(bad), /Meta inválida/);
 });
+
+test("Preferências sobrevivem à validação; bloqueio biométrico não vem do backup", async () => {
+  const { validateBackup, emptyState } = await import("../src/finance.mjs");
+  const s = validateBackup({ ...emptyState(), settings: { dark: true, biometric: true, onboarded: true, layout: { tab4: "goals" }, reminders: { enabled: true }, accent: "#7FB3FF" } });
+  assert.equal(s.settings.biometric, false);
+  assert.equal(s.settings.onboarded, true);
+  assert.deepEqual(s.settings.layout, { tab4: "goals" });
+  assert.equal(s.settings.reminders.enabled, true);
+  assert.equal(s.settings.accent, "#7FB3FF");
+});
