@@ -6,7 +6,7 @@ Auditoria feita em 7 de novembro de 2026 no Kontto 1.0.83 (emulador Android 15, 
 
 **Status no Floco v1.1.1 + F0:** ✅ tem · 🟡 parcial · ❌ falta. Os status foram estimados pelo código e ainda serão confirmados ficha a ficha na F2.
 
-## Status atual (v1.3.5)
+## Status atual (v1.3.6)
 
 As colunas "Floco" das tabelas abaixo guardam o diagnóstico da F1. Esta tabela é o estado atual, verificado por testes automatizados (139) e por uso no emulador.
 
