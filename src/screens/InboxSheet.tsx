@@ -6,6 +6,7 @@ import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { draftFromNotification, importNotification, KIND_LABEL } from "../notification-import.mjs";
 import { categoryNames } from "../planning.mjs";
+import BankBadge from "../ui/BankBadge";
 
 const KIND_ICON: Record<string, any> = {
   card: "credit-card",
@@ -17,6 +18,8 @@ const KIND_ICON: Record<string, any> = {
   debit: "credit-card",
   income: "arrow-down-left",
   expense: "arrow-up-right",
+  yield: "trending-up",
+  denied: "slash",
 };
 
 export default function InboxSheet({ row, onClose, onDone }: { row: any | null; onClose: () => void; onDone: (id: string) => void }) {
@@ -33,7 +36,7 @@ export default function InboxSheet({ row, onClose, onDone }: { row: any | null; 
   const income = f.type === "income";
   const color = income ? c.green : c.red;
   const when = new Date(row.postedAt);
-  const stamp = `${row.bank} · ${when.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} · ${f.time}`;
+  const stamp = `${String(row.bank).replace(/^SMS · /, "SMS ")} · ${when.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} · ${f.time}`;
   const confirm = async () => {
     setError("");
     const ok = await perform((s: any) => importNotification(s, row, { ...f, cardId: f.kind === "card" ? f.cardId : "" }), "Lançamento registrado");
@@ -48,11 +51,14 @@ export default function InboxSheet({ row, onClose, onDone }: { row: any | null; 
         <View style={[s.handle, { backgroundColor: c.line }]} />
         <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }} keyboardShouldPersistTaps="handled">
           <View style={[k.row, { justifyContent: "space-between" }]}>
-            <View style={[s.badge, { backgroundColor: c.soft }]}>
+            <View style={[s.badge, { backgroundColor: c.soft, flexShrink: 0 }]}>
               <I name={KIND_ICON[f.kind]} size={16} color={color} />
               <T style={{ color, fontFamily: "SoraSemi", fontSize: 13 }}>{KIND_LABEL[f.kind as "card"]}</T>
             </View>
-            <Muted>{stamp}</Muted>
+            <View style={[k.row, { gap: 8, flexShrink: 1 }]}>
+              <BankBadge name={row.bank} size={24} />
+              <Muted numberOfLines={1} style={{ flexShrink: 1 }}>{stamp}</Muted>
+            </View>
           </View>
           <View style={[k.row, { gap: 6 }]}>
             <T style={{ fontSize: 24, fontFamily: "SoraSemi", color }}>R$</T>
@@ -65,11 +71,12 @@ export default function InboxSheet({ row, onClose, onDone }: { row: any | null; 
             />
             <I name="edit-2" size={18} />
           </View>
+          {f.kind === "denied" && <Muted>O banco recusou esta compra: nada foi cobrado. Descarte o aviso ou, se ele estiver errado, escolha o tipo certo abaixo.</Muted>}
           <Choice
             label="Tipo · lido do banco"
-            values={Object.entries(KIND_LABEL).filter(([key]) => !["income", "expense"].includes(key)) as [string, string][]}
+            values={Object.entries(KIND_LABEL).filter(([key]) => !["income", "expense", "denied"].includes(key)) as [string, string][]}
             value={f.kind}
-            onChange={(v) => setF((x: any) => ({ ...x, kind: v, type: ["pixIn", "transferIn"].includes(v) ? "income" : "expense" }))}
+            onChange={(v) => setF((x: any) => ({ ...x, kind: v, type: ["pixIn", "transferIn", "yield"].includes(v) ? "income" : "expense" }))}
           />
           <Field label="Descrição" value={f.description} onChange={(v) => set("description", v)} />
           {f.kind === "card" ? (
@@ -88,7 +95,34 @@ export default function InboxSheet({ row, onClose, onDone }: { row: any | null; 
               </View>
             </>
           ) : (
-            <Choice label="Conta" values={accounts.map((a: any) => [a.id, a.name])} value={f.accountId} onChange={(v) => set("accountId", v)} empty="Cadastre uma conta primeiro." />
+            <View style={{ gap: 8 }} accessibilityRole="radiogroup" accessibilityLabel="Conta">
+              <Muted>Conta</Muted>
+              {accounts.length ? (
+                accounts.map((a: any) => {
+                  const on = f.accountId === a.id;
+                  return (
+                    <Pressable
+                      key={a.id}
+                      accessibilityRole="radio"
+                      accessibilityLabel={`${a.name}${a.institution ? ", " + a.institution : ""}`}
+                      accessibilityState={{ checked: on }}
+                      onPress={() => set("accountId", a.id)}
+                      android_ripple={{ color: c.soft }}
+                      style={[k.row, { gap: 12, minHeight: 56, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, borderColor: on ? c.primary : c.line, backgroundColor: on ? c.soft : "transparent" }]}
+                    >
+                      <BankBadge name={a.institution} alt={a.name} size={36} />
+                      <View style={{ flex: 1 }}>
+                        <T style={{ fontFamily: "SoraSemi" }}>{a.name}</T>
+                        {!!a.institution && a.institution !== a.name && <Muted>{a.institution}</Muted>}
+                      </View>
+                      {on && <I name="check" size={18} color={c.primary} />}
+                    </Pressable>
+                  );
+                })
+              ) : (
+                <Muted>Cadastre uma conta primeiro.</Muted>
+              )}
+            </View>
           )}
           <Choice label="Categoria" values={categoryNames(state).map((x: string) => [x, x])} value={f.category} onChange={(v) => set("category", v)} />
           {!!state.tags?.length && (
@@ -99,7 +133,14 @@ export default function InboxSheet({ row, onClose, onDone }: { row: any | null; 
               onChange={(v) => set("tags", v ? [v] : [])}
             />
           )}
-          <Field label="Observações (texto do banco)" value={f.notes} onChange={(v) => set("notes", v)} multiline />
+          <View style={{ gap: 4 }}>
+            <Field label="Observações (texto do banco)" value={f.notes} onChange={(v) => set("notes", v)} multiline />
+            {!!f.notes && (
+              <Pressable accessibilityRole="button" accessibilityLabel="Limpar observações" onPress={() => set("notes", "")} style={{ alignSelf: "flex-end", minHeight: 44, justifyContent: "center", paddingHorizontal: 8 }}>
+                <T style={{ color: c.primary, fontFamily: "SoraSemi", fontSize: 13 }}>Limpar observações</T>
+              </Pressable>
+            )}
+          </View>
           {!!error && <T style={{ color: c.red }}>{error}</T>}
         </ScrollView>
         <View style={[k.row, s.footer, { borderTopColor: c.line }]}>
@@ -107,7 +148,11 @@ export default function InboxSheet({ row, onClose, onDone }: { row: any | null; 
             <T style={{ color: c.primary, fontFamily: "SoraSemi" }}>Descartar</T>
           </Pressable>
           <View style={{ flex: 1.6 }}>
-            <Button title="Confirmar" icon="check" onPress={confirm} />
+            {f.kind === "denied" ? (
+              <Button title="Descartar aviso" icon="x" onPress={() => onDone(row.id)} />
+            ) : (
+              <Button title={f.kind === "card" ? "Confirmar compra" : income ? "Confirmar entrada" : "Confirmar saída"} icon="check" onPress={confirm} />
+            )}
           </View>
         </View>
       </KeyboardAvoidingView>

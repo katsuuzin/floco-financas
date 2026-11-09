@@ -1,5 +1,6 @@
 import { addTransaction, parseMoney } from "./finance.mjs";
 import { categorize } from "./rules.mjs";
+import { categoryNames } from "./planning.mjs";
 
 // Tipos lidos do texto do banco.
 export const KIND_LABEL = {
@@ -12,13 +13,25 @@ export const KIND_LABEL = {
   debit: "Compra no débito",
   income: "Entrada",
   expense: "Saída",
+  yield: "Rendimento recebido",
+  denied: "Compra negada",
 };
+
+const INCOME_KINDS = ["pixIn", "transferIn", "income", "yield"];
 
 const clean = (s) => String(s || "").replace(/\s+/g, " ").trim();
 const cut = (s) => clean(s).replace(/[.,;!]+$/, "").slice(0, 80);
 
+// Compra recusada pelo banco ou pelo emissor: nada foi cobrado, não vira lançamento.
+const DENIED = /negad|recusad|reprovad|declinad|n[aã]o\s+(?:foi\s+)?(?:aprovad|autorizad|conclu[ií]d|efetivad)|n[aã]o\s+p[oô]de\s+ser\s+(?:conclu|realiz|process)/;
+const MOVEMENT = /compra|pagamento|transa[cç][aã]o|cart[aã]o|d[eé]bito|cr[eé]dito|pix|transfer/;
+// Proventos de investimento: rendimento de fundo, dividendo, JCP, "rendeu".
+const YIELD = /rendimentos?|rendeu|dividendos?|\bjcp\b|juros sobre capital|proventos?/;
+
 function classify(content) {
   const c = content.toLowerCase();
+  if (DENIED.test(c) && MOVEMENT.test(c)) return "denied";
+  if (YIELD.test(c) && /receb|cr[eé]dit|pag|rendeu/.test(c) && !/pix\s+(?:recebid|enviad)/.test(c)) return "yield";
   if (/pix/.test(c) && /recebid|recebeu|te enviou|chegou/.test(c)) return "pixIn";
   if (/pix/.test(c) && /enviad|enviou|realizad|feito|pago|pagou|transfer/.test(c)) return "pixOut";
   if (/transfer[eê]ncia/.test(c) && /recebid|recebeu/.test(c)) return "transferIn";
@@ -31,9 +44,15 @@ function classify(content) {
 }
 
 // Comerciante ou pessoa, a partir dos padrões comuns dos bancos brasileiros.
+const upperFirst = (x) => x.charAt(0).toUpperCase() + x.slice(1);
+
 function counterpart(content, kind) {
+  if (kind === "yield") {
+    const m = /(rendimentos?|dividendos?|proventos?|juros sobre capital pr[oó]prio|jcp)\s+(?:do|da|de|dos)\s+(?:ativo\s+|fundo\s+|a[cç][aã]o\s+)?([A-Za-zÀ-ú0-9][^.\n]*?)(?:\s+(?:foram|foi|na|no|em|com|para|via)\b|[.\n]|$)/i.exec(content);
+    return m ? upperFirst(cut(`${m[1]} ${/ativo\s/i.test(m[0]) ? "do ativo " : "de "}${m[2]}`)) : "Rendimentos";
+  }
   const patterns =
-    kind === "pixIn" || kind === "transferIn" || kind === "income"
+    INCOME_KINDS.includes(kind)
       ? [/\b(?:de|por)\s+(?!R\$)([A-ZÀ-Ú][^.\n]{2,60}?)(?:\s+(?:no valor|via|com|em)\b|[.\n]|$)/i, /recebeu[^.]*?de\s+([^.\n]{3,60})/i]
       : [
           /\bem\s+([A-Z0-9*][^.\n]{2,60}?)(?:\s+(?:para o cart|no cart|com o cart|foi)|[.\n]|$)/,
@@ -60,7 +79,7 @@ export function suggestNotification(row) {
   const time = Number.isFinite(d.getTime()) ? `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}` : "";
   const lastFour = /final\s*(\d{4})/i.exec(content)?.[1] || "";
   const who = counterpart(content, kind);
-  const income = ["pixIn", "transferIn", "income"].includes(kind);
+  const income = INCOME_KINDS.includes(kind);
   return {
     kind,
     kindLabel: KIND_LABEL[kind],
@@ -74,6 +93,8 @@ export function suggestNotification(row) {
     ambiguous: !amount || values.length > 2,
   };
 }
+
+export const isDenied = (row) => suggestNotification(row).kind === "denied";
 
 // Sugere conta e cartão pelo banco da notificação e pelo final do cartão.
 export function guessTargets(s, row, suggestion) {
@@ -98,7 +119,9 @@ export function draftFromNotification(s, row) {
   const sug = suggestNotification(row);
   const targets = guessTargets(s, row, sug);
   const rule = categorize(s, sug.description, sug.type);
-  return { ...sug, ...targets, category: rule?.category || (sug.type === "income" ? "Outros" : "Outros"), installments: "1", tags: [] };
+  // Rendimento: usa a categoria do usuário que se pareça com "rendimentos/investimentos", se houver.
+  const own = sug.kind === "yield" ? categoryNames(s).find((n) => /rendiment|invest|dividend/i.test(n)) : "";
+  return { ...sug, ...targets, category: rule?.category || own || "Outros", installments: "1", tags: [] };
 }
 
 // A mesma operação pode chegar pelo app do banco e por SMS (mesmo valor, tipo e

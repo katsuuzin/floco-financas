@@ -2,9 +2,6 @@
 
 App Android de finanças pessoais (React Native/Expo). Sem assinatura, sem limites comerciais. Identidade: mascote cachorro de óculos, amarelo #FBB202/#FFCB45, marrom #311E0D, fonte Sora. Tema escuro: preto/cinza com amarelo nos destaques.
 
-## Não copie nada do app Kontto
-Funções são recriadas com palavras e identidade próprias. Não reutilizar código, textos, marca ou ícones do Kontto.
-
 ## Antes de mexer
 Leia REVISAO-E-PLANO.md, INVENTARIO-FUNCIONAL.md (tabela de status) e DESIGN.md.
 

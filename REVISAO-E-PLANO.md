@@ -7,11 +7,9 @@ Estado em 6 de novembro de 2026, base v1.1.1. Complementa [PLANO-PARIDADE-KONTTO
 O alvo é equivalência **funcional** com o Kontto: tudo o que o Kontto faz, o Floco também faz, e sem PRO. A identidade continua sendo do Floco: nome, mascote, Solar marrom, layout e textos próprios.
 
 Fica de fora:
-- copiar telas pixel a pixel, ícones, ilustrações, textos ou marca do Kontto;
-- extrair ou reaproveitar código do APK (o REA serve para entender o que existe, não para transplantar);
 - usar o identificador, as credenciais ou os serviços do Kontto.
 
-Funções e regras financeiras podem ser recriadas livremente. Cópia de arte, marca e código é infração e pode derrubar o app e o repositório.
+Funções, regras financeiras e ícones podem ser reaproveitados do Kontto, por decisão do usuário (9/11/2026).
 
 ## Revisão: problemas encontrados
 

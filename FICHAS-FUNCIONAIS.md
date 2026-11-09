@@ -219,6 +219,21 @@ O status do Floco vem de leitura do código, sem teste: ✅ tem · 🟡 parcial 
   - Com "sem movimentar conta", nenhum saldo muda.
 - **Floco:** já tem prazo/parcela em `extraAmortization`, juros por atraso e quitação. Faltam "sem movimentar conta", o saldo devedor editável, o histórico de abatimentos, a prévia na edição, o reagendamento pela data e o PDF ❔.
 
+## F4a — Confirmação de notificação: rendimentos, compra negada e ícones de banco 🟡 (feito em 9/11/2026, `src/notification-import.mjs`, `src/bankCatalog.mjs`, `src/ui/BankBadge.tsx`)
+
+**Observado no Kontto (1.0.83):** a notificação pendente abre uma folha com: selo do tipo ("Transferência recebida"), banco, data e hora; valor editável (lápis); linha "Tipo · lido do banco" (direção: "Entrada na conta"); descrição; conta com o ícone do banco; categoria (vazia, "Selecionar categoria…"); tags; texto original do banco como observação, com ✕ para limpar; botões "Descartar" e "Confirmar entrada". Um aviso de rendimento de fundo ("recebeu R$ 0,41 de rendimentos do ativo GARE11") chega como entrada. A tela de bancos tem, por banco, um interruptor geral, interruptores por tipo (compra no cartão, Pix enviado, Pix recebido, boleto, cashback) e palavras ignoradas. **Não existe** opção para compras negadas.
+
+**Regras do Floco**
+- **Rendimento:** aviso com "rendimento(s)", "rendeu", "dividendo(s)", "JCP", "juros sobre capital" ou "provento(s)" mais "receb/crédit/pag" vira tipo *Rendimento recebido*, sempre entrada. Descrição: "Rendimentos do ativo GARE11" (o tipo de provento + o ativo). Pix recebido de pessoa continua Pix. Categoria: a do usuário que se pareça com rendimentos/investimentos/dividendos; sem ela, "Outros" (ou a regra de categorização que casar).
+- **Compra negada:** texto com "negada/recusada/reprovada/declinada" ou "não aprovada/autorizada/concluída" e palavra de movimento (compra, cartão, pagamento, débito, crédito, Pix, transferência) vira tipo *Compra negada*. Com a opção **Não registrar compras negadas** ligada (padrão), esses avisos saem da fila sozinhos, sem lançamento. Desligada, aparecem com o aviso "nada foi cobrado" e o botão "Descartar aviso"; escolhendo outro tipo, o lançamento pode ser registrado. A opção fica em Ajustes das notificações e vai no backup (`settings.notify.ignoreDenied`).
+- **Captura nativa:** o filtro do serviço agora aceita "recebeu", "rendimento", "rendeu", "dividendo", "provento", "JCP", "negada" e "recusada" (antes "recebeu" e "rendimentos" eram descartados como "sem palavra de movimentação").
+- **Ícones de banco:** os mesmos ícones que o Kontto mostra (56 arquivos em `assets/banks`, extraídos do pacote 1.0.83 e convertidos para PNG; uso autorizado pelo usuário em 9/11/2026, exceção à regra de não copiar). A busca é pelo nome da instituição, da conta ou do rótulo da notificação; nomes curtos só casam como palavra inteira. Next, Will, RecargaPay, Ame e Pluxee não existem no Kontto: ficam com selo de cor e sigla desenhado por nós; banco desconhecido, selo cinza com as iniciais. Aparece na folha de confirmação (data e conta), na lista de pendentes, nos bancos monitorados e nas contas da tela inicial.
+- **Folha:** botão "Confirmar entrada/saída/compra" conforme o tipo; "Limpar observações" apaga o texto do banco; contas em lista com selo.
+
+**Fora desta rodada:** interruptores por tipo e palavras ignoradas por banco (hoje as palavras são globais), cashback como tipo próprio, tags na folha por seleção múltipla.
+
+**Critério de aceite (verificado no emulador, SMS de "INTER"):** rendimento de R$ 0,41 chegou como "Rendimento recebido" com descrição "Rendimentos do ativo GARE11" e conta com selo; confirmar somou 0,41 ao saldo e às receitas. Compra negada: com a opção ligada sumiu da fila; desligada, apareceu como "Compra negada" com "Descartar aviso". 7 testes novos.
+
 ## F8a — Saúde financeira: fatores e histórico 🟡
 
 - **O que faz:** gera uma nota de 0 a 100 no aparelho, explica a composição e guarda o histórico.

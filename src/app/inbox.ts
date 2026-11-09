@@ -1,7 +1,8 @@
 // Fila de notificações bancárias capturadas (lida do serviço nativo).
 import { useCallback, useEffect, useState } from "react";
 import { AppState, NativeModules } from "react-native";
-import { dedupeInbox } from "../notification-import.mjs";
+import { dedupeInbox, isDenied } from "../notification-import.mjs";
+import { notifySettings } from "../bankCatalog.mjs";
 
 const native = NativeModules.FlocoBankNotifications;
 
@@ -58,6 +59,13 @@ export function useBankInbox(state: any) {
   useEffect(() => {
     for (const r of rows) if (registered.has(r.id)) void dismiss(r.id);
   }, [rows.length, state.transactions.length]);
-  const { unique, duplicates } = dedupeInbox(rows.filter((r) => !registered.has(r.id)));
+  // Compras negadas não cobram nada: com a opção ligada (padrão) saem da fila sozinhas.
+  const skipDenied = notifySettings(state).ignoreDenied !== false;
+  const denied = skipDenied ? rows.filter((r) => isDenied(r)) : [];
+  useEffect(() => {
+    for (const r of denied) void dismiss(r.id);
+  }, [denied.map((r) => r.id).join(",")]);
+  const hide = new Set(denied.map((r) => r.id));
+  const { unique, duplicates } = dedupeInbox(rows.filter((r) => !registered.has(r.id) && !hide.has(r.id)));
   return { rows: unique, possibleDuplicates: new Set(duplicates), status, refresh, dismiss, native };
 }

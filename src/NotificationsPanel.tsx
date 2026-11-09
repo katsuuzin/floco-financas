@@ -13,10 +13,12 @@ import {
 import {
   suggestNotification,
   importNotification,
+  isDenied,
 } from "./notification-import.mjs";
 import { categoryNames } from "./planning.mjs";
 import { BANK_APPS, notifySettings, nativeConfig } from "./bankCatalog.mjs";
 import { categorize } from "./rules.mjs";
+import BankBadge from "./ui/BankBadge";
 const native = NativeModules.FlocoBankNotifications;
 export default function NotificationsPanel({
   state,
@@ -29,13 +31,15 @@ export default function NotificationsPanel({
     [form, setForm] = useState<any>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  const stateRef = React.useRef(state);
+  stateRef.current = state;
   const refresh = async () => {
     try {
       if (!native)
         throw Error("Instale a nova versão Android para usar notificações.");
       const s = await native.status();
       setStatus(s);
-      setRows(JSON.parse(s.pending));
+      setRows(JSON.parse(s.pending).filter((r: any) => !(notifySettings(stateRef.current).ignoreDenied !== false && isDenied(r))));
       setError("");
     } catch (e: any) {
       setError(e.message);
@@ -256,7 +260,10 @@ export default function NotificationsPanel({
                     onPress={() => setNotify({ banks: on ? notify.banks.filter((x: string) => x !== pkg) : [...notify.banks, pkg] })}
                     style={{ minHeight: 44, paddingHorizontal: 12, justifyContent: "center", borderRadius: 22, borderWidth: 1, borderColor: on ? c.primary : c.line, backgroundColor: on ? c.soft : c.surface }}
                   >
-                    {text((on ? "✓ " : "") + label)}
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <BankBadge name={label} size={24} />
+                      {text((on ? "✓ " : "") + label)}
+                    </View>
                   </Pressable>
                 );
               })}
@@ -267,6 +274,13 @@ export default function NotificationsPanel({
                 {text("Lê a notificação do app de mensagens, nunca a caixa de SMS, e só de remetentes dos bancos ligados acima.")}
               </View>
               <Switch accessibilityLabel="Ler SMS de compra" value={!!notify.sms} onValueChange={(v) => setNotify({ sms: v })} />
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                {text("Não registrar compras negadas", true)}
+                {text("Avisos de compra recusada ou não aprovada saem da fila sozinhos, pois nada foi cobrado.")}
+              </View>
+              <Switch accessibilityLabel="Não registrar compras negadas" value={notify.ignoreDenied !== false} onValueChange={(v) => setNotify({ ignoreDenied: v })} />
             </View>
             <View style={{ marginVertical: 8 }}>
               {text("Palavras ignoradas (separe por vírgula)", true)}

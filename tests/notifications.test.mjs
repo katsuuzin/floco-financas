@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { emptyState, balance, validateBackup } from "../src/finance.mjs";
-import { suggestNotification, importNotification, draftFromNotification, dedupeInbox } from "../src/notification-import.mjs";
+import { suggestNotification, importNotification, draftFromNotification, dedupeInbox, isDenied } from "../src/notification-import.mjs";
+import { bankLook, notifySettings } from "../src/bankCatalog.mjs";
 
 const at = new Date("2026-11-07T00:36:00").getTime();
 const row = { id: "n1", bank: "Nubank", title: "Compra aprovada", text: "Compra de R$ 42,90 no Mercado.", postedAt: at };
@@ -99,4 +100,83 @@ test("dois SMS idênticos em poucos minutos marcam o segundo", () => {
   const r = dedupeInbox([b, later, a, other]);
   assert.equal(r.unique.length, 4);
   assert.deepEqual(r.duplicates, ["s2"]);
+});
+
+test("rendimento de ativo vira entrada com a descrição do ativo", () => {
+  const s = suggestNotification({
+    id: "y1", bank: "Inter", title: "Rendimentos",
+    text: "Boas notícias, você recebeu R$ 0,41 de rendimentos do ativo GARE11",
+    postedAt: at,
+  });
+  assert.equal(s.kind, "yield");
+  assert.equal(s.kindLabel, "Rendimento recebido");
+  assert.equal(s.type, "income");
+  assert.equal(s.amount, "0,41");
+  assert.equal(s.description, "Rendimentos do ativo GARE11");
+});
+
+test("dividendo, JCP e 'rendeu' são rendimentos; Pix recebido continua Pix", () => {
+  const mk = (text) => suggestNotification({ id: "x", bank: "Nubank", title: "Aviso", text, postedAt: at });
+  assert.equal(mk("Dividendos de PETR4: R$ 12,30 creditados na sua conta.").kind, "yield");
+  assert.equal(mk("Seu dinheiro rendeu R$ 0,87 hoje.").kind, "yield");
+  assert.equal(mk("Você recebeu um Pix de R$ 50,00 de MARIA SOUZA.").kind, "pixIn");
+});
+
+test("rendimento usa a categoria do usuário parecida com rendimentos", () => {
+  const s = { ...emptyState(), customCategories: [{ id: "c1", name: "Rendimentos" }] };
+  const d = draftFromNotification(s, { id: "y2", bank: "Inter", title: "Rendimentos", text: "Você recebeu R$ 0,41 de rendimentos do ativo GARE11", postedAt: at });
+  assert.equal(d.category, "Rendimentos");
+  assert.equal(draftFromNotification(emptyState(), { id: "y3", bank: "Inter", title: "Rendimentos", text: "Você recebeu R$ 0,41 de rendimentos do ativo GARE11", postedAt: at }).category, "Outros");
+});
+
+test("compra negada é reconhecida e não confunde com compra aprovada", () => {
+  const mk = (text, title = "Compra") => ({ id: "d", bank: "Nubank", title, text, postedAt: at });
+  for (const t of [
+    "Compra de R$ 89,90 NEGADA em LOJA X para o cartão com final 5179.",
+    "Sua compra de R$ 30,00 foi recusada.",
+    "Compra não aprovada no valor de R$ 12,00.",
+    "Transação de R$ 45,00 no cartão não foi autorizada.",
+  ]) {
+    assert.equal(suggestNotification(mk(t)).kind, "denied", t);
+    assert.equal(isDenied(mk(t)), true, t);
+  }
+  assert.equal(isDenied(mk("Compra de R$ 27,69 APROVADA em TIM para o cartão com final 5179.", "Compra aprovada")), false);
+  assert.equal(isDenied(mk("Você recebeu um Pix de R$ 10,00 de ANA.")), false);
+});
+
+test("ícone do banco: arquivo do Kontto para banco conhecido, selo de sigla ou neutro nos demais", () => {
+  assert.equal(bankLook("Inter").logo, "inter");
+  assert.equal(bankLook("SMS · NUBANK").logo, "nubank");
+  assert.equal(bankLook("Minha conta", "Banco do Brasil").logo, "bb");
+  assert.equal(bankLook("Itaú Personnalité").logo, "itaupersonnalite");
+  assert.equal(bankLook("Itaú Empresas").logo, bankLook("Itau").logo);
+  assert.equal(bankLook("Mercado Pago").logo, "mercadopago");
+  assert.equal(bankLook("Minha pan").known, true); // sigla curta só por palavra inteira
+  assert.equal(bankLook("Panificadora").known, false);
+  assert.equal(bankLook("Coral").known, false);
+  assert.equal(bankLook("Banco Cora").logo, "cora");
+  assert.equal(bankLook("Next").logo, "");
+  assert.equal(bankLook("Next").abbr, "Nx");
+  assert.equal(bankLook("Tapete").known, false);
+  assert.equal(bankLook("Carteira").known, false);
+  assert.equal(bankLook("").abbr, "$");
+});
+
+test("todo ícone citado no catálogo existe em assets/banks e no mapa do app", async () => {
+  const { readFileSync, existsSync } = await import("node:fs");
+  const src = readFileSync(new URL("../src/bankCatalog.mjs", import.meta.url), "utf8");
+  const map = readFileSync(new URL("../src/ui/bankLogos.ts", import.meta.url), "utf8");
+  const keys = [...new Set([...src.split("const BANK_LOOKS")[0].split("const BANK_LOGOS")[1].matchAll(/"([a-z0-9]+)"\],/g)].map((m) => m[1]))];
+  assert.ok(keys.length > 40);
+  for (const k of keys) {
+    assert.ok(existsSync(new URL(`../assets/banks/${k}.png`, import.meta.url)), `falta assets/banks/${k}.png`);
+    assert.ok(map.includes(`assets/banks/${k}.png`), `falta ${k} em bankLogos.ts`);
+  }
+});
+
+test("não registrar compras negadas vem ligado e o backup aceita a preferência", () => {
+  assert.equal(notifySettings(emptyState()).ignoreDenied, true);
+  const s = { ...emptyState(), settings: { ...emptyState().settings, notify: { banks: ["br.com.intermedium"], ignored: [], sms: false, ignoreDenied: false } } };
+  assert.equal(notifySettings(s).ignoreDenied, false);
+  validateBackup(JSON.parse(JSON.stringify(s)));
 });

@@ -60,7 +60,7 @@ object BankInbox {
     val content=(title+" "+text).take(2000)
     if(!content.contains("R$",true)){seen0(if(hidden) "o Android ocultou o conteúdo (Android 15+)" else "sem valor em R$");return}
     if(Regex("(?i)c[oó]digo|senha|token|verifica[çc][aã]o|autentica[çc][aã]o").containsMatchIn(content)){seen0("código de acesso descartado");return}
-    if(!Regex("(?i)compra|pagamento|pix|transfer[eê]ncia|recebid|enviad|d[eé]bito|cr[eé]dito|saque|boleto|aprovad").containsMatchIn(content)){seen0("sem palavra de movimentação");return}
+    if(!Regex("(?i)compra|pagamento|pix|transfer[eê]ncia|receb|enviad|d[eé]bito|cr[eé]dit|saque|boleto|aprovad|rendimento|rendeu|dividendo|provento|jcp|negad|recusad").containsMatchIn(content)){seen0("sem palavra de movimentação");return}
     val lower=content.lowercase()
     if(ignored(c).any{lower.contains(it)}){seen0("palavra ignorada");return}
     // SMS: só de remetentes bancários conhecidos (título da notificação = remetente).

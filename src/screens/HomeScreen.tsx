@@ -6,6 +6,8 @@ import { useStore } from "../app/store";
 import { useNav, destination } from "../app/nav";
 import { useBankInbox } from "../app/inbox";
 import InboxSheet from "./InboxSheet";
+import BankBadge from "../ui/BankBadge";
+import { bankLook } from "../bankCatalog.mjs";
 import { suggestNotification } from "../notification-import.mjs";
 import { layoutOf, firstSteps, DESTINATIONS } from "../layout.mjs";
 import { monthInsights } from "../insights.mjs";
@@ -62,18 +64,22 @@ export function AccountList({ limit }: { limit?: number }) {
               }
               style={({ pressed }) => [k.row, { flex: 1, opacity: pressed ? 0.75 : 1 }]}
             >
-              <View
-                style={{
-                  width: 42,
-                  height: 42,
-                  borderRadius: 12,
-                  backgroundColor: a.color || c.primary,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <I name="briefcase" color="#FFFFFF" />
-              </View>
+              {bankLook(a.institution, a.name).known ? (
+                <BankBadge name={a.institution} alt={a.name} size={42} />
+              ) : (
+                <View
+                  style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 12,
+                    backgroundColor: a.color || c.primary,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <I name="briefcase" color="#FFFFFF" />
+                </View>
+              )}
               <View style={{ flex: 1, gap: 2 }}>
                 <T style={{ fontFamily: "SoraSemi", fontSize: 13 }}>{a.name}</T>
                 <Muted style={{ fontSize: 11 }}>
@@ -195,8 +201,6 @@ function FirstSteps() {
   );
 }
 
-const INBOX_ICON: Record<string, any> = { card: "credit-card", pixIn: "arrow-down-left", transferIn: "arrow-down-left", income: "arrow-down-left" };
-
 function PendingInbox() {
   const { c } = useTheme();
   const { state } = useStore();
@@ -245,9 +249,7 @@ function PendingInbox() {
                   android_ripple={{ color: c.soft }}
                   style={[k.row, { flex: 1, paddingVertical: 10 }]}
                 >
-                  <View style={{ width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: c.soft }}>
-                    <I name={INBOX_ICON[sug.kind] || "arrow-up-right"} size={18} color={income ? c.green : c.red} />
-                  </View>
+                  <BankBadge name={row.bank} size={38} />
                   <View style={{ flex: 1, gap: 2 }}>
                     <T numberOfLines={1} style={{ fontFamily: "SoraSemi", fontSize: 14 }}>
                       {sug.description}
