@@ -463,15 +463,35 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
 
       {form.kind === "goal" && (
         <>
-          <Field label="Nome da meta" value={form.name} onChange={(v) => set("name", v)} autoFocus={!form.id} />
+          {!form.id && (
+            <Segmented
+              label="Tipo"
+              values={[
+                ["box", "Caixinha"],
+                ["goal", "Meta"],
+              ]}
+              value={form.goalKind === "goal" ? "goal" : "box"}
+              onChange={(v) => set("goalKind", v)}
+            />
+          )}
+          <Muted>
+            {form.goalKind === "goal"
+              ? "Meta acompanha um objetivo sem separar dinheiro. Você atualiza o progresso quando quiser."
+              : "Caixinha reserva dinheiro dentro de uma conta. O saldo total não muda; o disponível diminui."}
+          </Muted>
+          <Field label={form.goalKind === "goal" ? "Nome da meta" : "Nome da caixinha"} value={form.name} onChange={(v) => set("name", v)} autoFocus={!form.id} />
           <Field label="Quanto quer guardar? (R$)" value={form.target} onChange={(v) => set("target", v)} numeric />
           <Field label="Prazo (opcional, AAAA-MM-DD)" value={form.deadline || ""} onChange={(v) => set("deadline", v)} placeholder={addMonths(today(), 12)} />
         </>
       )}
 
+      {form.kind === "goalProgress" && (
+        <Field label="Quanto você já juntou? (R$)" value={form.amount} onChange={(v) => set("amount", v)} numeric autoFocus />
+      )}
+
       {["deposit", "withdraw", "reserveTransfer"].includes(form.kind) && (
         <>
-          <Choice label="Meta" values={state.goals.map((g: any) => [g.id, g.name])} value={form.goalId} onChange={(v) => set("goalId", v)} />
+          <Choice label="Caixinha" values={state.goals.filter((g: any) => g.kind !== "goal" && !g.archived).map((g: any) => [g.id, g.name])} value={form.goalId} onChange={(v) => set("goalId", v)} />
           <Field label="Valor (R$)" value={form.amount} onChange={(v) => set("amount", v)} numeric autoFocus />
           <Choice
             label={form.kind === "deposit" ? "Reservar de qual conta?" : "De qual conta?"}
@@ -482,7 +502,7 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
           {form.kind === "reserveTransfer" && (
             <Choice
               label="Caixinha de destino"
-              values={state.goals.filter((g: any) => g.id !== form.goalId).map((g: any) => [g.id, g.name])}
+              values={state.goals.filter((g: any) => g.id !== form.goalId && g.kind !== "goal" && !g.archived).map((g: any) => [g.id, g.name])}
               value={form.destinationGoalId}
               onChange={(v) => set("destinationGoalId", v)}
             />

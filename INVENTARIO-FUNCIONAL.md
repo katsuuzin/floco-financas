@@ -8,12 +8,12 @@ Auditoria feita em 7 de novembro de 2026 no Kontto 1.0.83 (emulador Android 15, 
 
 ## Status atual (v1.3.5)
 
-As colunas "Floco" das tabelas abaixo guardam o diagnóstico da F1. Esta tabela é o estado atual, verificado por testes automatizados (113) e por uso no emulador.
+As colunas "Floco" das tabelas abaixo guardam o diagnóstico da F1. Esta tabela é o estado atual, verificado por testes automatizados (134) e por uso no emulador.
 
 | Situação | IDs |
 |---|---|
-| ✅ Feito | N1, N2, N3, L2, L3, L4, L5, L6, L7, L8, L9, L10, L14, O2, O3, P1, P4, P5, P6, A1, A2, D1, D2, D3, R1–R10, F2, F3, F4, F5, F6, F7, F8, S2, S3, S4, S5, S7, S8, S12, H1, H2, H4 |
-| 🟡 Parcial | **L1** (sem teclado de cálculo) · **L11** (o comprovante abre o leitor, não preenche o formulário aberto) · **L12** (sem calendário no extrato) · **L13** (filtros rápidos; sem filtro por conta, tag ou valor) · **O1** (sem reordenar por arraste nem relatório por conta) · **O4/O5** (sem ícone e cor em categorias e tags) · **P2/P3** (meta sem conta e caixinha não são tipos separados; sem arquivar caixinha) · **F1** (OFX e CSV sim; extrato em PDF não) · **S1** (tema claro/escuro; sem cores de destaque) · **S6** (extrato e saldo; sem vibração ou teclado) · **S9** (backup criptografado sim; Drive e sincronização não) · **S11** (sem lixeira para purgar, porque a exclusão é definitiva) · **H3** (lembretes entram pelos primeiros passos) · **W1** (2 de 6 widgets: saldo do mês com botões de lançar e próximas contas com orçamentos) |
+| ✅ Feito | N1, N2, N3, L2, L3, L4, L5, L6, L7, L8, L9, L10, L14, O2, O3, P1, P4, P5, P6, A1, A2, D1, D2, D3, R1–R10, F2, F3, F4, F5, F6, F7, F8, S2, S3, S4, S5, S7, S8, S12, H1, H2, H4, **L1** (calculadora no valor), **L12** (calendário no extrato), **L13** (conta/cartão, categoria, tag, faixa de valor e ordem), **O4/O5** (ícone e cor), **P2/P3** (meta × caixinha, arquivar e movimento por mês), **S11** (lixeira de 30 dias) |
+| 🟡 Parcial | **L11** (o comprovante abre o leitor, não preenche o formulário aberto) · **O1** (reordenar por setas e arquivar; sem arraste nem relatório por conta) · **F1** (OFX e CSV sim; extrato em PDF não) · **S1** (tema claro/escuro; sem cores de destaque) · **S6** (extrato e saldo; sem vibração ou teclado) · **S9** (backup criptografado sim; Drive e sincronização não) · **H3** (lembretes entram pelos primeiros passos) · **W1** (2 de 6 widgets: saldo do mês com botões de lançar e próximas contas com orçamentos) |
 | ❌ Não feito | **S10** ícones alternativos do app |
 
 **Duplicatas de notificação (1.3.5):** a mesma compra por app e SMS (até 10 min) ou em dois SMS iguais (até 5 min) aparece marcada como *possível duplicata*, sem descarte automático. Testado no emulador com SMS reais do console.

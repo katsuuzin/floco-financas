@@ -5,9 +5,10 @@ import { T, Muted, I, Box, Section, Button, Empty, IconButton, Progress, styles 
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
-import { invoice, invoiceDueDate, totalBalance, today, monthKey } from "../finance.mjs";
+import { invoice, invoiceDueDate, totalBalance, today, monthKey, moveItem } from "../finance.mjs";
 import { normalizeBudget, budgetUsage, budgetHistory } from "../analysis.mjs";
 import { toInput } from "../app/forms";
+import { archiveGoal, boxReport, isBox } from "../goals.mjs";
 import TransactionRow from "./TransactionRow";
 import MonthBar from "./MonthBar";
 import { AccountList } from "./HomeScreen";
@@ -16,14 +17,44 @@ export function AccountsScreen() {
   const { state, perform, show } = useStore();
   const nav = useNav();
   const archived = state.accounts.filter((a: any) => a.archived);
+  const active = state.accounts.filter((a: any) => !a.archived);
+  const [ordering, setOrdering] = useState(false);
+  const move = (id: string, delta: number) =>
+    perform((s: any) => ({ ...s, accounts: moveItem(s.accounts, id, delta) }));
   return (
     <>
       <Box>
         <Muted>Saldo total</Muted>
         <T style={[k.balanceValue, { fontSize: 28, marginTop: 4 }]}>{show(totalBalance(state))}</T>
       </Box>
-      <Section title="Contas ativas" action="Adicionar" onPress={() => nav.push({ name: "form", kind: "account" })} />
-      <AccountList />
+      <Section
+        title="Contas ativas"
+        action={ordering ? "Concluir" : "Adicionar"}
+        onPress={() => (ordering ? setOrdering(false) : nav.push({ name: "form", kind: "account" }))}
+      />
+      {ordering ? (
+        <Box style={{ paddingVertical: 0 }}>
+          {active.map((a: any, i: number) => (
+            <View key={a.id} style={[k.row, i < active.length - 1 && k.hairline, { minHeight: 64, gap: 4 }]}>
+              <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: a.color || "#FFCB45" }} />
+              <T style={{ flex: 1, fontFamily: "SoraSemi", marginLeft: 8 }} numberOfLines={1}>
+                {a.name}
+              </T>
+              <IconButton name="arrow-up" label={`Subir ${a.name}`} onPress={() => move(a.id, -1)} />
+              <IconButton name="arrow-down" label={`Descer ${a.name}`} onPress={() => move(a.id, 1)} />
+            </View>
+          ))}
+        </Box>
+      ) : (
+        <>
+          <AccountList />
+          {active.length > 1 && (
+            <View style={{ marginTop: 10 }}>
+              <Button secondary icon="list" title="Reordenar contas" onPress={() => setOrdering(true)} />
+            </View>
+          )}
+        </>
+      )}
       {!!archived.length && (
         <>
           <Section title="Arquivadas" />
@@ -258,45 +289,64 @@ export function GoalsScreen() {
   const { c } = useTheme();
   const { state, show, perform, confirm } = useStore();
   const nav = useNav();
+  const [showArchived, setShowArchived] = useState(false);
+  const active = state.goals.filter((g: any) => !g.archived);
+  const boxes = active.filter(isBox);
+  const metas = active.filter((g: any) => !isBox(g));
+  const archived = state.goals.filter((g: any) => g.archived);
+  const edit = (g: any) => nav.push({ name: "form", kind: "goal", initial: { ...g, goalKind: g.kind || "box", target: toInput(g.target) } });
+  const remove = (g: any) =>
+    confirm(
+      isBox(g) ? "Excluir caixinha e liberar reserva?" : "Excluir meta?",
+      isBox(g) ? "Os valores reservados voltam a ficar disponíveis nas contas. O saldo total não muda." : "A meta sai da lista. Nenhum saldo muda.",
+      () => perform((s: any) => ({ ...s, goals: s.goals.filter((x: any) => x.id !== g.id) })),
+      "Excluir",
+    );
+  const header = (g: any) => (
+    <>
+      <View style={[k.row, { justifyContent: "space-between" }]}>
+        <View style={{ flex: 1 }}>
+          <T style={{ fontFamily: "SoraSemi" }}>{g.name}</T>
+          <Muted style={{ marginTop: 4 }}>
+            {show(g.saved)} de {show(g.target)}
+            {g.deadline ? ` · até ${g.deadline.split("-").reverse().join("/")}` : ""}
+          </Muted>
+        </View>
+        <IconButton name="edit-2" label={`Editar ${g.name}`} onPress={() => edit(g)} />
+      </View>
+      <View style={{ marginVertical: 14 }}>
+        <Progress value={g.saved} max={g.target} color={g.saved >= g.target ? c.green : undefined} />
+      </View>
+    </>
+  );
+  if (!state.goals.length)
+    return (
+      <Empty
+        icon="target"
+        title="Um plano para chegar lá"
+        body="Crie uma caixinha para separar dinheiro numa conta, ou uma meta para acompanhar um objetivo."
+        action="Criar"
+        onPress={() => nav.push({ name: "form", kind: "goal" })}
+      />
+    );
   return (
     <>
-      <Section title="Metas e caixinhas" action="Criar meta" onPress={() => nav.push({ name: "form", kind: "goal" })} />
-      <Muted style={{ marginBottom: 16 }}>
-        Os depósitos reservam dinheiro dentro da conta. O saldo total continua o mesmo; o disponível diminui.
+      <Section title="Caixinhas" action="Criar" onPress={() => nav.push({ name: "form", kind: "goal" })} />
+      <Muted style={{ marginBottom: 12 }}>
+        Caixinhas reservam dinheiro dentro da conta. O saldo total continua o mesmo; o disponível diminui.
       </Muted>
-      {state.goals.length ? (
-        state.goals.map((g: any) => (
+      {boxes.length === 0 && <Muted style={{ marginBottom: 12 }}>Nenhuma caixinha ativa.</Muted>}
+      {boxes.map((g: any) => {
+        const report = boxReport(g).slice(0, 3);
+        return (
           <Box key={g.id}>
-            <View style={[k.row, { justifyContent: "space-between" }]}>
-              <View style={{ flex: 1 }}>
-                <T style={{ fontFamily: "SoraSemi" }}>{g.name}</T>
-                <Muted style={{ marginTop: 4 }}>
-                  {show(g.saved)} de {show(g.target)}
-                  {g.deadline ? ` · até ${g.deadline.split("-").reverse().join("/")}` : ""}
-                </Muted>
-              </View>
-              <IconButton
-                name="edit-2"
-                label={`Editar meta ${g.name}`}
-                onPress={() =>
-                  nav.push({ name: "form", kind: "goal", initial: { ...g, target: toInput(g.target) } })
-                }
-              />
-            </View>
-            <View style={{ marginVertical: 14 }}>
-              <Progress value={g.saved} max={g.target} color={g.saved >= g.target ? c.green : undefined} />
-            </View>
+            {header(g)}
             <View style={{ gap: 8 }}>
               <Button title="Guardar dinheiro" icon="plus" onPress={() => nav.push({ name: "form", kind: "deposit", initial: { goalId: g.id } })} />
               {g.saved > 0 && (
-                <Button
-                  title="Retirar"
-                  secondary
-                  icon="minus"
-                  onPress={() => nav.push({ name: "form", kind: "withdraw", initial: { goalId: g.id } })}
-                />
+                <Button title="Retirar" secondary icon="minus" onPress={() => nav.push({ name: "form", kind: "withdraw", initial: { goalId: g.id } })} />
               )}
-              {g.saved > 0 && state.goals.length > 1 && (
+              {g.saved > 0 && boxes.length > 1 && (
                 <Button
                   title="Transferir para outra caixinha"
                   secondary
@@ -305,45 +355,72 @@ export function GoalsScreen() {
                     nav.push({
                       name: "form",
                       kind: "reserveTransfer",
-                      initial: { goalId: g.id, destinationGoalId: state.goals.find((x: any) => x.id !== g.id)?.id || "" },
+                      initial: { goalId: g.id, destinationGoalId: boxes.find((x: any) => x.id !== g.id)?.id || "" },
                     })
                   }
                 />
               )}
             </View>
-            {!!g.history?.length && (
-              <Muted style={{ marginTop: 12 }}>
-                {g.history
-                  .slice(-5)
-                  .map(
-                    (h: any) =>
-                      `${h.date.split("-").reverse().join("/")} · ${h.type === "deposit" ? "Depósito" : "Retirada"} · ${show(h.amount)}`,
-                  )
-                  .join("\n")}
-              </Muted>
+            {report.length > 0 && (
+              <View style={{ marginTop: 12, gap: 2 }}>
+                <Muted style={{ fontFamily: "SoraSemi" }}>Movimento por mês</Muted>
+                {report.map((r: any) => (
+                  <Muted key={r.month}>
+                    {r.month.split("-").reverse().join("/")} · guardou {show(r.deposits)} · retirou {show(r.withdrawals)}
+                  </Muted>
+                ))}
+              </View>
             )}
-            <Button
-              title="Excluir e liberar reserva"
-              danger
-              onPress={() =>
-                confirm(
-                  "Excluir meta e liberar reserva?",
-                  "Os valores reservados voltam a ficar disponíveis nas contas. O saldo total não muda.",
-                  () => perform((s: any) => ({ ...s, goals: s.goals.filter((x: any) => x.id !== g.id) })),
-                  "Excluir",
-                )
-              }
-            />
+            <View style={[k.row, { gap: 8, marginTop: 12 }]}>
+              {g.saved === 0 && (
+                <View style={{ flex: 1 }}>
+                  <Button title="Arquivar" secondary icon="archive" onPress={() => perform((s: any) => archiveGoal(s, g.id), "Caixinha arquivada")} />
+                </View>
+              )}
+              <View style={{ flex: 1 }}>
+                <Button title="Excluir" danger onPress={() => remove(g)} />
+              </View>
+            </View>
           </Box>
-        ))
-      ) : (
-        <Empty
-          icon="target"
-          title="Um plano para chegar lá"
-          body="Crie uma reserva ou dê um nome ao seu próximo objetivo."
-          action="Criar meta"
-          onPress={() => nav.push({ name: "form", kind: "goal" })}
-        />
+        );
+      })}
+      <Section title="Metas" />
+      <Muted style={{ marginBottom: 12 }}>Metas acompanham um objetivo sem separar dinheiro.</Muted>
+      {metas.length === 0 && <Muted style={{ marginBottom: 12 }}>Nenhuma meta. Toque em Criar e escolha Meta.</Muted>}
+      {metas.map((g: any) => (
+        <Box key={g.id}>
+          {header(g)}
+          <View style={{ gap: 8 }}>
+            <Button
+              title="Atualizar progresso"
+              icon="trending-up"
+              onPress={() => nav.push({ name: "form", kind: "goalProgress", initial: { goalId: g.id, amount: toInput(g.saved) } })}
+            />
+            <View style={[k.row, { gap: 8 }]}>
+              <View style={{ flex: 1 }}>
+                <Button title="Arquivar" secondary icon="archive" onPress={() => perform((s: any) => archiveGoal(s, g.id), "Meta arquivada")} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button title="Excluir" danger onPress={() => remove(g)} />
+              </View>
+            </View>
+          </View>
+        </Box>
+      ))}
+      {archived.length > 0 && (
+        <>
+          <Section title={`Arquivadas (${archived.length})`} action={showArchived ? "Ocultar" : "Mostrar"} onPress={() => setShowArchived(!showArchived)} />
+          {showArchived &&
+            archived.map((g: any) => (
+              <Box key={g.id} style={[k.row, { justifyContent: "space-between" }]}>
+                <View style={{ flex: 1 }}>
+                  <T>{g.name}</T>
+                  <Muted>{isBox(g) ? "Caixinha" : "Meta"} · {show(g.saved)} de {show(g.target)}</Muted>
+                </View>
+                <Button title="Restaurar" secondary onPress={() => perform((s: any) => archiveGoal(s, g.id, false), "Restaurada")} />
+              </Box>
+            ))}
+        </>
       )}
     </>
   );

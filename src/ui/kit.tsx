@@ -1,6 +1,6 @@
 // Componentes de interface em escopo de módulo: nunca são recriados a cada render,
 // então campos de texto não perdem o foco enquanto o usuário digita.
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { useTheme } from "./theme";
+import { evaluate, hasOperator, toAmountText } from "../calc.mjs";
 
 export type Icon = React.ComponentProps<typeof Feather>["name"];
 
@@ -537,6 +538,18 @@ export function AmountField({
   label?: string;
 }) {
   const { c } = useTheme();
+  // L1: teclado de cálculo. A conta fica visível; o valor do formulário recebe o resultado.
+  const [pad, setPad] = useState(false);
+  const [expr, setExpr] = useState("");
+  const press = (key: string) => {
+    const next = key === "C" ? "" : key === "⌫" ? expr.slice(0, -1) : key === "=" ? expr : expr + key;
+    const result = evaluate(next);
+    const shown = key === "=" && result != null && result > 0 ? toAmountText(result) : next;
+    setExpr(shown);
+    if (result != null && result > 0) onChange(toAmountText(result));
+    else if (!next) onChange("");
+  };
+  const preview = pad && hasOperator(expr) ? evaluate(expr) : null;
   return (
     <View style={[styles.amountBox, { backgroundColor: c.surface }]}>
       <Muted>{label}</Muted>
@@ -552,7 +565,8 @@ export function AmountField({
         </T>
         <TextInput
           accessibilityLabel={`${label} em reais`}
-          value={value}
+          value={pad ? expr : value}
+          editable={!pad}
           onChangeText={onChange}
           placeholder="0,00"
           placeholderTextColor={c.muted}
@@ -567,7 +581,48 @@ export function AmountField({
             paddingVertical: space.xs,
           }}
         />
+        <IconButton
+          name={pad ? "x" : "divide"}
+          label={pad ? "Fechar calculadora" : "Abrir calculadora"}
+          onPress={() => {
+            if (!pad) setExpr(value);
+            setPad(!pad);
+          }}
+        />
       </View>
+      {pad && (
+        <>
+          <Muted accessibilityLiveRegion="polite" style={{ minHeight: 18 }}>
+            {preview != null ? "= R$ " + toAmountText(preview) : hasOperator(expr) ? "Conta incompleta" : " "}
+          </Muted>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+            {["7", "8", "9", "÷", "4", "5", "6", "×", "1", "2", "3", "−", ",", "0", "⌫", "+", "C", "="].map((key) => {
+              const op = "÷×−+=".includes(key);
+              const names: Record<string, string> = { "÷": "dividir", "×": "multiplicar", "−": "menos", "+": "mais", "⌫": "apagar", C: "limpar", "=": "igual", ",": "vírgula" };
+              return (
+                <Pressable
+                  key={key}
+                  accessibilityRole="button"
+                  accessibilityLabel={names[key] || key}
+                  onPress={() => press(key)}
+                  android_ripple={{ color: c.soft }}
+                  style={{
+                    width: key === "=" ? "48%" : "22.6%",
+                    flexGrow: key === "=" ? 1 : 0,
+                    minHeight: 48,
+                    borderRadius: 14,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: key === "=" ? c.primary : op ? c.soft : c.bg,
+                  }}
+                >
+                  <T style={{ fontSize: 20, fontFamily: "SoraSemi", color: key === "=" ? c.onPrimary : op ? c.primary : c.text }}>{key}</T>
+                </Pressable>
+              );
+            })}
+          </View>
+        </>
+      )}
     </View>
   );
 }

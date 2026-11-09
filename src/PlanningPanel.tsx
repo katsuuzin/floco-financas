@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
+import { ICONS, PALETTE, lookOf, setCategoryLook, setTagColor, tagColor } from "./looks.mjs";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import {
@@ -235,6 +236,54 @@ function Options({ c, label, values, value, onChange, multiple = false }: any) {
     </View>
   );
 }
+// O4/O5: escolha de cor (e ícone, para categorias). Cada opção tem nome falado.
+function LookPicker({ c, icon, color, withIcon, onIcon, onColor }: any) {
+  return (
+    <View style={{ gap: 10, marginTop: 6 }}>
+      <Text style={{ color: c.muted, fontSize: 13 }}>Cor</Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+        {PALETTE.map((p: string, i: number) => (
+          <Pressable
+            key={p}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: p === color }}
+            accessibilityLabel={`Cor ${i + 1}`}
+            onPress={() => onColor(p)}
+            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: p, alignItems: "center", justifyContent: "center", borderWidth: p === color ? 3 : 0, borderColor: c.text }}
+          >
+            {p === color && <Feather name="check" size={18} color="#311E0D" />}
+          </Pressable>
+        ))}
+      </View>
+      {withIcon && (
+        <>
+          <Text style={{ color: c.muted, fontSize: 13 }}>Ícone</Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {ICONS.map((n: string) => (
+              <Pressable
+                key={n}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: n === icon }}
+                accessibilityLabel={`Ícone ${n}`}
+                onPress={() => onIcon(n)}
+                style={{ width: 48, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: n === icon ? color : c.bg }}
+              >
+                <Feather name={n as any} size={20} color={n === icon ? "#311E0D" : c.text} />
+              </Pressable>
+            ))}
+          </View>
+        </>
+      )}
+    </View>
+  );
+}
+function LookBadge({ icon, color }: any) {
+  return (
+    <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: color, alignItems: "center", justifyContent: "center" }} importantForAccessibility="no">
+      <Feather name={icon} size={18} color="#311E0D" />
+    </View>
+  );
+}
 function Card({ c, children }: any) {
   return (
     <View
@@ -377,8 +426,17 @@ export default function PlanningPanel({
       const f = form;
       let change: any;
       if (f.kind === "category" || f.kind === "tag")
+        change = (s: any) => {
+          let n = saveLabel(s, f.kind === "tag" ? "tags" : "customCategories", f);
+          const name = f.name.trim();
+          if (f.kind === "category" && (f.lookIcon || f.lookColor))
+            n = setCategoryLook(n, name, { ...(f.lookIcon ? { icon: f.lookIcon } : {}), ...(f.lookColor ? { color: f.lookColor } : {}) });
+          if (f.kind === "tag" && f.lookColor) n = setTagColor(n, n.tags.find((t: any) => t.name === name).id, f.lookColor);
+          return n;
+        };
+      if (f.kind === "categoryLook")
         change = (s: any) =>
-          saveLabel(s, f.kind === "tag" ? "tags" : "customCategories", f);
+          setCategoryLook(s, f.name, { ...(f.lookIcon ? { icon: f.lookIcon } : {}), ...(f.lookColor ? { color: f.lookColor } : {}) });
       if (f.kind === "recurrence") {
         const amount = parseMoney(f.amount);
         change = (s: any) => saveRecurrence(s, { ...f, amount });
@@ -496,7 +554,7 @@ export default function PlanningPanel({
               <Feather name="arrow-left" size={24} color={c.text} />
             </Pressable>
             <Txt c={c} bold style={{ fontSize: 19, flex: 1 }}>
-              {form ? "Novo registro" : heading}
+              {form ? (form.kind === "categoryLook" ? "Ícone e cor" : form.id ? "Editar registro" : "Novo registro") : heading}
             </Txt>
           </View>
           <ScrollView
@@ -517,8 +575,31 @@ export default function PlanningPanel({
             )}
             {form ? (
               <>
+                {form.kind === "categoryLook" && (
+                  <>
+                    <Txt c={c} bold>
+                      {form.name}
+                    </Txt>
+                    <LookPicker
+                      c={c}
+                      withIcon
+                      icon={form.lookIcon || lookOf(s, form.name).icon}
+                      color={form.lookColor || lookOf(s, form.name).color}
+                      onIcon={(v: string) => setForm({ ...form, lookIcon: v })}
+                      onColor={(v: string) => setForm({ ...form, lookColor: v })}
+                    />
+                  </>
+                )}
                 {(form.kind === "category" || form.kind === "tag") && (
                   <>
+                    <LookPicker
+                      c={c}
+                      withIcon={form.kind === "category"}
+                      icon={form.lookIcon || lookOf(s, form.name).icon}
+                      color={form.lookColor || (form.kind === "tag" ? tagColor(form) : lookOf(s, form.name).color)}
+                      onIcon={(v: string) => setForm({ ...form, lookIcon: v })}
+                      onColor={(v: string) => setForm({ ...form, lookColor: v })}
+                    />
                     {field(
                       "name",
                       form.kind === "tag" ? "Nome da tag" : "Nome da categoria",
@@ -658,10 +739,22 @@ export default function PlanningPanel({
                           Categorias iniciais
                         </Txt>
                         <Txt c={c} muted>
-                          {categoryNames({ ...s, customCategories: [] }).join(
-                            " · ",
-                          )}
+                          Toque para escolher ícone e cor.
                         </Txt>
+                        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                          {categoryNames({ ...s, customCategories: [] }).map((n: string) => (
+                            <Pressable
+                              key={n}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Ícone e cor de ${n}`}
+                              onPress={() => open("categoryLook", { name: n })}
+                              style={{ flexDirection: "row", alignItems: "center", gap: 8, minHeight: 48, paddingRight: 12, paddingLeft: 6, borderRadius: 16, backgroundColor: c.bg }}
+                            >
+                              <LookBadge {...lookOf(s, n)} />
+                              <Text style={{ color: c.text, fontSize: 14 }}>{n}</Text>
+                            </Pressable>
+                          ))}
+                        </View>
                       </Card>
                     )}
                     {!(s[labelList] || []).length && (
@@ -671,9 +764,12 @@ export default function PlanningPanel({
                     )}
                     {(s[labelList] || []).map((r: any) => (
                       <Card key={r.id} c={c}>
-                        <Txt c={c} bold>
-                          {r.name}
-                        </Txt>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                          <LookBadge {...(page === "tags" ? { icon: "hash", color: tagColor(r) } : lookOf(s, r.name))} />
+                          <Txt c={c} bold>
+                            {page === "tags" ? "#" + r.name : r.name}
+                          </Txt>
+                        </View>
                         {!!r.parent && (
                           <Txt c={c} muted>
                             Subcategoria de {r.parent}

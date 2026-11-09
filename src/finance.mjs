@@ -301,6 +301,9 @@ export function contribute(state, goalId, amount, accountId, date = today()) {
     !state.accounts.some((a) => a.id === accountId)
   )
     throw Error("Confira a meta, a conta e o valor.");
+  if (goal.kind === "goal")
+    throw Error("Esta meta não reserva dinheiro em conta. Use Atualizar progresso.");
+  if (goal.archived) throw Error("Caixinha arquivada. Restaure-a para guardar dinheiro.");
   if (balance(state, accountId) - reserved(state, accountId) < amount)
     throw Error(
       "O saldo disponível da conta é insuficiente para reservar esse valor.",
@@ -501,6 +504,7 @@ export function validateBackup(value) {
     "financings",
     "customCategories",
     "tags",
+    "trash",
   ]) {
     if (value[key] === undefined) value[key] = [];
     if (!Array.isArray(value[key]) || value[key].length > 100000)
@@ -605,7 +609,10 @@ export function validateBackup(value) {
           !isDate(d.date) ||
           !value.accounts.some((a) => a.id === d.accountId),
       ) ||
-      g.saved !== g.deposits.reduce((n, d) => n + d.amount, 0)
+      // Caixinha: o guardado é a soma dos depósitos. Meta sem conta: progresso manual, sem depósitos.
+      (g.kind === "goal"
+        ? g.deposits.length > 0
+        : g.saved !== g.deposits.reduce((n, d) => n + d.amount, 0))
     )
       throw Error("Meta inválida.");
   const positive = (n) => integer(n) && n > 0 && n <= 99999999999;
@@ -735,4 +742,18 @@ export function validateBackup(value) {
       biometric: false,
     },
   };
+}
+
+// O1: move um item ativo (não arquivado) uma posição para cima (-1) ou para baixo (+1).
+// Itens arquivados mantêm o lugar; a ordem do array é a ordem exibida e gravada.
+export function moveItem(list, id, delta) {
+  const active = list.filter((x) => !x.archived);
+  const from = active.findIndex((x) => x.id === id);
+  const to = from + delta;
+  if (from < 0 || to < 0 || to >= active.length) return list;
+  const a = list.indexOf(active[from]);
+  const b = list.indexOf(active[to]);
+  const next = [...list];
+  [next[a], next[b]] = [next[b], next[a]];
+  return next;
 }

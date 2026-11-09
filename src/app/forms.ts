@@ -17,6 +17,7 @@ import { saveContract, changeMethod, payPart, addLateFee, extraAmortization, set
 import { expenseOwed } from "../commitments.mjs";
 import { saveBudget } from "../analysis.mjs";
 import { bankProfile } from "../banks.mjs";
+import { setGoalProgress } from "../goals.mjs";
 
 export const toInput = (cents: number) => (cents / 100).toFixed(2).replace(".", ",");
 const optionalMoney = (text: string) =>
@@ -41,7 +42,8 @@ export const formTitles: Record<string, (f: any) => string> = {
   account: (f) => (f.id ? "Editar conta" : "Nova conta"),
   card: (f) => (f.id ? "Editar cartão" : "Novo cartão"),
   budget: (f) => (f.id ? "Editar orçamento" : "Novo orçamento"),
-  goal: (f) => (f.id ? "Editar meta" : "Nova meta"),
+  goal: (f) => (f.id ? (f.goalKind === "goal" ? "Editar meta" : "Editar caixinha") : "Nova meta ou caixinha"),
+  goalProgress: () => "Atualizar progresso",
   deposit: () => "Guardar dinheiro",
   withdraw: () => "Retirar reserva",
   reserveTransfer: () => "Transferir reserva",
@@ -198,9 +200,12 @@ export function buildChange(f: any, month: string): (s: any) => any {
           name: f.name.trim(),
           target: parseMoney(f.target),
           deadline: f.deadline || "",
+          ...(prev ? {} : { kind: f.goalKind === "goal" ? "goal" : "box" }),
         };
         return { ...s, goals: prev ? s.goals.map((g: any) => (g.id === f.id ? row : g)) : [...s.goals, row] };
       }
+      case "goalProgress":
+        return setGoalProgress(s, f.goalId, f.amount);
       case "deposit":
         return contribute(s, f.goalId, parseMoney(f.amount), f.accountId, f.date);
       case "withdraw":

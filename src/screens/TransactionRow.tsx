@@ -4,7 +4,9 @@ import { T, Muted, I, styles as k } from "../ui/kit";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
-import { money, deleteTransaction } from "../finance.mjs";
+import { money } from "../finance.mjs";
+import { trashTransaction } from "../trash.mjs";
+import { lookOf } from "../looks.mjs";
 import { toInput } from "../app/forms";
 import { displayOf } from "./PersonalizeScreens";
 
@@ -48,14 +50,10 @@ export default function TransactionRow({ t, withDate = false, last = false }: { 
       }),
       t.confirmed ? "Marcado como pendente" : "Confirmado",
     );
-  const options = () =>
-    Alert.alert(
-      t.description,
-      `${money(t.amount)} · ${br(t.date)}${t.time ? " " + t.time : ""}\n${t.category || "Outros"}${
-        t.installments > 1 ? ` · ${t.installment}/${t.installments}` : ""
-      }${t.notes ? "\n\n" + t.notes : ""}`,
-      [
-        { text: "Fechar", style: "cancel" },
+  // O alerta do Android mostra no máximo 3 botões. Com 3 ações, "Fechar" sai e o
+  // alerta fecha ao tocar fora ou pelo voltar.
+  const options = () => {
+    const actions: any[] = [
         ...(t.loanSettlement
           ? [{ text: "Ver dívida e recebimentos", onPress: () => nav.push({ name: "tool", id: "receivables" }) }]
           : []),
@@ -82,16 +80,24 @@ export default function TransactionRow({ t, withDate = false, last = false }: { 
                   confirm(
                     "Excluir lançamento?",
                     t.installments > 1
-                      ? "Todas as parcelas desta compra serão excluídas."
-                      : "Esta ação remove o lançamento e recalcula o saldo.",
-                    () => perform((s: any) => deleteTransaction(s, t.id), "Lançamento excluído"),
+                      ? "Todas as parcelas desta compra vão para a lixeira. Dá para restaurar por 30 dias."
+                      : "O lançamento vai para a lixeira e o saldo é recalculado. Dá para restaurar por 30 dias.",
+                    () => perform((s: any) => trashTransaction(s, t.id), "Lançamento movido para a lixeira"),
                     "Excluir",
                   ),
               },
             ]
           : []),
-      ],
+    ];
+    Alert.alert(
+      t.description,
+      `${money(t.amount)} · ${br(t.date)}${t.time ? " " + t.time : ""}\n${t.category || "Outros"}${
+        t.installments > 1 ? ` · ${t.installment}/${t.installments}` : ""
+      }${t.notes ? "\n\n" + t.notes : ""}`,
+      actions.length >= 3 ? actions : [{ text: "Fechar", style: "cancel" }, ...actions],
+      { cancelable: true },
     );
+  };
   const income = t.type === "income" || t.refund;
   const d = displayOf(state);
   const shortDate = new Date(t.date + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", "");
@@ -114,13 +120,15 @@ export default function TransactionRow({ t, withDate = false, last = false }: { 
       android_ripple={{ color: c.soft }}
       style={({ pressed }) => [row.tx, !last && k.hairline, { borderBottomColor: c.line, backgroundColor: pressed ? c.soft : "transparent" }]}
     >
-      <View style={[row.icon, { backgroundColor: income ? c.soft : c.bg }]} importantForAccessibility="no">
-        <I
-          name={t.type === "transfer" ? "repeat" : income ? "arrow-down-left" : t.cardId ? "credit-card" : "arrow-up-right"}
-          size={18}
-          color={income ? c.green : c.primary}
-        />
-      </View>
+      {t.type === "transfer" ? (
+        <View style={[row.icon, { backgroundColor: c.bg }]} importantForAccessibility="no">
+          <I name="repeat" size={18} color={c.primary} />
+        </View>
+      ) : (
+        <View style={[row.icon, { backgroundColor: lookOf(state, t.category || "Outros").color }]} importantForAccessibility="no">
+          <I name={lookOf(state, t.category || "Outros").icon as any} size={18} color="#311E0D" />
+        </View>
+      )}
       <View style={{ flex: 1, gap: 2 }}>
         <T numberOfLines={1} style={{ fontFamily: "SoraSemi", fontSize: 14 }}>
           {t.description}

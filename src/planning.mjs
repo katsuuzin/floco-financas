@@ -1,3 +1,4 @@
+import { renameLook } from "./looks.mjs";
 import {
   uid,
   today,
@@ -97,6 +98,7 @@ export function saveLabel(s, list, input) {
       next.customCategories = next.customCategories.map((c) =>
         c.parent === previous.name ? { ...c, parent: name } : c,
       );
+      next = renameLook(next, previous.name, name);
     } // Tags are stored by stable ID, so renaming preserves every link.
   }
   return next;

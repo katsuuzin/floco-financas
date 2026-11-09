@@ -37,6 +37,7 @@ export type Route =
   | { name: "notifications" }
   | { name: "security" }
   | { name: "updates" }
+  | { name: "trash" }
   | { name: "form"; kind: string; initial?: any };
 
 type Nav = {

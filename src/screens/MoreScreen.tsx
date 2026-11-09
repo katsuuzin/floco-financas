@@ -106,6 +106,12 @@ const groups: [string, Item[]][] = [
         icon: "bell",
         route: { name: "notifications" },
       },
+      {
+        label: "Lixeira",
+        icon: "trash-2",
+        detail: "Lançamentos excluídos nos últimos 30 dias",
+        route: { name: "trash" },
+      },
     ],
   ],
 ];

@@ -49,6 +49,7 @@ import {
   ProjectionsScreen,
 } from "./src/screens/ReportScreens";
 import { RulesScreen, ReconcileScreen } from "./src/screens/ToolScreens";
+import TrashScreen from "./src/screens/TrashScreen";
 import RemindersScreen from "./src/screens/RemindersScreen";
 import AssistantScreen from "./src/screens/AssistantScreen";
 import {
@@ -278,6 +279,7 @@ const TITLES: Record<string, string> = {
   preferences: "Preferências",
   welcome: "Boas-vindas",
   reconcile: "Conferir fatura",
+  trash: "Lixeira",
 };
 const REPORT_TITLES: Record<string, string> = {
   cashflow: "Fluxo de caixa",
@@ -554,6 +556,8 @@ function renderRoute(r: Route) {
       return <WelcomeScreen />;
     case "reconcile":
       return <ReconcileScreen />;
+    case "trash":
+      return <TrashScreen />;
     case "form":
       return <FormScreen kind={r.kind} initial={r.initial} />;
   }
