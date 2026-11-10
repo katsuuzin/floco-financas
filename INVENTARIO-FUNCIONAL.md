@@ -18,7 +18,7 @@ As colunas "Floco" das tabelas abaixo guardam o diagnóstico da F1. Esta tabela 
 | ✅ Feito (auditoria 9/11) | **A3**: Análise no padrão do Calen em cinco abas (Resumo, Categorias, Tipos, Fluxo, Mais), cores do Calen com amarelo Solar nos dois temas, 161 ícones do Calen nas categorias, tipo de gasto com metas (ficha A3) |
 | ✅ Feito (auditoria 9/11) | **A2**: Análise com calendário de gastos (entrada, saída, saldo realizado/previsto, folha do dia) e rosca de categorias (despesa/receita, ocultar do gráfico). Nova dependência `react-native-svg`. Ficha A2 traz as próximas funções do Calen por prioridade |
 | ✅ Feito (auditoria 9/11) | **C1**: categorias com subcategorias (catálogo do Kontto, migração, seletor Categoria › Sub), pendentes só com setas e folha de confirmação compacta (ficha C1) |
-| ✅ Feito (auditoria 9/11) | **F4a**: confirmação de notificação com rendimentos, opção "Não registrar compras negadas" e selos de banco (ficha F4a; faltam tipos e palavras ignoradas por banco) |
+| ✅ Feito (auditoria 9/11) | **F4a**: conta PF ou PJ escolhida pelo texto do aviso (Nu Empresas → Nubank PJ, Inter Empresas → Inter PJ, CNPJ/MEI → PJ); confirmação de notificação com rendimentos, opção "Não registrar compras negadas" e selos de banco (ficha F4a; faltam tipos e palavras ignoradas por banco) |
 | 🟡 Parcial (auditoria 9/11) | **P3a**: rendimento feito; faltam reserva de emergência, limite garantido e "já guardado" na criação |
 | 🟡 Parcial (auditoria 9/11) | **D1a**: abatimento, histórico e prévia feitos; faltam editar contrato (reagendar, mudar total) e PDF |
 | 🟡 Parcial (auditoria 9/11) | **P2a**: depósitos, previsão e concluir feitos; falta transformar em caixinha |

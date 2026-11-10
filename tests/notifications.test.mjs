@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { emptyState, balance, validateBackup } from "../src/finance.mjs";
-import { suggestNotification, importNotification, draftFromNotification, dedupeInbox, isDenied } from "../src/notification-import.mjs";
+import { suggestNotification, importNotification, draftFromNotification, dedupeInbox, isDenied, holderHint } from "../src/notification-import.mjs";
 import { bankLook, notifySettings } from "../src/bankCatalog.mjs";
 
 const at = new Date("2026-11-07T00:36:00").getTime();
@@ -188,4 +188,31 @@ test("sem nome do outro lado, a descrição é o tipo (não o título com valor)
   assert.equal(s.kind, "pixOut");
   assert.equal(s.description, "Pix enviado");
   assert.equal(suggestNotification({ id: "q", bank: "Nubank", title: "Compra aprovada", text: "Compra de R$ 4,30 APROVADA em PISTA 4 para o cartão com final 5179.", postedAt: at }).description, "PISTA 4");
+});
+
+test("conta PF ou PJ pelo texto do aviso: Nu Empresas vai para a conta PJ do Nubank", () => {
+  const s = {
+    ...emptyState(),
+    accounts: [
+      { id: "pf", name: "Conta Nubank", institution: "Nubank", holderType: "PF", initial: 0, includeInTotal: true },
+      { id: "pj", name: "Nubank PJ", institution: "Nubank", initial: 0, includeInTotal: true },
+      { id: "ipj", name: "Inter", institution: "Inter", holderType: "PJ", initial: 0, includeInTotal: true },
+      { id: "ipf", name: "Inter", institution: "Inter", holderType: "PF", initial: 0, includeInTotal: true },
+    ],
+    cards: [],
+  };
+  const row = (bank, text) => ({ id: "x", bank, title: "Pix", text, postedAt: at });
+  const pick = (r) => draftFromNotification(s, r).accountId;
+  assert.equal(pick(row("Nubank", "Você recebeu R$ 22,50 de MARIA na conta Nu Empresas.")), "pj");
+  assert.equal(pick(row("Nubank", "Você recebeu R$ 22,50 de MARIA.")), "pf");
+  assert.equal(pick(row("SMS · NUBANK", "Pix de R$ 10,00 recebido na sua conta PJ.")), "pj");
+  assert.equal(pick(row("Inter", "Pix recebido de R$ 50,00 na conta Inter Empresas")), "ipj");
+  assert.equal(pick(row("Inter", "Pix recebido de R$ 50,00 no CPF")), "ipf");
+  assert.equal(holderHint("Compra aprovada no cartão MEI"), "PJ");
+  assert.equal(holderHint("Compra aprovada"), "");
+});
+
+test("nome de quem pagou não leva o 'na conta Nu Empresas' junto", () => {
+  const s = suggestNotification({ id: "n", bank: "Nubank", title: "Pix", text: "Você recebeu R$ 22,50 de MARIA SOUZA na conta Nu Empresas.", postedAt: at });
+  assert.equal(s.description, "MARIA SOUZA");
 });

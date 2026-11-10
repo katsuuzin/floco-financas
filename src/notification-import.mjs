@@ -68,7 +68,7 @@ function counterpart(content, kind) {
   }
   const patterns =
     INCOME_KINDS.includes(kind)
-      ? [/\b(?:de|por)\s+(?!R\$)([A-ZÀ-Ú][^.\n]{2,60}?)(?:\s+(?:no valor|via|com|em)\b|[.\n]|$)/i, /recebeu[^.]*?de\s+([^.\n]{3,60})/i]
+      ? [/\b(?:de|por)\s+(?!R\$)([A-ZÀ-Ú][^.\n]{2,60}?)(?:\s+(?:no valor|via|com|em|na|no|pela|pelo)\b|[.\n]|$)/i, /recebeu[^.]*?de\s+([^.\n]{3,60})/i]
       : [
           /\bem\s+([A-Z0-9*][^.\n]{2,60}?)(?:\s+(?:para o cart|no cart|com o cart|foi)|[.\n]|$)/,
           /para\s+([A-ZÀ-Ú0-9][^.\n]{2,60}?)(?:\s+(?:no valor|via|com|foi)\b|[.\n]|$)/i,
@@ -111,21 +111,46 @@ export function suggestNotification(row) {
 
 export const isDenied = (row) => suggestNotification(row).kind === "denied";
 
-// Sugere conta e cartão pelo banco da notificação e pelo final do cartão.
+// Conta de empresa ou pessoal pelo texto do aviso: "na conta Nu Empresas", "Inter Empresas",
+// "conta PJ", "CNPJ", "MEI" apontam para PJ; "conta pessoal", "CPF" apontam para PF.
+const PJ_HINT = /\bnu\s*empresas?\b|\bempresas?\b|\bempresarial\b|\bpj\b|\bcnpj\b|\bmei\b|\bbusiness\b/i;
+const PF_HINT = /\bconta pessoal\b|\bpessoa f[ií]sica\b|\bcpf\b|\bpf\b/i;
+export function holderHint(text) {
+  const t = String(text || "");
+  if (PJ_HINT.test(t)) return "PJ";
+  if (PF_HINT.test(t)) return "PF";
+  return "";
+}
+// Conta (ou cartão) de empresa: marcada como PJ ou com PJ/Empresa/MEI/CNPJ no nome.
+export const isBusiness = (x) => (x.holderType || "") === "PJ" || /\bpj\b|empresa|\bmei\b|\bcnpj\b/i.test(`${x.name || ""} ${x.institution || ""}`);
+
+// Sugere conta e cartão pelo banco da notificação, pelo final do cartão e por PF/PJ no texto.
 export function guessTargets(s, row, suggestion) {
   const bank = String(row.bank || "").toLowerCase().replace(/^sms · /, "");
   const has = (x) => {
     const hay = `${x.name} ${x.institution || ""}`.toLowerCase();
     return bank && (hay.includes(bank) || bank.includes(x.name.toLowerCase()));
   };
+  const hint = holderHint(`${row.title || ""} ${row.text || ""}`);
+  const wantPJ = hint === "PJ";
+  const fits = (x) => isBusiness(x) === wantPJ;
   const cards = s.cards.filter((c) => !c.archived);
   const card =
-    (suggestion.lastFour && cards.find((c) => c.lastFour === suggestion.lastFour)) || cards.find(has) || null;
+    (suggestion.lastFour && cards.find((c) => c.lastFour === suggestion.lastFour)) ||
+    cards.find((c) => has(c) && fits(c)) ||
+    cards.find(has) ||
+    null;
   const accounts = s.accounts.filter((a) => !a.archived);
-  const account = accounts.find((a) => has(a) && (a.holderType || "PF") === "PF") || accounts.find(has) || accounts[0] || null;
+  const account =
+    accounts.find((a) => has(a) && fits(a)) ||
+    (wantPJ ? accounts.find((a) => isBusiness(a)) : null) ||
+    accounts.find(has) ||
+    accounts[0] ||
+    null;
   return {
     cardId: suggestion.kind === "card" && card ? card.id : "",
     accountId: account?.id || "",
+    holder: hint,
   };
 }
 
