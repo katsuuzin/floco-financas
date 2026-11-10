@@ -29,6 +29,7 @@ const groups: [string, Item[]][] = [
     [
       { label: "Orçamento", icon: "pie-chart", route: { name: "budgets" } },
       { label: "Metas e caixinhas", icon: "target", route: { name: "goals" } },
+      { label: "Lista de compras", icon: "shopping-cart", route: { name: "shopping" } },
       {
         label: "Projeções",
         icon: "trending-up",

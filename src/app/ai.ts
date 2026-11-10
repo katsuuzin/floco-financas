@@ -3,6 +3,8 @@ import { requestAI } from "../ai-client.mjs";
 // Assistente opcional com a chave do próprio usuário. A chave fica no SecureStore;
 // o pedido vai direto do aparelho ao provedor, com um resumo agregado (sem descrições).
 import * as SecureStore from "expo-secure-store";
+import { requestShoppingSuggestions } from "../shopping-ai-client.mjs";
+import { cleanModel } from "../ai-model.mjs";
 
 export type Provider = "gemini" | "openai" | "openrouter" | "anthropic";
 export const PROVIDERS: Record<
@@ -11,8 +13,8 @@ export const PROVIDERS: Record<
 > = {
   gemini: {
     label: "Gemini (Google)",
-    model: "gemini-2.5-flash",
-    hint: "Tem nível gratuito. Crie a chave no Google AI Studio.",
+    model: "gemini-3.5-flash-lite",
+    hint: "Crie sua chave de API no Google AI Studio.",
   },
   openai: {
     label: "OpenAI",
@@ -35,6 +37,25 @@ const keys = createAIKeyStore(SecureStore);
 export const getKey = (provider: Provider = "gemini") => keys.getKey(provider);
 export const setKey = (value: string, provider: Provider = "gemini") =>
   keys.setKey(value, provider);
+
+export function shoppingAIConfig(config?: { provider?: unknown; model?: unknown }) {
+  const provider = config?.provider ?? "gemini";
+  if (typeof provider !== "string" || !Object.hasOwn(PROVIDERS, provider)) return null;
+  return {
+    provider: provider as Provider,
+    model: cleanModel(config?.model),
+  };
+}
+
+export async function interpretShoppingText(
+  cfg: { provider: Provider; model: string },
+  text: string,
+  signal: AbortSignal,
+) {
+  const key = await getKey(cfg.provider);
+  if (!key || signal.aborted) return null;
+  return requestShoppingSuggestions(cfg, text, key, PROVIDERS, signal);
+}
 export async function ask(
   cfg: { provider: Provider; model?: string },
   context: string,

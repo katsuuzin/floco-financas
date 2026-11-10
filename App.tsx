@@ -51,6 +51,10 @@ import {
 } from "./src/screens/ReportScreens";
 import { RulesScreen, ReconcileScreen } from "./src/screens/ToolScreens";
 import TrashScreen from "./src/screens/TrashScreen";
+import ShoppingScreen, { ShoppingAddBar } from "./src/screens/ShoppingScreen";
+import ScanNotaScreen from "./src/screens/ScanNotaScreen";
+import NfceConsultaScreen from "./src/screens/NfceConsultaScreen";
+import { PurchasesScreen, PurchaseDetailScreen, ProductDetailScreen } from "./src/screens/PurchasesScreens";
 import RemindersScreen from "./src/screens/RemindersScreen";
 import AssistantScreen from "./src/screens/AssistantScreen";
 import {
@@ -281,6 +285,12 @@ const TITLES: Record<string, string> = {
   welcome: "Boas-vindas",
   reconcile: "Conferir fatura",
   trash: "Lixeira",
+  shopping: "Lista de compras",
+  scanNota: "Ler nota fiscal",
+  nfceConsulta: "Consultar nota",
+  purchases: "Histórico de compras",
+  purchaseDetail: "Compra",
+  productDetail: "Produto",
 };
 const REPORT_TITLES: Record<string, string> = {
   cashflow: "Fluxo de caixa",
@@ -414,7 +424,8 @@ function Shell({
     >
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        // A barra de adicionar da lista fica fora da rolagem: sem isso o teclado a cobre no Android.
+        behavior={Platform.OS === "ios" || top?.name === "shopping" || top?.name === "scanNota" ? "padding" : undefined}
       >
         {top?.name !== "form" && (
           <View style={[s.header, { backgroundColor: pageBg }]}>
@@ -480,6 +491,7 @@ function Shell({
           )}
           {content}
         </ScrollView>
+        {top?.name === "shopping" && <ShoppingAddBar autoFocus={top.add} />}
         {!top && (
           <View
             accessibilityRole="tablist"
@@ -575,6 +587,18 @@ function renderRoute(r: Route) {
       return <ReconcileScreen />;
     case "trash":
       return <TrashScreen />;
+    case "shopping":
+      return <ShoppingScreen />;
+    case "scanNota":
+      return <ScanNotaScreen />;
+    case "nfceConsulta":
+      return <NfceConsultaScreen info={r.info} />;
+    case "purchases":
+      return <PurchasesScreen />;
+    case "purchaseDetail":
+      return <PurchaseDetailScreen id={r.id} />;
+    case "productDetail":
+      return <ProductDetailScreen id={r.id} />;
     case "form":
       return <FormScreen kind={r.kind} initial={r.initial} />;
   }

@@ -27,6 +27,7 @@ import {
 } from "../insights.mjs";
 import { monthKey, today } from "../finance.mjs";
 import { ask, getKey, setKey, PROVIDERS, Provider } from "../app/ai";
+import { looksLikeSecret } from "../ai-model.mjs";
 
 export default function AssistantScreen() {
   const { c } = useTheme();
@@ -40,6 +41,7 @@ export default function AssistantScreen() {
   };
   const [hasKey, setHasKey] = useState(false);
   const [keyText, setKeyText] = useState("");
+  const [modelWarning, setModelWarning] = useState("");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [chat, setChat] = useState<
@@ -60,6 +62,13 @@ export default function AssistantScreen() {
       alive = false;
     };
   }, [ai.provider]);
+  // Uma chave colada por engano no campo Modelo ficaria nas configurações (e nos backups): apaga ao abrir.
+  useEffect(() => {
+    if (looksLikeSecret(state.settings.ai?.model)) {
+      void saveAi({ model: "" });
+      setModelWarning("Havia uma chave de API no campo Modelo. Apaguei de lá. Cole a chave só no campo Chave de API.");
+    }
+  }, [state.settings.ai?.model]);
   const h = useMemo(() => healthScore(state), [state]);
   const insights = useMemo(
     () => monthInsights(state, monthKey(today())),
@@ -350,8 +359,16 @@ export default function AssistantScreen() {
           <Muted>{PROVIDERS[ai.provider as Provider].hint}</Muted>
           <Field
             label={`Modelo (padrão: ${PROVIDERS[ai.provider as Provider].model})`}
-            value={ai.model}
-            onChange={(v) => saveAi({ model: v })}
+            value={looksLikeSecret(ai.model) ? "" : ai.model}
+            onChange={(v) => {
+              if (looksLikeSecret(v)) {
+                setModelWarning("Isso parece uma chave de API. Cole-a no campo Chave de API, abaixo. Aqui vai só o nome do modelo.");
+                return;
+              }
+              setModelWarning("");
+              void saveAi({ model: v });
+            }}
+            hint={modelWarning || undefined}
           />
           <Field
             secure

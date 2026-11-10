@@ -13,6 +13,8 @@ export const HOME_BLOCKS = [
   ["installments", "Parcelamentos"],
   ["recurrences", "Recorrências do mês"],
   ["recent", "Despesas recentes"],
+  ["restock", "Já deve estar acabando"],
+  ["shopping", "Lista de compras"],
 ];
 export const DEFAULT_HOME_HIDDEN = ["insights", "goals", "receivables", "installments", "recurrences"];
 
@@ -45,6 +47,7 @@ export const DESTINATIONS = [
   ["cashflow", "Fluxo de caixa", "activity"],
   ["accounts", "Contas", "briefcase"],
   ["cards", "Cartões", "credit-card"],
+  ["shopping", "Lista de compras", "shopping-cart"],
   ["assistant", "Assistente", "message-circle"],
   ["receipt", "Ler comprovante", "camera"],
 ];

@@ -2,6 +2,8 @@ const SYSTEM =
   "Você é o assistente financeiro do app Floco Finanças. Responda em português do Brasil, de forma curta, prática e sem jargão. " +
   "Use apenas os dados do resumo fornecido; se faltar informação, diga o que falta. Não recomende produtos de investimento específicos " +
   "nem dê aconselhamento financeiro profissional; ofereça orientações gerais de organização financeira.";
+import { cleanModel } from "./ai-model.mjs";
+
 export async function requestAI(
   cfg,
   context,
@@ -9,11 +11,16 @@ export async function requestAI(
   key,
   defaults,
   fetcher = fetch,
+  options = {},
 ) {
   if (!key) throw Error("Configure uma chave de API primeiro.");
-  const model = cfg.model?.trim() || defaults[cfg.provider].model;
-  const system = SYSTEM + "\n\nResumo financeiro atual:\n" + context;
+  const model = cleanModel(cfg.model) || defaults[cfg.provider].model;
+  const system = options.system ?? SYSTEM + "\n\nResumo financeiro atual:\n" + context;
   const ctrl = new AbortController();
+  const abort = () => ctrl.abort();
+  const signal = options.signal;
+  if (signal?.aborted) abort();
+  else signal?.addEventListener("abort", abort, { once: true });
   const timer = setTimeout(() => ctrl.abort(), 45000);
   try {
     let res;
@@ -80,6 +87,7 @@ export async function requestAI(
       },
       body: JSON.stringify({
         model,
+        ...(cfg.provider === "openai" && options.store === false ? { store: false } : {}),
         messages: [
           { role: "system", content: system },
           ...messages.map((m) => ({ role: m.role, content: m.text })),
@@ -95,5 +103,6 @@ export async function requestAI(
     throw e;
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener("abort", abort);
   }
 }

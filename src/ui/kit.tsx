@@ -125,17 +125,28 @@ export function Section({
   title,
   action,
   onPress,
+  icon,
 }: {
   title: string;
   action?: string;
   onPress?: () => void;
+  icon?: React.ReactNode; // ícone decorativo antes do título (o título continua sendo o texto lido)
 }) {
   const { c } = useTheme();
   return (
     <View style={styles.section}>
-      <T accessibilityRole="header" style={styles.sectionTitle}>
-        {title}
-      </T>
+      {icon ? (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 1 }}>
+          {icon}
+          <T accessibilityRole="header" style={styles.sectionTitle}>
+            {title}
+          </T>
+        </View>
+      ) : (
+        <T accessibilityRole="header" style={styles.sectionTitle}>
+          {title}
+        </T>
+      )}
       {action && onPress && (
         <Pressable
           accessibilityRole="button"
@@ -231,10 +242,12 @@ export function Field({
   secure = false,
   hint,
   maxLength,
+  onSubmit,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  onSubmit?: () => void;
   numeric?: boolean;
   placeholder?: string;
   autoFocus?: boolean;
@@ -259,6 +272,8 @@ export function Field({
         keyboardType={numeric ? "decimal-pad" : "default"}
         autoFocus={autoFocus}
         multiline={multiline}
+        returnKeyType={onSubmit ? "done" : undefined}
+        onSubmitEditing={onSubmit}
         autoCapitalize={secure ? "none" : "sentences"}
         maxLength={maxLength ?? (numeric ? 16 : multiline ? 2000 : 180)}
         style={[

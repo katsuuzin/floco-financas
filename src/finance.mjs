@@ -1,4 +1,5 @@
 // All monetary values are integer centavos. Dates are local ISO calendar dates.
+import { sanitizeShoppingItems, sanitizePurchases, sanitizeProducts } from "./shoppingData.mjs";
 export const uid = () =>
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 export const today = () => {
@@ -56,6 +57,9 @@ export const emptyState = () => ({
   financings: [],
   customCategories: [],
   tags: [],
+  shoppingItems: [],
+  shoppingPurchases: [],
+  shoppingProducts: [],
   settings: { dark: false, biometric: false, hide: false },
 });
 // Sinal do lançamento no saldo da conta de origem. Estorno de despesa devolve dinheiro.
@@ -509,6 +513,16 @@ export function validateBackup(value) {
   if (!value || value.version !== 1)
     throw Error("Formato de backup incompatível.");
   value = { ...value };
+  // Lista de compras: ausente em backups antigos (quem restaura mantém a lista atual).
+  const shopping = sanitizeShoppingItems(value.shoppingItems);
+  if (shopping === undefined) delete value.shoppingItems;
+  else value.shoppingItems = shopping;
+  const purchases = sanitizePurchases(value.shoppingPurchases);
+  if (purchases === undefined) delete value.shoppingPurchases;
+  else value.shoppingPurchases = purchases;
+  const products = sanitizeProducts(value.shoppingProducts);
+  if (products === undefined) delete value.shoppingProducts;
+  else value.shoppingProducts = products;
   for (const key of [
     "recurrences",
     "receivables",

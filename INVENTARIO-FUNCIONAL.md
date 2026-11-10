@@ -13,6 +13,7 @@ As colunas "Floco" das tabelas abaixo guardam o diagnóstico da F1. Esta tabela 
 | Situação | IDs |
 |---|---|
 | ✅ Feito | N1, N2, N3, L2, L3, L4, L5, L6, L7, L8, L9, L10, L14, O2, O3, P1, P4, P5, P6, A1, A2, D1, D2, D3, R1–R10, F2, F3, F4, F5, F6, F7, F8, S2, S3, S4, S5, S7, S8, S12, H1, H2, H4, **L1** (calculadora no valor), **O6** (ajustar saldo, 9/11), **L12** (calendário no extrato), **L13** (conta/cartão, categoria, tag, faixa de valor e ordem), **O4/O5** (ícone e cor), **P2/P3** (meta × caixinha, arquivar e movimento por mês), **S11** (lixeira de 30 dias), **F1** (PDF do Nubank e PDF genérico com conferência de saldo; testado com textos de exemplo, não com PDFs reais de outros bancos), **S1** (6 cores de destaque), **S10** (4 ícones: Solar, Grafite, Creme, Céu), **W1** (6 widgets: saldo, próximas contas, lançar rápido, botão +, faturas, orçamentos; links testados, aparência na tela inicial não conferida) |
+| ✅ Feito (fora da paridade) | **E1**: lista de compras integrada (bloco na Início, tela própria, backup JSON e criptografado, registrar a compra como despesa). Testada no emulador nos dois temas; TalkBack e celular real não testados. Ver "Extensões do Floco". |
 | 🟡 Parcial | **L11** (o comprovante abre o leitor, não preenche o formulário aberto) · **O1** (reordenar por setas e arquivar; sem arraste nem relatório por conta) · **S6** (extrato e saldo; sem vibração ou teclado) · **S9** (backup criptografado sim; Drive e sincronização não) · **H3** (lembretes entram pelos primeiros passos) |
 | ❌ Não feito | Da auditoria de 9/11 (fichas em `FICHAS-FUNCIONAIS.md`): **H5** (momento de progresso, opcional) |
 | ✅ Feito (auditoria 9/11) | **A3**: Análise no padrão do Calen em cinco abas (Resumo, Categorias, Tipos, Fluxo, Mais), cores do Calen com amarelo Solar nos dois temas, 161 ícones do Calen nas categorias, tipo de gasto com metas (ficha A3) |
@@ -170,6 +171,18 @@ Inventário de rotas com REA: 117 telas, idênticas às do 1.0.82. 83 já tinham
 | S6a | Preferências por grupo | Prévia ao vivo; início do mês personalizado; "quem me deve" no saldo; parcelamento pelo total; cartão no mês de fechamento; orçamento pela fatura; caixinha no +; vibração por aba; moeda só símbolo; formato de data. | 🟡 |
 | H4a | Apresentação | Banco (sem conexão), objetivos múltiplos, primeiro gasto; "já uso, restaurar". | 🟡❔ |
 | H5 | Momento de progresso | Marco com dias de uso, lançamentos e contas quitadas, sem venda. | ❌ opcional |
+
+## Extensões do Floco (fora da paridade com o Kontto)
+
+Funções criadas para o Floco, sem equivalente no Kontto. Origem das ideias: estudo de um app de lista de compras (pasta "02 - app lista de compras"), reescrito aqui com a identidade do Floco, sem marca, mascote, texto ou código do original.
+
+| ID | Função | Comportamento | Floco |
+|---|---|---|---|
+| E1 | Lista de compras | **Lista única** (cada item tem `listId` "main"): adicionar digitando "2 leite" ou "500g farinha", categoria por palavras-chave com ícone Lucide, carrinho, edição de nome/quantidade/preço, excluir com Desfazer, limpar carrinho, compartilhar como texto. **Bloco na Início** (pendentes, estimativa, atalho +, respeita ocultar valores). **Leitor de nota fiscal**: QR pela câmera, foto da galeria ou chave colada; valida a chave de 44 dígitos (módulo 11). **Consulta da nota de SP** pela WebView (host oficial por estado, mensagem da ponte vinculada à página e à nota), leitura dos itens no aparelho com nomes legíveis, salvar a compra, **conferência com a lista** (marca no carrinho e aprende preços) e **registrar como despesa** (formulário normal, nada grava sozinho). **Histórico** de compras e produtos (último, médio, mínimo e máximo, variação, apagar compra) e **"Já deve estar acabando"** (ritmo de compra por produto, na Início e na aba Produtos). **Colar lista** por regras e, opcionalmente, com IA (chave do próprio usuário; só o texto colado é enviado; prévia editável). Tudo no SQLite, dentro do backup JSON e do criptografado. | ✅ 540 testes + 11 defensivos; emulador (dados fictícios e uma nota real de SP): lista, leitor por foto e chave, consulta, conferência, histórico, ritmo e IA com Gemini. **Não testado**: QR ao vivo pela câmera, TalkBack, fonte grande, celular real; PR, SC e RS ainda sem leitura dos itens |
+
+**E1 — Colar lista:** prévia offline e opção de interpretar com o provedor de IA configurado no Assistente. A IA recebe o texto colado quando solicitada. A pessoa revisa e confirma os itens antes de gravar. Requisições verificadas com provedores simulados. A validação da interface e da conexão real no Android está pendente.
+
+**Fora do escopo da E1 (por decisão):** voz, escanear produto/nota, leitura de NFC-e, convidar pessoas e dividir contas, pagamento, mascotes. **Não testado:** TalkBack, fonte grande, restauração de backup no aparelho.
 
 ## Fora do escopo
 

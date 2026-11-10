@@ -10,6 +10,7 @@ import { ACCENTS, accentOf, useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
 import { today, validateBackup, emptyState, demoState } from "../finance.mjs";
+import { keepShoppingOnRestore } from "../shopping.mjs";
 
 export async function exportCSV(state: any) {
   const esc = (v: any) => '"' + String(v ?? "").replace(/"/g, '""') + '"';
@@ -77,7 +78,7 @@ export default function SettingsScreen() {
       confirm(
         "Restaurar backup?",
         `Substituir os dados deste aparelho por ${data.accounts.length} contas e ${data.transactions.length} lançamentos? Faça um backup dos dados atuais antes.`,
-        () => perform(data, "Backup restaurado"),
+        () => perform((s: any) => keepShoppingOnRestore(data, s), "Backup restaurado"),
         "Restaurar",
       );
     } catch (e: any) {

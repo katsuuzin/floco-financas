@@ -7,6 +7,7 @@ import { Section, Box, Muted, Button, ListItem } from "../ui/kit";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
 import { validateBackup, today } from "../finance.mjs";
+import { keepShoppingOnRestore } from "../shopping.mjs";
 import { exportCSV } from "./SettingsScreen";
 export default function DataToolsScreen() {
   const nav = useNav();
@@ -21,6 +22,10 @@ export default function DataToolsScreen() {
       await fn();
     } catch (e: any) {
       Alert.alert("Não foi possível concluir", e.message);
+    } finally {
+      // Sem isto o trava ficava preso: a confirmação de "Restaurar" chama run() de novo e nunca executava.
+      locked.current = false;
+      setBusy(false);
     }
   };
   const backup = () =>
@@ -54,7 +59,7 @@ export default function DataToolsScreen() {
               dir + "before-restore-" + Date.now() + ".json",
               JSON.stringify(current()),
             );
-            await perform(state, "Backup restaurado");
+            await perform((s: any) => keepShoppingOnRestore(state, s), "Backup restaurado");
           }),
         "Restaurar",
       );

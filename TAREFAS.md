@@ -78,6 +78,10 @@ Modelos sugeridos:
 **Fazer:** backup automático no Drive (pasta do próprio app, sem acesso a outros arquivos) e, depois, sincronização entre aparelhos com resolução de conflitos.
 **Aceite:** backup restaurado em outro aparelho com os mesmos dados.
 
+## 12. Lista de compras integrada (E1) — CONCLUÍDA (sem commit)
+**Feito:** `src/shopping.mjs` e `src/shoppingData.mjs` (lógica e validação), `src/screens/ShoppingScreen.tsx`, bloco na Início, backup JSON e criptografado, registrar compra como despesa. Também corrigidos no percurso: voltar do Android (manifest), `back()` em `nav.tsx` e o build com SDK em caminho com espaço.
+**Falta:** TalkBack, fonte grande e restauração de backup no aparelho; commit e release só quando você pedir.
+
 ---
 
 ## Ao final de qualquer tarefa

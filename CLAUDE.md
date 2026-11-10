@@ -19,6 +19,11 @@ px tsc --noEmit
 - APK para emulador: .\build-android.ps1 -Architecture x86_64
 - Saída: entrega\. Nunca rode expo prebuild: apagaria widgets, manifest e ícones feitos em ndroid/.
 
+## Notas do build e do Android (aprendidas)
+- O NDK/CMake falha no link (símbolos do libc++) se o SDK está num caminho com espaço. O build-android.ps1 já mapeia o SDK para uma letra livre (R: a W:) com subst e desfaz no fim. Não precisa fazer nada à mão.
+- O voltar do Android depende de android:enableOnBackInvokedCallback="false" no AndroidManifest.xml. Com "true", o React Native só trata o voltar em aparelhos Android 16+; do 13 ao 15 o app sairia. Um prebuild reverteria isso (mais um motivo para nunca rodar).
+- Teclado e telas com barra fixa: o app usa edge-to-edge e o Android não redimensiona a tela; use KeyboardAvoidingView (como a rota shopping em App.tsx).
+
 ## Regras de trabalho
 - Commit e push só quando o usuário pedir. Mensagem termina com Co-Authored-By: Claude <modelo> <noreply@anthropic.com>.
 - Release só com pedido explícito: incrementar versão e ersionCode em pp.json, package.json e ndroid/app/build.gradle; gerar APK universal; entrega\Floco-Financas.apk + .sha256; gh release create vX.Y.Z.
@@ -28,7 +33,7 @@ px tsc --noEmit
 
 ## Estado atual
 Pasta do projeto: C:\Users\Kat\Desktop\Projetos de IA\01 - Floco finanças (repositório Git, branch main).
-Publicado: 1.3.6. Já concluído nos commits recentes: widgets (W1), extrato PDF (F1), cores de destaque e ícones alternativos. Para o que falta, consulte TAREFAS.md e INVENTARIO-FUNCIONAL.md.
+Versão: 1.9.0 (release publicada no GitHub). Concluído: widgets (W1), extrato PDF (F1), cores de destaque e ícones alternativos, lista de compras (E1, ainda sem release). Para o que falta, consulte TAREFAS.md e INVENTARIO-FUNCIONAL.md.
 
 
 ## Lista de tarefas (em ordem)

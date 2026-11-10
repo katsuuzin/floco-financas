@@ -38,6 +38,12 @@ export type Route =
   | { name: "security" }
   | { name: "updates" }
   | { name: "trash" }
+  | { name: "shopping"; add?: boolean }
+  | { name: "scanNota" }
+  | { name: "nfceConsulta"; info: any }
+  | { name: "purchases" }
+  | { name: "purchaseDetail"; id: string }
+  | { name: "productDetail"; id: string }
   | { name: "form"; kind: string; initial?: any };
 
 type Nav = {
@@ -65,22 +71,19 @@ export function NavProvider({
   const [stack, setStack] = useState<Route[]>([]);
   const [month, setMonth] = useState(initialMonth);
 
+  // Voltar: desempilha a tela aberta; sem pilha, volta para Início; em Início devolve false (sair).
+  // Usa a pilha atual (não um flag dentro do setState, que o React pode executar depois).
   const back = useCallback(() => {
-    let handled = false;
-    setStack((s) => {
-      if (s.length) {
-        handled = true;
-        return s.slice(0, -1);
-      }
-      return s;
-    });
-    if (handled) return true;
+    if (stack.length) {
+      setStack((s) => s.slice(0, -1));
+      return true;
+    }
     if (tab !== "home") {
       setTabState("home");
       return true;
     }
     return false;
-  }, [tab]);
+  }, [stack.length, tab]);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
@@ -135,6 +138,7 @@ export function destination(id: string): { tab?: Tab; route?: Route } {
     cards: { name: "cards" },
     assistant: { name: "assistant" },
     receipt: { name: "receipt" },
+    shopping: { name: "shopping" },
   };
   return id === "analysis" ? { tab: "analysis" } : { route: map[id] };
 }

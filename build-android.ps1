@@ -39,6 +39,21 @@ foreach ($stale in 'android\app\build\generated\assets\react','android\app\build
   $p=Join-Path $BuildDir $stale; if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force }
 }
 
+# O NDK/CMake falha no link (símbolos do libc++ indefinidos) quando o SDK fica num caminho com espaço,
+# como "Minha agenda". Enquanto o build roda, o SDK é mapeado para uma letra de unidade livre (subst).
+$mappedDrive=$null
+if ($AndroidSdk -match '\s') {
+  $sdkReal=(Resolve-Path -LiteralPath $AndroidSdk).Path
+  foreach ($letter in 'R','S','T','U','V','W') {
+    if (-not (Test-Path -LiteralPath "${letter}:\")) {
+      & subst "${letter}:" $sdkReal
+      if ($LASTEXITCODE -eq 0) { $mappedDrive="${letter}:"; break }
+    }
+  }
+  if (-not $mappedDrive) { throw 'Nenhuma letra de unidade livre (R: a W:) para mapear o SDK que tem espaço no caminho.' }
+  $env:ANDROID_HOME="$mappedDrive\"
+}
+
 try {
   Set-Location -LiteralPath $BuildDir
   # Windows PowerShell 5.1 converte o stderr do Gradle em erro; o resultado é conferido por $LASTEXITCODE.
@@ -54,4 +69,5 @@ if (-not $env:GRADLE_USER_HOME) { $env:GRADLE_USER_HOME='C:\Users\Kat\Documents\
   Write-Host "APK gerado em entrega\Floco-Financas-$Architecture.apk"
 } finally {
   Set-Location -LiteralPath $previousLocation.Path
+  if ($mappedDrive) { & subst $mappedDrive /d | Out-Null }
 }

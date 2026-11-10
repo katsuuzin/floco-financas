@@ -13,6 +13,9 @@ import { layoutOf, firstSteps, DESTINATIONS } from "../layout.mjs";
 import { monthInsights } from "../insights.mjs";
 import { normalizeBudget, budgetUsage } from "../analysis.mjs";
 import { receivableBalance } from "../planning.mjs";
+import { shoppingSummary } from "../shopping.mjs";
+import RestockList from "./RestockList";
+import { restockCandidates } from "../shoppingRhythm.mjs";
 import { installmentPlan, recurrenceTotals } from "../commitments.mjs";
 import {
   totals,
@@ -564,6 +567,81 @@ export default function HomeScreen() {
             </Box>
           </>
         )
+      );
+    },
+    restock: () => {
+      if (!restockCandidates(state, today(), { limit: 1 }).length) return null;
+      return (
+        <>
+          <Section title="Já deve estar acabando" action="Histórico" onPress={() => nav.push({ name: "purchases" })} />
+          <View style={{ marginBottom: 12 }}>
+            <RestockList limit={3} />
+          </View>
+        </>
+      );
+    },
+    shopping: () => {
+      const sum = shoppingSummary(state);
+      const open = () => nav.push({ name: "shopping" });
+      const title =
+        sum.total === 0
+          ? "Lista vazia"
+          : sum.pending === 0
+            ? "Tudo no carrinho"
+            : `${sum.pending} ${sum.pending === 1 ? "item pendente" : "itens pendentes"}`;
+      const detail =
+        sum.total === 0
+          ? "Toque para adicionar itens."
+          : sum.pending === 0
+            ? "Limpe o carrinho depois da compra."
+            : sum.estimatedCents === 0
+              ? "Sem preços informados"
+              : sum.unpriced > 0
+                ? `${sum.unpriced} sem preço`
+                : undefined;
+      const hasEstimate = sum.pending > 0 && sum.estimatedCents > 0;
+      const more = sum.pending - sum.preview.length;
+      return (
+        <>
+          <Section title="Lista de compras" action="Ver" onPress={open} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Lista de compras. ${title}.${hasEstimate ? ` Estimado ${show(sum.estimatedCents)}.` : ""}${detail ? ` ${detail}` : ""}`}
+            accessibilityHint="Abre a lista de compras"
+            onPress={open}
+            android_ripple={{ color: c.soft }}
+            style={{ borderRadius: 18, backgroundColor: c.surface, padding: 16, gap: 4, minHeight: 72, marginBottom: 12 }}
+          >
+            <View style={[k.row, { justifyContent: "space-between", alignItems: "flex-start" }]}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <T style={{ fontFamily: "SoraSemi" }}>{title}</T>
+                {!!detail && <Muted>{detail}</Muted>}
+              </View>
+              {hasEstimate && (
+                <View style={{ alignItems: "flex-end" }}>
+                  <T style={{ fontFamily: "SoraSemi", fontSize: 17, fontVariant: ["tabular-nums"] }}>{show(sum.estimatedCents)}</T>
+                  <Muted>estimado</Muted>
+                </View>
+              )}
+            </View>
+            <View style={[k.row, { justifyContent: "space-between", alignItems: "flex-end" }]}>
+              <View style={{ flex: 1, marginTop: 8, gap: 2 }}>
+                {sum.preview.map((i: any) => (
+                  <Muted key={i.id} numberOfLines={1}>
+                    {"– " + (i.unit ? `${i.qty} ${i.unit} ` : i.qty > 1 ? `${i.qty}x ` : "") + i.name}
+                  </Muted>
+                ))}
+                {more > 0 && <Muted>{`e mais ${more}`}</Muted>}
+              </View>
+              <IconButton
+                name="plus"
+                label="Adicionar item à lista de compras"
+                color={c.primary}
+                onPress={() => nav.push({ name: "shopping", add: true })}
+              />
+            </View>
+          </Pressable>
+        </>
       );
     },
     recent: () => (

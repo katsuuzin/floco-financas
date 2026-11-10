@@ -12,6 +12,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as DocumentPicker from "expo-document-picker";
 import * as Sharing from "expo-sharing";
 import { validateBackup } from "./finance.mjs";
+import { keepShoppingOnRestore } from "./shopping.mjs";
 const native = NativeModules.FlocoFinanceTools;
 const folder = FileSystem.documentDirectory + "encrypted-backups/";
 export default function SecurityPanel({
@@ -145,7 +146,7 @@ export default function SecurityPanel({
               run(async () => {
                 await snapshot();
                 const ok = await onChange(
-                  value,
+                  (s: any) => keepShoppingOnRestore(value, s),
                   "Backup criptografado restaurado",
                 );
                 if (ok) setPassword("");
