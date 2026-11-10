@@ -2,14 +2,14 @@
   "expo": {
     "name": "Floco Finanças",
     "slug": "floco-financas",
-    "version": "1.8.1",
+    "version": "1.9.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#FAF5EF",
     "android": {
       "package": "br.com.kat.flocofinancas",
-      "versionCode": 18,
+      "versionCode": 19,
       "permissions": [
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",
