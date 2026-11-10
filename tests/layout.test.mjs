@@ -30,12 +30,3 @@ test("H2 primeiros passos são derivados dos dados", () => {
   const f = firstSteps(s);
   assert.equal(f.done, 2);
 });
-
-test("Análise: calendário e rosca entram logo depois do balanço, mesmo com layout salvo", () => {
-  const def = layoutOf(emptyState()).analysis.map((b) => b.id);
-  assert.deepEqual(def.slice(0, 3), ["balance", "calendar", "donut"]);
-  const s = { ...emptyState(), settings: { ...emptyState().settings, layout: { analysis: [{ id: "flow", visible: true }, { id: "balance", visible: true }, { id: "top", visible: false }] } } };
-  const ids = layoutOf(s).analysis.map((b) => b.id);
-  assert.deepEqual(ids.slice(0, 4), ["flow", "balance", "calendar", "donut"]);
-  assert.equal(layoutOf(s).analysis.find((b) => b.id === "top").visible, false);
-});

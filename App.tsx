@@ -28,6 +28,7 @@ import { monthKey, today } from "./src/finance.mjs";
 import HomeScreen from "./src/screens/HomeScreen";
 import TransactionsScreen from "./src/screens/TransactionsScreen";
 import AnalysisScreen from "./src/screens/AnalysisScreen";
+import { calenTokens } from "./src/calenTheme.mjs";
 import MoreScreen from "./src/screens/MoreScreen";
 import SettingsScreen from "./src/screens/SettingsScreen";
 import DataToolsScreen from "./src/screens/DataToolsScreen";
@@ -308,7 +309,7 @@ function Shell({
   unlocked: boolean;
   protectedApp: boolean;
 }) {
-  const { c } = useTheme();
+  const { c, dark } = useTheme();
   const { state, perform, notice, setNotice, storageError } = useStore();
   // Estado atual para os links dos widgets (o efeito é registrado uma vez).
   const stateRef = useRef(state);
@@ -404,9 +405,11 @@ function Shell({
   const slot4 =
     DESTINATIONS.find(([id]: string[]) => id === tab4) || DESTINATIONS[0];
   const title = top ? routeTitle(top) : TITLES[nav.tab];
+  // A Análise usa o fundo do tema do Calen (claro e escuro); o resto do app segue o Floco.
+  const pageBg = !top && nav.tab === "analysis" ? calenTokens(dark).bg : c.bg;
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: c.bg }}
+      style={{ flex: 1, backgroundColor: pageBg }}
       edges={["top", "bottom"]}
     >
       <KeyboardAvoidingView
@@ -414,7 +417,7 @@ function Shell({
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         {top?.name !== "form" && (
-          <View style={[s.header, { backgroundColor: c.bg }]}>
+          <View style={[s.header, { backgroundColor: pageBg }]}>
             {top ? (
               <IconButton name="arrow-left" label="Voltar" onPress={nav.back} />
             ) : nav.tab === "home" ? (
@@ -467,6 +470,7 @@ function Shell({
             k.content,
             { maxWidth: 900, width: "100%", alignSelf: "center" },
           ]}
+          style={{ backgroundColor: pageBg }}
           keyboardShouldPersistTaps="handled"
         >
           {!!storageError && (

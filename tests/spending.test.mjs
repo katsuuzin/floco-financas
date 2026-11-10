@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { emptyState, addTransaction, totalBalance } from "../src/finance.mjs";
-import { monthCalendar, balanceAtEndOf, intensity, dayDetail, donutSlices, donutArcs, arcPath, donutCaption, compactCents } from "../src/spending.mjs";
+import { monthCalendar, balanceAtEndOf, intensity, dayDetail, donutSlices, donutArcs, arcPath, donutCaption, compactCents, categoryList, tagTotals } from "../src/spending.mjs";
 
 const REF = "2026-11-09";
 const base = () => ({
@@ -154,4 +154,43 @@ test("legenda do centro: mês atual x outros, despesa x receita, singular", () =
 
 test("valor curto da célula: reais, mil e mi, com sinal", () => {
   assert.deepEqual([0, 4999, 8500, 123456, 1_200_000, -23_000_00, 150_000_000].map(compactCents), ["0", "50", "85", "1,2 mil", "12 mil", "−23 mil", "1,5 mi"]);
+});
+
+test("calendário por origem: só conta, só cartão ou tudo", () => {
+  let s = tx(base(), { amount: 4000, date: "2026-11-03" });
+  s = tx(s, { amount: 6000, date: "2026-11-03", cardId: "c1" });
+  const day = (src) => monthCalendar(s, "2026-11", REF, { source: src }).days[2].expense;
+  assert.deepEqual([day("all"), day("account"), day("card")], [10000, 4000, 6000]);
+});
+
+test("rosca por fatura: compra no cartão conta no mês da fatura", () => {
+  let s = tx(base(), { amount: 8000, date: "2026-10-12", cardId: "c1", category: "Lazer" }); // fecha dia 10 → fatura de novembro
+  s = tx(s, { amount: 2000, date: "2026-11-03", category: "Alimentação" });
+  const by = donutSlices(s, "2026-11", { byInvoice: true });
+  assert.deepEqual(by.slices.map((x) => [x.name, x.cents]), [["Lazer", 8000], ["Alimentação", 2000]]);
+  const plain = donutSlices(s, "2026-11");
+  assert.deepEqual(plain.slices.map((x) => x.name), ["Alimentação"]);
+});
+
+test("lista de categorias: com valor primeiro, zeradas depois, busca sem acento, ordem e ocultas", () => {
+  let s = tx(base(), { amount: 5000, category: "Alimentação" });
+  s = tx(s, { amount: 3000, category: "Saúde" });
+  const l = categoryList(s, "2026-11", {});
+  assert.deepEqual(l.rows.slice(0, 2).map((r) => r.name), ["Alimentação", "Saúde"]);
+  assert.ok(l.rows.length > 10 && l.rows.find((r) => r.name === "Moradia").cents === 0);
+  assert.deepEqual(categoryList(s, "2026-11", { query: "saude" }).rows.map((r) => r.name), ["Saúde"]);
+  assert.equal(categoryList(s, "2026-11", { sort: "name" }).rows[0].name, "Alimentação");
+  const h = categoryList(s, "2026-11", { hidden: ["Saúde"] });
+  assert.equal(h.rows.find((r) => r.name === "Saúde").hidden, true);
+  assert.equal(h.rows.find((r) => r.name === "Alimentação").fraction, 1);
+  assert.deepEqual(categoryList(s, "2026-11", { kind: "income" }).rows.some((r) => r.name === "Salário"), true);
+});
+
+test("total por tag no mês", () => {
+  let s = { ...base(), tags: [{ id: "t1", name: "casa" }, { id: "t2", name: "viagem" }] };
+  s = tx(s, { amount: 5000, tags: ["t1"] });
+  s = tx(s, { amount: 2000, tags: ["t1", "t2"] });
+  const r = tagTotals(s, "2026-11");
+  assert.deepEqual(r.rows.map((x) => [x.name, x.cents]), [["casa", 7000], ["viagem", 2000]]);
+  assert.equal(tagTotals(base(), "2026-11").noTags, true);
 });

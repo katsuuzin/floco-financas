@@ -7,7 +7,9 @@ import { PALETTE, colorFor, lookOf, setCategoryLook, setTagColor, tagColor } fro
 test("O4 categorias padrão têm ícone; cor estável sem escolha", () => {
   const s = emptyState();
   assert.equal(lookOf(s, "Mercado").icon, "shopping-cart");
-  assert.equal(lookOf(s, "Mercado").color, colorFor("Mercado"));
+  assert.deepEqual([lookOf(s, "Mercado").image, lookOf(s, "Mercado").color], ["grocery", "#6366F1"]);
+  assert.equal(lookOf(s, "Qualquer").image, "");
+  assert.equal(lookOf(s, "Qualquer").color, colorFor("Qualquer"));
   assert.ok(PALETTE.includes(colorFor("Qualquer")));
 });
 
@@ -24,9 +26,18 @@ test("O4 escolha de ícone e cor vale, valida e acompanha renomear", () => {
   assert.equal(back.categoryLooks.Bichos.color, PALETTE[3]);
 });
 
+test("O4 escolha de ícone do Calen: vale, valida e vence o padrão", () => {
+  let s = emptyState();
+  s = setCategoryLook(s, "Moradia", { icon: "calen:wedding" });
+  assert.equal(lookOf(s, "Moradia").image, "wedding");
+  assert.throws(() => setCategoryLook(s, "Moradia", { icon: "calen:nao-existe" }));
+  assert.equal(lookOf(setCategoryLook(emptyState(), "Moradia", { color: "#14B8A6" }), "Moradia").color, "#14B8A6");
+});
+
 test("O4 subcategoria herda o ícone da principal", () => {
   const s = { ...emptyState(), customCategories: [{ id: "u", name: "Uber", parent: "Transporte" }] };
   assert.equal(lookOf(s, "Uber").icon, "truck");
+  assert.equal(lookOf(s, "Uber").image, "transport");
 });
 
 test("O5 cor de tag", () => {

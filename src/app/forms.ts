@@ -79,6 +79,7 @@ export function defaults(kind: string, state: any, initial: any = {}) {
     notes: "",
     category: "Alimentação",
     subcategory: "",
+    spendType: "",
     accountId: state.accounts.find((a: any) => !a.archived)?.id || "",
     destinationId: state.accounts.filter((a: any) => !a.archived)[1]?.id || "",
     cardId: "",

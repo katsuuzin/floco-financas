@@ -4,8 +4,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Animated, Easing, Pressable, AccessibilityInfo } from "react-native";
 import Svg, { Path, Circle } from "react-native-svg";
-import { T, Muted } from "./kit";
-import { useTheme } from "./theme";
+import { useCalen, CText } from "./calen";
 import CategoryIcon from "./CategoryIcon";
 import { donutArcs, arcPath } from "../spending.mjs";
 
@@ -48,7 +47,7 @@ export default function Donut({
   onPress?: (name: string) => void;
   label: string;
 }) {
-  const { c } = useTheme();
+  const { k } = useCalen();
   const [instant, setInstant] = useState(false);
   const [shown, setShown] = useState(0);
   useEffect(() => {
@@ -78,7 +77,7 @@ export default function Donut({
   return (
     <View accessible accessibilityLabel={label} style={{ width: size, height: size, alignSelf: "center" }}>
       <Svg width={size} height={size}>
-        <Circle cx={cx} cy={cx} r={r} stroke={c.soft} strokeWidth={stroke} fill="none" />
+        <Circle cx={cx} cy={cx} r={r} stroke={k.track} strokeWidth={stroke} fill="none" />
         {slices.map((s, i) => {
           const a = arcs[i];
           if (!a) return null;
@@ -94,10 +93,12 @@ export default function Donut({
         })}
       </Svg>
       <View pointerEvents="none" style={{ position: "absolute", left: stroke + 8, right: stroke + 8, top: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
-        <T numberOfLines={1} adjustsFontSizeToFit style={{ fontFamily: "SoraBold", fontSize: text.length > 12 ? 20 : 26, fontVariant: ["tabular-nums"] }}>
+        <CText bold numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: text.length > 12 ? 20 : 26, fontVariant: ["tabular-nums"] }}>
           {text}
-        </T>
-        <Muted style={{ textAlign: "center", fontSize: 12 }}>{caption}</Muted>
+        </CText>
+        <CText muted style={{ textAlign: "center", fontSize: 12 }}>
+          {caption}
+        </CText>
       </View>
       {slices.map((s, i) => {
         const a = arcs[i];
@@ -111,9 +112,9 @@ export default function Donut({
             accessibilityLabel={`${s.name}, ${Math.round(s.fraction * 100)}%. Ver detalhes`}
             disabled={!onPress}
             onPress={() => onPress?.(s.name)}
-            style={{ position: "absolute", left: x, top: y, width: bubble, height: bubble, borderRadius: bubble / 2, overflow: "hidden", borderWidth: 2, borderColor: "rgba(255,255,255,0.85)" }}
+            style={{ position: "absolute", left: x, top: y, width: bubble, height: bubble, borderRadius: bubble / 2, overflow: "hidden", borderWidth: 2, borderColor: k.card }}
           >
-            <CategoryIcon look={s.look} size={bubble - 4} />
+            <CategoryIcon look={s.look} size={bubble - 4} solid />
           </Pressable>
         );
       })}

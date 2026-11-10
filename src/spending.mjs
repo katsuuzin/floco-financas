@@ -2,6 +2,7 @@
 // Valores em centavos; datas ISO. Sem imports de tela: tudo testável em Node.
 import { monthKey, addMonths, analysisAmount, totalBalance, signedAmount, includedAccounts, today } from "./finance.mjs";
 import { projection } from "./planning.mjs";
+import { categoryTree } from "./categories.mjs";
 
 const pad = (n) => String(n).padStart(2, "0");
 const daysIn = (month) => new Date(Number(month.slice(0, 4)), Number(month.slice(5)), 0).getDate();
@@ -25,7 +26,9 @@ export function balanceAtEndOf(state, date) {
 
 // Um mês em dias. `ref` é "hoje": até ele o saldo é o realizado; depois, o previsto
 // (pendentes, recorrências e faturas a vencer, como em Projeções).
-export function monthCalendar(state, month, ref = today()) {
+// `source`: "all" (padrão), "account" (só o que passa pela conta) ou "card" (só compras no cartão).
+export function monthCalendar(state, month, ref = today(), { source = "all" } = {}) {
+  const fromSource = (t) => source === "all" || (source === "card" ? !!t.cardId : !t.cardId);
   const n = daysIn(month);
   const first = dateOf(month, 1);
   const last = dateOf(month, n);
@@ -43,7 +46,7 @@ export function monthCalendar(state, month, ref = today()) {
   }));
   const at = (date) => rows[Number(date.slice(8)) - 1];
   for (const t of state.transactions) {
-    if (monthKey(t.date) !== month || !real(t)) continue;
+    if (monthKey(t.date) !== month || !real(t) || !fromSource(t)) continue;
     if (t.confirmed) {
       if (t.type === "income") at(t.date).income += analysisAmount(t);
       else at(t.date).expense += analysisAmount(t);
@@ -139,11 +142,13 @@ export function dayDetail(state, date, ref = today()) {
 
 // Fatias por categoria principal. `kind`: "expense" | "income". `hidden`: nomes fora do
 // gráfico (continuam na lista). Subcategorias somam na principal.
-export function donutSlices(state, month, { kind = "expense", hidden = [] } = {}) {
+export function donutSlices(state, month, { kind = "expense", hidden = [], byInvoice = false } = {}) {
   const off = new Set(hidden);
   const byCat = new Map();
   for (const t of state.transactions) {
-    if (!t.confirmed || monthKey(t.date) !== month || !real(t)) continue;
+    // "Por fatura": compra no cartão conta no mês da fatura, não no da compra.
+    const inMonth = byInvoice && t.cardId ? t.invoiceMonth === month : monthKey(t.date) === month;
+    if (!t.confirmed || !inMonth || !real(t)) continue;
     const isIncome = t.type === "income";
     if ((kind === "income") !== isIncome) continue;
     const name = t.category || "Outros";
@@ -219,4 +224,37 @@ export function compactCents(cents) {
   if (reais < 1000) return sign + String(Math.round(reais));
   if (reais < 1_000_000) return sign + (reais < 10_000 ? fmt(reais / 1000) : String(Math.round(reais / 1000))) + " mil";
   return sign + fmt(reais / 1_000_000) + " mi";
+}
+
+// Lista completa da aba Categorias: as com valor no mês e as demais (R$ 0,00), com busca,
+// ordem e a fração de cada uma na rosca (só das visíveis).
+export function categoryList(state, month, { kind = "expense", hidden = [], byInvoice = false, query = "", sort = "value" } = {}) {
+  const d = donutSlices(state, month, { kind, hidden, byInvoice });
+  const withValue = new Map([...d.slices, ...d.hidden].map((r) => [r.name, r]));
+  const norm = (x) => String(x).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const q = norm(query.trim());
+  const off = new Set(hidden);
+  const rows = categoryTree(state, kind)
+    .map((n) => n.name)
+    .concat([...withValue.keys()].filter((name) => !categoryTree(state, kind).some((n) => n.name === name)))
+    .map((name) => {
+      const r = withValue.get(name);
+      return { name, cents: r ? r.cents : 0, fraction: r && !r.hidden && d.total ? r.cents / d.total : 0, hidden: off.has(name), subs: r ? r.subs : [] };
+    })
+    .filter((r) => !q || norm(r.name).includes(q));
+  const by = { value: (a, b) => b.cents - a.cents || a.name.localeCompare(b.name, "pt-BR"), name: (a, b) => a.name.localeCompare(b.name, "pt-BR"), low: (a, b) => a.cents - b.cents || a.name.localeCompare(b.name, "pt-BR") }[sort] || (() => 0);
+  rows.sort(by);
+  return { ...d, rows };
+}
+
+// Total por tag no mês (despesa ou receita), do maior ao menor.
+export function tagTotals(state, month, kind = "expense") {
+  const names = new Map((state.tags || []).map((t) => [t.id, t.name]));
+  const map = new Map();
+  for (const t of state.transactions) {
+    if (!t.confirmed || monthKey(t.date) !== month || !real(t) || (kind === "income") !== (t.type === "income")) continue;
+    for (const id of t.tags || []) if (names.has(id)) map.set(id, (map.get(id) || 0) + analysisAmount(t));
+  }
+  const rows = [...map.entries()].filter(([, v]) => v > 0).map(([id, cents]) => ({ id, name: names.get(id), cents })).sort((a, b) => b.cents - a.cents || a.name.localeCompare(b.name, "pt-BR"));
+  return { rows, total: rows.reduce((a, r) => a + r.cents, 0), noTags: (state.tags || []).length === 0 };
 }

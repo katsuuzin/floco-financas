@@ -18,8 +18,6 @@ export const DEFAULT_HOME_HIDDEN = ["insights", "goals", "receivables", "install
 
 export const ANALYSIS_BLOCKS = [
   ["balance", "Balanço do mês"],
-  ["calendar", "Calendário de gastos"],
-  ["donut", "Rosca de gastos"],
   ["categories", "Despesas por categoria"],
   ["flow", "Fluxo dos últimos 6 meses"],
   ["net", "Patrimônio em 12 meses"],
@@ -30,9 +28,7 @@ export const ANALYSIS_BLOCKS = [
   ["fixed", "Fixas e variáveis"],
   ["links", "Relatórios e projeções"],
 ];
-export const DEFAULT_ANALYSIS_HIDDEN = ["weekday", "fixed", "categories"]; // a rosca já traz a lista por categoria
-// Blocos novos entram logo depois deste vizinho (em vez de no fim) em quem já tinha layout salvo.
-const ANALYSIS_ANCHOR = { calendar: "balance", donut: "calendar" };
+export const DEFAULT_ANALYSIS_HIDDEN = ["weekday", "fixed"];
 
 // Destinos possíveis para atalhos e para o quarto botão.
 export const DESTINATIONS = [
@@ -55,22 +51,16 @@ export const DESTINATIONS = [
 export const DEFAULT_SHORTCUTS = ["budgets", "goals", "reports", "recurrences"];
 
 // Ordem final de blocos: respeita a ordem salva e acrescenta blocos novos no fim.
-export function orderedBlocks(all, saved, hiddenDefault, anchor = {}) {
+export function orderedBlocks(all, saved, hiddenDefault) {
   const ids = all.map(([id]) => id);
   const list = (saved || []).filter((b) => ids.includes(b.id));
-  for (const id of ids) {
-    if (list.some((b) => b.id === id)) continue;
-    const row = { id, visible: !hiddenDefault.includes(id) };
-    const at = anchor[id] ? list.findIndex((b) => b.id === anchor[id]) : -1;
-    if (at >= 0) list.splice(at + 1, 0, row);
-    else list.push(row);
-  }
+  for (const id of ids) if (!list.some((b) => b.id === id)) list.push({ id, visible: !hiddenDefault.includes(id) });
   return list.map((b) => ({ ...b, label: all.find(([id]) => id === b.id)[1] }));
 }
 
 export const layoutOf = (s) => ({
   home: orderedBlocks(HOME_BLOCKS, s.settings?.layout?.home, DEFAULT_HOME_HIDDEN),
-  analysis: orderedBlocks(ANALYSIS_BLOCKS, s.settings?.layout?.analysis, DEFAULT_ANALYSIS_HIDDEN, ANALYSIS_ANCHOR),
+  analysis: orderedBlocks(ANALYSIS_BLOCKS, s.settings?.layout?.analysis, DEFAULT_ANALYSIS_HIDDEN),
   shortcuts: s.settings?.layout?.shortcuts || DEFAULT_SHORTCUTS,
   tab4: s.settings?.layout?.tab4 || "analysis",
 });

@@ -211,6 +211,7 @@ export function addTransaction(state, input) {
     invoiceMonth: card ? monthKey(addMonths(first + "-01", i)) : null,
     category: input.category || "Outros",
     ...(input.subcategory ? { subcategory: String(input.subcategory).slice(0, 80) } : {}),
+    ...(input.spendType ? { spendType: String(input.spendType).slice(0, 40) } : {}),
     confirmed: cardId ? true : Boolean(input.confirmed),
     installment: i + 1,
     installments: count,

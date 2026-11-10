@@ -15,7 +15,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
 import { subsOf } from "./categories.mjs";
 import CategoryIcon from "./ui/CategoryIcon";
-import { ICONS, PALETTE, lookOf, setCategoryLook, setTagColor, tagColor } from "./looks.mjs";
+import { useTheme } from "./ui/theme";
+import { PALETTE, CATEGORY_COLORS, CALEN_PREFIX, lookOf, setCategoryLook, setTagColor, tagColor } from "./looks.mjs";
+import { calenIconNames, calenSvg } from "./calenArt.mjs";
+import { SvgXml } from "react-native-svg";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import {
@@ -239,12 +242,16 @@ function Options({ c, label, values, value, onChange, multiple = false }: any) {
   );
 }
 // O4/O5: escolha de cor (e ícone, para categorias). Cada opção tem nome falado.
-function LookPicker({ c, icon, color, withIcon, onIcon, onColor }: any) {
+function LookPicker({ c, icon, image, color, withIcon, onIcon, onColor }: any) {
+  const { dark } = useTheme();
+  const picked = typeof icon === "string" && icon.startsWith(CALEN_PREFIX) ? icon.slice(CALEN_PREFIX.length) : image || "";
+  const colors: string[] = withIcon ? CATEGORY_COLORS : PALETTE;
+  const base = color || colors[0];
   return (
     <View style={{ gap: 10, marginTop: 6 }}>
       <Text style={{ color: c.muted, fontSize: 13 }}>Cor</Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-        {PALETTE.map((p: string, i: number) => (
+        {colors.map((p: string, i: number) => (
           <Pressable
             key={p}
             accessibilityRole="radio"
@@ -253,7 +260,7 @@ function LookPicker({ c, icon, color, withIcon, onIcon, onColor }: any) {
             onPress={() => onColor(p)}
             style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: p, alignItems: "center", justifyContent: "center", borderWidth: p === color ? 3 : 0, borderColor: c.text }}
           >
-            {p === color && <Feather name="check" size={18} color="#311E0D" />}
+            {p === color && <Feather name="check" size={18} color="#FFFFFF" />}
           </Pressable>
         ))}
       </View>
@@ -261,16 +268,16 @@ function LookPicker({ c, icon, color, withIcon, onIcon, onColor }: any) {
         <>
           <Text style={{ color: c.muted, fontSize: 13 }}>Ícone</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {ICONS.map((n: string) => (
+            {calenIconNames().map((n: string) => (
               <Pressable
                 key={n}
                 accessibilityRole="radio"
-                accessibilityState={{ selected: n === icon }}
-                accessibilityLabel={`Ícone ${n}`}
-                onPress={() => onIcon(n)}
-                style={{ width: 48, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: n === icon ? color : c.bg }}
+                accessibilityState={{ selected: n === picked }}
+                accessibilityLabel={`Ícone ${n.replace(/_/g, " ")}`}
+                onPress={() => onIcon(CALEN_PREFIX + n)}
+                style={{ width: 52, height: 52, borderRadius: 16, alignItems: "center", justifyContent: "center", borderWidth: n === picked ? 2 : 1, borderColor: n === picked ? base : c.line, backgroundColor: n === picked ? base + "22" : "transparent" }}
               >
-                <Feather name={n as any} size={20} color={n === icon ? "#311E0D" : c.text} />
+                <SvgXml xml={calenSvg(n, base, dark)} width={32} height={32} />
               </Pressable>
             ))}
           </View>
@@ -280,7 +287,8 @@ function LookPicker({ c, icon, color, withIcon, onIcon, onColor }: any) {
   );
 }
 function LookBadge({ icon, color, image }: any) {
-  return <CategoryIcon look={{ icon, color, image }} size={36} />;
+  const chosen = typeof icon === "string" && icon.startsWith(CALEN_PREFIX);
+  return <CategoryIcon look={{ icon: chosen ? "tag" : icon, color, image: chosen ? icon.slice(CALEN_PREFIX.length) : image }} size={36} />;
 }
 function Card({ c, children }: any) {
   return (

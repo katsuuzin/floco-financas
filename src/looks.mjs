@@ -1,3 +1,5 @@
+import { CALEN_COLORS, hasCalenIcon } from "./calenArt.mjs";
+
 // O4/O5: ícone e cor de categorias (por nome, inclusive as padrão) e cor de tags.
 // As escolhas ficam em `categoryLooks` ({ [nome]: { icon, color } }) e em `tag.color`.
 
@@ -11,31 +13,39 @@ export const ICONS = [
   "scissors", "shopping-bag", "dollar-sign", "trending-up", "users", "award", "monitor", "feather", "sun", "anchor",
 ];
 
-// Arte das categorias padrão, a mesma do Kontto: [arquivo em assets/categories, cor]. O ícone
-// vem do conjunto Phosphor (peso "fill"), em silhueta branca que o app pinta por cima da cor.
+// Arte das categorias padrão, a mesma do Calen: [ícone desenhado do Calen, cor]. Veja
+// src/calenArt.mjs (161 ícones de três tons). Cores do Calen, sem a família roxa.
 export const CATEGORY_ART = {
-  "Moradia": ["house", "#2B697A"],
-  "Alimentação": ["fork-knife", "#F97316"],
-  "Transporte": ["car", "#3B82F6"],
-  "Saúde": ["heartbeat", "#EF4444"],
-  "Educação": ["graduation-cap", "#1A4350"],
-  "Lazer": ["game-controller", "#EC4899"],
-  "Vestuário": ["t-shirt", "#14B8A6"],
-  "Cuidados Pessoais": ["user", "#F472B6"],
-  "Assinaturas": ["repeat", "#E8927C"],
-  "Serviços": ["wrench", "#6366F1"],
-  "Filhos / Dependentes": ["baby", "#FB923C"],
-  "Pets": ["paw-print", "#A3E635"],
-  "Impostos e Taxas": ["receipt", "#64748B"],
-  "Seguros": ["shield", "#0EA5E9"],
-  "Presentes e Doações": ["gift", "#E11D48"],
-  "Outros": ["dots-three", "#9CA3AF"],
-  "Salário": ["briefcase", "#10B981"],
-  "Freelance / Autônomo": ["laptop", "#06B6D4"],
-  "Investimentos": ["chart-line-up", "#4DAFB8"],
-  "Renda Extra": ["coins", "#F59E0B"],
-  "Aluguéis": ["buildings", "#0284C7"],
+  "Moradia": ["home", CALEN_COLORS.sapphire],
+  "Alimentação": ["food", CALEN_COLORS.green],
+  "Transporte": ["transport", CALEN_COLORS.blue],
+  "Saúde": ["health", CALEN_COLORS.teal],
+  "Educação": ["education", CALEN_COLORS.yellow],
+  "Lazer": ["entertainment", CALEN_COLORS.rose],
+  "Vestuário": ["clothes", CALEN_COLORS.cherry],
+  "Cuidados Pessoais": ["personal_care", CALEN_COLORS.salmon],
+  "Assinaturas": ["subscriptions", CALEN_COLORS.cyan],
+  "Serviços": ["services", CALEN_COLORS.amber],
+  "Filhos / Dependentes": ["family", CALEN_COLORS.orange],
+  "Pets": ["pet", CALEN_COLORS.coral],
+  "Impostos e Taxas": ["tax", CALEN_COLORS.red],
+  "Seguros": ["insurance", CALEN_COLORS.sky],
+  "Presentes e Doações": ["gift", CALEN_COLORS.terracotta],
+  "Outros": ["other", CALEN_COLORS.red],
+  "Salário": ["salary", CALEN_COLORS.green],
+  "Freelance / Autônomo": ["freelance", CALEN_COLORS.forest],
+  "Investimentos": ["investments", CALEN_COLORS.emerald],
+  "Renda Extra": ["cashback", CALEN_COLORS.gold],
+  "Aluguéis": ["rent", CALEN_COLORS.ocean],
+  "Mercado": ["grocery", CALEN_COLORS.indigo],
 };
+
+// Escolha de ícone do Calen é guardada como "calen:nome" (os nomes do Feather ficam como antes).
+export const CALEN_PREFIX = "calen:";
+export const isCalenChoice = (v) => typeof v === "string" && v.startsWith(CALEN_PREFIX);
+
+// Cores oferecidas ao escolher a cor de uma categoria (as do Calen).
+export const CATEGORY_COLORS = Object.values(CALEN_COLORS);
 
 // Cor do ícone sobre um fundo: escuro em fundos claros, branco nos demais.
 export function onColor(hex) {
@@ -106,21 +116,25 @@ export function colorFor(name) {
 }
 
 export function lookOf(state, name) {
-  const own = (state.categoryLooks || {})[name] || {};
+  const looks = state.categoryLooks || {};
+  const own = looks[name] || {};
   const parent = (state.customCategories || []).find((c) => c.name === name)?.parent;
+  const ownOrParent = own.icon || (parent && looks[parent]?.icon) || "";
+  const chosen = isCalenChoice(ownOrParent) ? ownOrParent.slice(CALEN_PREFIX.length) : "";
   const art = CATEGORY_ART[name] || (parent ? CATEGORY_ART[parent] : undefined);
   return {
-    icon: own.icon || DEFAULT_ICONS[name] || (parent && (state.categoryLooks || {})[parent]?.icon) || DEFAULT_ICONS[parent] || "tag",
-    color: own.color || CATEGORY_ART[name]?.[1] || (parent && CATEGORY_ART[parent]?.[1]) || colorFor(name),
-    // Imagem do Kontto só quando a pessoa não escolheu outro ícone.
-    image: own.icon || (parent && (state.categoryLooks || {})[parent]?.icon) ? "" : art?.[0] || "",
+    icon: (!chosen && ownOrParent) || DEFAULT_ICONS[name] || DEFAULT_ICONS[parent] || "tag",
+    color: own.color || CATEGORY_ART[name]?.[1] || (parent && looks[parent]?.color) || (parent && CATEGORY_ART[parent]?.[1]) || colorFor(name),
+    // Ícone do Calen: o escolhido pela pessoa ou o da categoria padrão. Escolha antiga em
+    // Feather mantém o Feather.
+    image: chosen || (ownOrParent ? "" : art?.[0] || ""),
   };
 }
 
 export function setCategoryLook(state, name, look) {
   if (!name) throw Error("Categoria inválida.");
-  if (look.icon && !ICONS.includes(look.icon)) throw Error("Ícone inválido.");
-  if (look.color && !PALETTE.includes(look.color)) throw Error("Cor inválida.");
+  if (look.icon && !ICONS.includes(look.icon) && !(isCalenChoice(look.icon) && hasCalenIcon(look.icon.slice(CALEN_PREFIX.length)))) throw Error("Ícone inválido.");
+  if (look.color && !PALETTE.includes(look.color) && !CATEGORY_COLORS.includes(look.color)) throw Error("Cor inválida.");
   const prev = (state.categoryLooks || {})[name] || {};
   return { ...state, categoryLooks: { ...(state.categoryLooks || {}), [name]: { ...prev, ...look } } };
 }

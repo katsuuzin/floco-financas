@@ -7,6 +7,7 @@ import { useNav } from "../app/nav";
 import { buildChange, defaults, formTitles } from "../app/forms";
 import { categoryNames } from "../planning.mjs";
 import { CategoryRow } from "../ui/pickers";
+import { spendTypeConfig } from "../spendTypes.mjs";
 import { bankProfiles, bankProfile } from "../banks.mjs";
 import { invoice, balance, reserved, today, addMonths, ACCOUNT_TYPES } from "../finance.mjs";
 import { categorize } from "../rules.mjs";
@@ -171,6 +172,14 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
               category={form.category}
               subcategory={form.subcategory}
               onChange={(cat, sub) => setForm((f: any) => ({ ...f, category: cat, subcategory: sub, categoryTouched: true }))}
+            />
+          )}
+          {form.type === "expense" && (
+            <Choice
+              label="Tipo de gasto"
+              values={[["", "Automático (pela categoria)"], ...spendTypeConfig(state).types.filter((t: any) => !t.saved).map((t: any) => [t.id, t.name])] as [string, string][]}
+              value={form.spendType || ""}
+              onChange={(v) => set("spendType", v)}
             />
           )}
           {form.cardId && (() => {

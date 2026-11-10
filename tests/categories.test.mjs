@@ -116,21 +116,18 @@ test("regras sugeridas antigas ganham subcategoria uma vez; as editadas ficam co
   assert.equal(upgradeBuiltInRules(up), up);
 });
 
-test("arte das categorias: cada catálogo tem imagem e cor, os arquivos existem e a escolha da pessoa vence", async () => {
-  const { existsSync, readFileSync } = await import("node:fs");
-  const { CATEGORY_ART, lookOf, onColor } = await import("../src/looks.mjs");
-  const map = readFileSync(new URL("../src/ui/categoryImages.ts", import.meta.url), "utf8");
+test("arte das categorias: cada categoria do catálogo tem ícone e cor do Calen, e a escolha da pessoa vence", async () => {
+  const { CATEGORY_ART, lookOf } = await import("../src/looks.mjs");
+  const { hasCalenIcon, CALEN_COLORS } = await import("../src/calenArt.mjs");
   for (const c of CATALOG) {
     const art = CATEGORY_ART[c.name];
     assert.ok(art, `sem arte: ${c.name}`);
-    assert.ok(existsSync(new URL(`../assets/categories/${art[0]}.png`, import.meta.url)), art[0]);
-    assert.ok(map.includes(`assets/categories/${art[0]}.png`), art[0]);
+    assert.ok(hasCalenIcon(art[0]), art[0]);
+    assert.ok(Object.values(CALEN_COLORS).includes(art[1]), art[1]);
   }
-  assert.deepEqual([lookOf({}, "Moradia").image, lookOf({}, "Moradia").color], ["house", "#2B697A"]);
+  assert.deepEqual([lookOf({}, "Moradia").image, lookOf({}, "Moradia").color], ["home", CALEN_COLORS.sapphire]);
   const sub = lookOf({ customCategories: [{ name: "Uber", parent: "Transporte" }] }, "Uber");
-  assert.deepEqual([sub.image, sub.color], ["car", "#3B82F6"]);
+  assert.deepEqual([sub.image, sub.color], ["transport", CALEN_COLORS.blue]);
   assert.equal(lookOf({ categoryLooks: { Moradia: { icon: "tag" } } }, "Moradia").image, "");
-  assert.equal(lookOf({}, "Mercado").image, "");
-  assert.equal(onColor("#A3E635"), "#311E0D");
-  assert.equal(onColor("#1A4350"), "#FFFFFF");
+  assert.equal(lookOf({}, "Mercado").image, "grocery");
 });

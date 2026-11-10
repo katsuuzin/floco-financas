@@ -282,6 +282,33 @@ O status do Floco vem de leitura do código, sem teste: ✅ tem · 🟡 parcial 
 
 **Não testado:** celular real, TalkBack (os rótulos de acessibilidade estão nas células, nos balões e nas linhas, mas não foram ouvidos), tema claro, modo "reduzir animações" e telas grandes/fonte aumentada. Testado no emulador (dados fictícios): calendário nos três modos, folha do dia, rosca de despesa e receita, ocultar e mostrar categoria, mês seguinte. 29 testes novos (spending e layout).
 
+## A3 — Análise no padrão do Calen: Resumo, Categorias, Tipos e Fluxo ✅ (feito em 9/11/2026)
+
+**Pedido do usuário:** copiar o design do Calen na aba Análise, com todas as opções de Início, Categorias, Tipo de Gasto e Fluxo; mesmos ícones e cores, no claro e no escuro; o roxo vira amarelo Solar (e seus tons), os meses e dias com mais entrada ficam verdes como no Calen; a fonte Sora e o resto do Floco ficam como estão. O uso do material do Calen é autorizado pelo usuário.
+
+**Evidências e limites (REA)**
+- `inspect-artifact` leu o APK (React Native com bytecode Hermes: sem decompilação). `inspect-android-package` falhou por falta do JADX. `analyze-javascript-application` rodou nos 51 trechos do app web do Calen, mas estourou o prazo de 300 s por arquivo e devolveu só um resultado parcial (179 MB em `analysis\calen`, ignorado pelo Git).
+- O que sustenta esta ficha: os trechos públicos do app web lidos direto (variáveis CSS dos temas, 161 ícones SVG, fórmula de tons, componentes) e as telas do app no emulador, nos dois temas.
+- **Cores:** variáveis do tema claro (`#FAFAFA`, `#FFFFFF`, `#18181B`, `#E4E4E7`, verde `#1A7F2B`, vermelho `#D12C32`, azul `#2563EB`) e escuro (`#0B0D0A`, `#111212`, `#F4F6F2`, `#28282C`, `#2FB22F`, `#FF6166`, `#5B8BFF`) mais 34 cores de categoria, sem a família roxa. Primário: Solar `#FBB202` (claro) e `#FFCB45` (escuro).
+- **Ícones:** 161 ícones desenhados em três tons (`#0000A1` base, `#0000A2` volume, `#0000A3` detalhe). Fórmula do Calen: claro = bloco 84% mais claro, base na cor, volume 15% mais escuro, detalhe 50% mais escuro; escuro = bloco da cor acinzentada sobre quase preto, base 20% mais clara; sobre cor cheia = ícone branco. Vêm em `src/calenArt.mjs`.
+- **Não deu para confirmar:** o cálculo exato dos insights e do "saldo previsto" no servidor do Calen, e os botões de filtro por banco; o que está abaixo é nosso desenho para o que o Floco tem.
+
+**Estrutura (Análise, abas no topo, todas visíveis)**
+- **Resumo (Início):** Saldo (toque abre Contas); Atividade em calendário (Tudo/Conta/Cartão, modos Cor/Gasto/Recebido/Saldo, células menores, resumo Resultado/Entrada/Saída/Saldo previsto/Entrada do mês seguinte, folha do dia); Insights do mês; Gasto no mês (cartão escuro com linha acumulada, mês passado e previsão, "N% acima/abaixo de R$ X em [mês]") e cartão amarelo "Comparação com o mês passado"; Tendência da fatura (por cartão, 3 meses, variação); Resumo cartões (fatura aberta, vencimento, % do limite); Gasto em [mês] (barras de 12 meses, gasto e previsto); Suas assinaturas; Top categorias (Ver todas); Atividade recente (Ver tudo).
+- **Categorias:** sub-abas Categorias, Tags e Regras. Rosca do mês (despesa/receita pela seta, info), "Ocultos do gráfico", busca, "Por fatura" (compra no cartão conta no mês da fatura), R$ ou %, ordem (maior, nome, menor), "Editar categorias", um cartão por categoria com barra e limite (usa o orçamento mensal de uma categoria; o lápis define ou edita) e subcategorias ao tocar, "Nova categoria". Tags: total por tag no mês. Regras: lista das regras ativas.
+- **Tipos (Tipo de gasto):** Fixo, Cortável, Variável e Guardado, mais tipos próprios; barra de proporção, "Gasto até agora", metas em % da renda (modelos 50·30·20, 60·20·20, 70·20·10 ou valores livres), Por fatura, R$/%, ordem, categorias dentro de cada tipo, Saldo e saldo previsto, "Editar tipos" (modelos, metas, categoria → tipo, tipo próprio). O lançamento de despesa tem o campo "Tipo de gasto" (automático pela categoria ou um tipo próprio). Guardado = depósitos em metas e caixinhas no mês, menos resgates.
+- **Fluxo:** cabeçalho "Recebido/Gasto em [mês]" com variação contra o mês anterior e botão "+", barras de 12 meses com média, abas Receitas, Despesas, Caixa e Projeção. Receitas e Despesas: sugestões de recorrência (3 meses seguidos, valor parecido), recorrentes (já entrou/saiu, pendente, ainda vai) e esporádicas; Caixa: saldo no começo, entradas, saídas, faturas e outros, saldo atual e previsto, guardado em metas e disponível; Projeção: saldo dia a dia, menor saldo e saldo no fim do mês.
+- **Mais:** os relatórios de antes (balanço, patrimônio, ritmo, maiores gastos, poupança, dia da semana, fixas e variáveis, atalhos), ainda com "Personalizar análise".
+
+**Regras do Floco**
+- Cores e ícones do Calen só na Análise; os ícones de categoria do Calen valem no app todo (extrato, seletor, pendentes, regras, Categorias) e a escolha de ícone de categoria própria agora oferece os 161 (guardada como `calen:nome`); escolha antiga em Feather continua valendo. Os ícones de interface e os logos de banco não mudam.
+- Calendário: dia com qualquer entrada fica verde; só saída, amarelo; fatura ou previsto, azul; contorno vermelho, saldo previsto negativo; contorno de texto, hoje.
+- Cartão "Gasto no mês" é escuro nos dois temas, como no Calen.
+
+**Fora desta rodada:** abas Central, Metas e Investimentos do Calen; filtro por banco; "Ver análise de 6 meses" do insight de comerciante; tipo de gasto em receitas e em transferências; criar a recorrência direto da sugestão (hoje abre o formulário com os dados do primeiro item).
+
+**Não testado:** celular real, TalkBack (rótulos estão nas abas, células, balões, linhas e gráficos, mas não foram ouvidos), fonte aumentada, telas pequenas e tablets. Testado no emulador (dados fictícios) nos dois temas: as cinco abas, calendário nos modos, rosca com ocultar, modelo 50·30·20 e metas por tipo. 52 testes novos (overview, flow, spendtypes, spending, looks, categories).
+
 ## F8a — Saúde financeira: fatores e histórico 🟡
 
 - **O que faz:** gera uma nota de 0 a 100 no aparelho, explica a composição e guarda o histórico.
