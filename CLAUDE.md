@@ -33,7 +33,7 @@ px tsc --noEmit
 
 ## Estado atual
 Pasta do projeto: C:\Users\Kat\Desktop\Projetos de IA\01 - Floco finanças (repositório Git, branch main).
-Versão: 1.9.0 (release publicada no GitHub). Concluído: widgets (W1), extrato PDF (F1), cores de destaque e ícones alternativos, lista de compras (E1, ainda sem release). Para o que falta, consulte TAREFAS.md e INVENTARIO-FUNCIONAL.md.
+Versão: 1.10.0 (release publicada no GitHub). Concluído: widgets (W1), extrato PDF (F1), cores de destaque e ícones alternativos, lista de compras (E1) com Modo compra, escanear produto e histórico. Para o que falta, consulte TAREFAS.md e INVENTARIO-FUNCIONAL.md.
 
 
 ## Lista de tarefas (em ordem)
