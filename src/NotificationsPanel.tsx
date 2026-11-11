@@ -1,3 +1,4 @@
+import { visibleAccounts } from "./accountOrder.mjs";
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -182,7 +183,7 @@ export default function NotificationsPanel({
             {choose(
               "Conta",
               "accountId",
-              state.accounts.map((a: any) => [a.id, a.name]),
+              visibleAccounts(state).map((a: any) => [a.id, a.name]),
             )}
             {choose("Cartão (se for compra a crédito)", "cardId", [
               ["", "Débito / conta"],

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import { WebView } from "react-native-webview";
-import { Box, Button, I, Muted, Section, T, styles as k } from "../ui/kit";
+import { Box, Button, I, Muted, Section, T, focusAccessibility, type ViewControl, styles as k } from "../ui/kit";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
@@ -9,7 +9,7 @@ import { formatCnpj } from "../nfce.mjs";
 import { MAX_HTML_CHARS, allowedHosts, consultUrl, hrefMatchesKey, isAllowedUrl, nfceToPurchase, parseNfceHtml } from "../nfceParse.mjs";
 import { purchasesOf, recordPurchase } from "../shoppingPurchases.mjs";
 import { applyConferencia, matchListToNota } from "../shoppingMatch.mjs";
-import { itemsOf } from "../shopping.mjs";
+import { activeShoppingState, editActiveShoppingItems, itemsOf } from "../shopping.mjs";
 
 const TIMEOUT_MS = 45000;
 // A página real tem ~40 KB. O teto vale para o texto bruto da mensagem, antes de qualquer JSON.parse.
@@ -24,7 +24,7 @@ const PAGE_SCRIPT = `
     var body = document.body ? document.body.innerText : "";
     if (/Request Rejected/i.test(body) && body.length < 600) {
       clearInterval(timer);
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: "rejected" }));
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: "rejected", href: String(location.href) }));
       return;
     }
     if (document.querySelector('#tabResult, tr[id^="Item"]') && document.readyState === "complete") {
@@ -53,6 +53,14 @@ export default function NfceConsultaScreen({ info }: { info: any }) {
   const [applied, setApplied] = useState(0);
   const [used, setUsed] = useState<number[]>([]); // linhas da nota já usadas na conferência
   const done = useRef(false);
+  const resultHeading = useRef<ViewControl>(null);
+  useEffect(() => { if (phase !== "loading") focusAccessibility(resultHeading.current); }, [phase]);
+  const status = phase === "loading" ? "Consultando a nota no site da SEFAZ…" :
+    phase === "preview" ? error || "Prévia da nota fiscal disponível." : phase === "saved" ? "Compra salva no histórico" : error;
+  const frame = (content: React.ReactNode) => <View>
+    <Muted accessibilityLiveRegion="polite">{status}</Muted>
+    {content}
+  </View>;
 
   const url = useMemo(() => {
     try {
@@ -89,7 +97,7 @@ export default function NfceConsultaScreen({ info }: { info: any }) {
       const msg = JSON.parse(raw);
       // A mensagem tem de vir do site oficial e da consulta desta nota (não de outra página nem de outra chave).
       if (!msg || !isAllowedUrl(msg.href, info.uf) || !hrefMatchesKey(msg.href, info.chave)) return fail("A resposta não veio da consulta desta nota.");
-      if (msg.type === "rejected") return fail("A SEFAZ recusou a consulta agora. Tente de novo em alguns minutos.");
+      if (msg.type === "rejected") return fail("A SEFAZ recusou a consulta. Tente de novo em alguns minutos.");
       if (msg.type !== "html" || typeof msg.html !== "string" || msg.html.length > MAX_HTML_CHARS) return fail("Resposta inesperada da SEFAZ.");
       const nota = parseNfceHtml(msg.html, { uf: info.uf });
       if (nota.chave !== info.chave) return fail("A nota consultada não é a que você leu. Tente ler o QR de novo.");
@@ -101,13 +109,13 @@ export default function NfceConsultaScreen({ info }: { info: any }) {
     }
   };
 
-  const conf = useMemo(() => (parsed ? matchListToNota(state, parsed.items, { skip: new Set(used) }) : null), [state.shoppingItems, parsed, used]);
+  const conf = useMemo(() => (parsed ? matchListToNota(activeShoppingState(state), parsed.items, { skip: new Set(used) }) : null), [state.shoppingItems, state.shoppingListId, parsed, used]);
   const picks = conf ? conf.matches.filter((m: any) => !off[m.listItemId]) : [];
-  const pendingCount = itemsOf(state).filter((i: any) => !i.inCart).length;
+  const pendingCount = itemsOf(activeShoppingState(state)).filter((i: any) => !i.inCart).length;
 
   const applyMatches = async () => {
     const n = picks.length;
-    const ok = await perform((st: any) => applyConferencia(st, picks, parsed.items), "");
+    const ok = await perform((st: any) => editActiveShoppingItems(st, (scope: any) => applyConferencia(scope, picks, parsed.items)), "");
     if (ok) {
       setApplied((a) => a + n);
       setUsed((u) => [...u, ...picks.map((p: any) => p.notaIndex)]);
@@ -141,9 +149,9 @@ export default function NfceConsultaScreen({ info }: { info: any }) {
 
   // Depois de salvar (ou ao voltar do formulário de despesa, que remonta a tela) mostra o estado de nota salva.
   if (phase === "saved" || (phase === "preview" && parsed && existing))
-    return (
+    return frame(
       <>
-        <View accessibilityLiveRegion="polite">
+        <View ref={resultHeading} accessible accessibilityRole="header" accessibilityLiveRegion="polite">
           <Box>
             <View style={[k.row, { gap: 8 }]}>
               <I name="check-circle" color={c.green} />
@@ -193,8 +201,9 @@ export default function NfceConsultaScreen({ info }: { info: any }) {
                           {on && <I name="check" size={16} color={c.onPrimary} />}
                         </View>
                         <View style={{ flex: 1 }}>
-                          <T numberOfLines={1}>{m.listName}</T>
-                          <Muted numberOfLines={1}>{`na nota: ${m.notaName}${m.qtyShort ? " · menos que o pedido" : ""}`}</Muted>
+                          <T>{m.listName}</T>
+                          <Muted>Na nota: {m.notaName}</Muted>
+                          {m.qtyShort && <Muted>Quantidade menor que a pedida</Muted>}
                         </View>
                       </Pressable>
                     );
@@ -210,9 +219,9 @@ export default function NfceConsultaScreen({ info }: { info: any }) {
         )}
         <View style={{ gap: 8 }}>
           {conf && conf.matches.length > 0 && (
-            <Button title={`Marcar ${picks.length} como comprados`} icon="check" disabled={picks.length === 0} onPress={() => void applyMatches()} />
+            <Button title={picks.length === 1 ? "Marcar 1 item como comprado" : `Marcar ${picks.length} itens como comprados`} icon="check" disabled={picks.length === 0} onPress={() => void applyMatches()} />
           )}
-          <Button title="Registrar como despesa" icon="dollar-sign" secondary={!!conf && conf.matches.length > 0} onPress={toExpense} />
+          <Button title="Registrar despesa" icon="dollar-sign" secondary={!!conf && conf.matches.length > 0} onPress={toExpense} />
           <Button title="Concluir" secondary onPress={() => nav.replace({ name: "shopping" })} />
         </View>
       </>
@@ -220,10 +229,10 @@ export default function NfceConsultaScreen({ info }: { info: any }) {
 
   if (phase === "preview" && parsed) {
     const shown = parsed.items.slice(0, 8);
-    return (
+    return frame(
       <>
         <Box>
-          <T style={{ fontFamily: "SoraSemi" }}>{parsed.marketName || "Mercado"}</T>
+          <View ref={resultHeading} accessible accessibilityRole="header"><T style={{ fontFamily: "SoraSemi" }}>{parsed.marketName || "Mercado"}</T></View>
           <Muted>{`CNPJ ${formatCnpj(parsed.cnpj)}`}</Muted>
           <Muted>{`${brDate(parsed.issuedDate)} ${parsed.issuedTime}`.trim()}</Muted>
           <View style={[k.row, { justifyContent: "space-between", marginTop: 8 }]}>
@@ -241,7 +250,7 @@ export default function NfceConsultaScreen({ info }: { info: any }) {
           {shown.map((i: any, idx: number) => (
             <View key={idx} style={[k.row, idx < shown.length - 1 && k.hairline, { borderBottomColor: c.line, padding: 12, gap: 8 }]}>
               <View style={{ flex: 1 }}>
-                <T numberOfLines={2}>{i.name}</T>
+                <T>{i.name}</T>
                 <Muted>{`${String(i.qty).replace(".", ",")}${i.unit ? ` ${i.unit}` : "x"} · ${show(i.unitPriceCents)}`}</Muted>
               </View>
               <T style={{ fontVariant: ["tabular-nums"] }}>{show(i.totalCents)}</T>
@@ -263,16 +272,13 @@ export default function NfceConsultaScreen({ info }: { info: any }) {
   }
 
   if (phase === "error")
-    return (
+    return frame(
       <>
         <Box>
-          <View style={[k.row, { gap: 8 }]}>
+          <View ref={resultHeading} accessible accessibilityRole="header" style={[k.row, { gap: 8 }]}>
             <I name="alert-circle" color={c.red} />
             <T style={{ fontFamily: "SoraSemi", flex: 1 }}>Não consegui consultar a nota</T>
           </View>
-          <Muted accessibilityLiveRegion="polite" style={{ marginTop: 8 }}>
-            {error}
-          </Muted>
         </Box>
         <View style={{ gap: 8 }}>
           <Button title="Tentar de novo" icon="refresh-cw" onPress={() => setAttempt((n) => n + 1)} />
@@ -281,11 +287,8 @@ export default function NfceConsultaScreen({ info }: { info: any }) {
       </>
     );
 
-  return (
+  return frame(
     <>
-      <View accessibilityLiveRegion="polite">
-        <Muted>Consultando a nota no site da SEFAZ…</Muted>
-      </View>
       <View
         accessible
         accessibilityLabel="Página da SEFAZ carregando"
@@ -315,7 +318,7 @@ export default function NfceConsultaScreen({ info }: { info: any }) {
           geolocationEnabled={false}
         />
       </View>
-      <Muted style={{ marginTop: 8 }}>A página é aberta só para ler os itens. Nada é enviado a ninguém além da SEFAZ.</Muted>
+      <Muted style={{ marginTop: 8 }}>A consulta abre a nota fiscal no site da SEFAZ.</Muted>
     </>
   );
 }

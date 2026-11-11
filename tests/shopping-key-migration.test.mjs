@@ -1,3 +1,4 @@
+import { assertFast } from "./helpers/timing.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
@@ -44,9 +45,10 @@ test("Funde colisão, usa os 24 pontos mais recentes e reaponta itens", () => {
 test("Cinco mil produtos são migrados em até 300 ms", () => {
   const products = Array.from({ length: 5000 }, (_, i) => product({ id: String(i), name: "Produto " + i, key: "antiga" }));
   const state = makeState({ products });
-  const start = performance.now();
-  const result = migrateProductKeys(state);
-  assert.ok(performance.now() - start < 300);
+  let result;
+  assertFast(() => {
+    result = migrateProductKeys(state);
+  }, 300, "shopping-key-migration");
   assert.equal(result.rekeyed, 5000);
   assert.equal(result.state.shoppingProducts[4999].key, productKey(products[4999].name));
 });

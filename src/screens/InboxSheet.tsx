@@ -59,7 +59,7 @@ export default function InboxSheet({ row, onClose, onDone }: { row: any | null; 
   const line = { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.line };
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={s.backdrop} onPress={onClose} accessibilityLabel="Fechar" />
+      <Pressable style={[s.backdrop, { backgroundColor: c.scrim }]} onPress={onClose} accessibilityLabel="Fechar" />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[s.sheet, { backgroundColor: c.bg }]}>
         <View style={[s.handle, { backgroundColor: c.line }]} />
         <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }} keyboardShouldPersistTaps="handled">
@@ -231,7 +231,7 @@ export default function InboxSheet({ row, onClose, onDone }: { row: any | null; 
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
+  backdrop: { flex: 1 },
   sheet: { maxHeight: "92%", borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: "hidden" },
   handle: { width: 44, height: 5, borderRadius: 3, alignSelf: "center", marginTop: 8 },
   badge: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },

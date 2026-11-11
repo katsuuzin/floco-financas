@@ -1,49 +1,56 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { View } from "react-native";
 import { Box, Button, Empty, IconButton, Muted, T, styles as k } from "../ui/kit";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
-import { daysLeft, emptyTrash, purgeExpired, purgeTrash, restoreTrash, TRASH_DAYS } from "../trash.mjs";
+import { daysLeft, emptyTrash, purgeTrash, TRASH_DAYS } from "../trash.mjs";
+import { emptyTrashPlan, planPurge, restoreFromTrash } from "../trashPurge.mjs";
 
 // S11: lançamentos excluídos, com restaurar, apagar de vez e esvaziar.
 export default function TrashScreen() {
   const { c } = useTheme();
   const { state, perform, confirm, show } = useStore();
   const items: any[] = state.trash || [];
-  // Itens com mais de 30 dias saem ao abrir a tela (e também a cada nova exclusão).
-  useEffect(() => {
-    if (purgeExpired(state) !== state) void perform((s: any) => purgeExpired(s));
-  }, []);
+  const now = Date.now();
+  const invalid = new Set(planPurge(items, { now } as Parameters<typeof planPurge>[1]).reasons.flatMap((reason) => reason.code === "data_invalida" && "index" in reason ? [reason.index] : []));
+  const plan = emptyTrashPlan(items);
+  const restore = (id: string) => void perform((s: any) => {
+    const next = restoreFromTrash(s, id);
+    if (next.error) throw Error(next.error);
+    return next;
+  }, "Lançamento restaurado");
   if (!items.length)
     return <Empty title="Lixeira vazia" body={`Lançamentos excluídos ficam aqui por ${TRASH_DAYS} dias e podem ser restaurados.`} />;
   return (
     <>
       <Muted style={{ marginBottom: 10 }}>
-        Restaure um lançamento para devolvê-lo ao extrato e ao saldo. Depois de {TRASH_DAYS} dias ele é apagado de vez.
+        Itens ficam até {TRASH_DAYS} dias na lixeira. Você pode restaurá-los para o extrato.
       </Muted>
       <Box style={{ padding: 0, overflow: "hidden" }}>
         {items.map((x, i) => {
-          const left = daysLeft(x);
+          const date = new Date(x.deletedAt);
+          const left = daysLeft({ ...x, deletedAt: date.getTime() }, now);
           const income = x.type === "income";
-          const when = new Date(x.deletedAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", "");
+          const when = invalid.has(i) ? "Data de exclusão desconhecida" :
+            `Excluído em ${date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })} · ${left} ${left === 1 ? "dia" : "dias"}`;
           return (
             <View
               key={x.id}
               style={[k.row, i < items.length - 1 && k.hairline, { borderBottomColor: c.line, paddingLeft: 16, paddingRight: 4, minHeight: 68, gap: 4 }]}
             >
               <View style={{ flex: 1, paddingVertical: 10, gap: 2 }}>
-                <T numberOfLines={1} style={{ fontFamily: "SoraSemi" }}>
+                <T style={{ fontFamily: "SoraSemi" }}>
                   {x.description || "Sem descrição"}
                 </T>
-                <Muted numberOfLines={2}>
-                  {(x.count > 1 ? `${x.count} parcelas · ` : "") + `excluído em ${when} · ${left} ${left === 1 ? "dia" : "dias"}`}
+                <Muted>
+                  {(x.count > 1 ? `${x.count} parcelas · ` : "") + when}
                 </Muted>
               </View>
               <T style={{ fontFamily: "SoraSemi", color: income ? c.green : c.text, fontVariant: ["tabular-nums"] }}>{show(x.amount)}</T>
               <IconButton
                 name="rotate-ccw"
                 label={`Restaurar ${x.description}`}
-                onPress={() => void perform((s: any) => restoreTrash(s, x.id), "Lançamento restaurado")}
+                onPress={() => restore(x.id)}
               />
               <IconButton
                 name="x"
@@ -64,8 +71,8 @@ export default function TrashScreen() {
           title="Esvaziar lixeira"
           onPress={() =>
             confirm(
-              "Esvaziar lixeira?",
-              `${items.length} ${items.length === 1 ? "item será apagado" : "itens serão apagados"} de vez. Isso não pode ser desfeito.`,
+              plan.message,
+              plan.transactions === 1 ? "Um lançamento será apagado de vez." : `${plan.transactions} lançamentos serão apagados de vez.`,
               () => perform((s: any) => emptyTrash(s), "Lixeira esvaziada"),
               "Esvaziar",
             )

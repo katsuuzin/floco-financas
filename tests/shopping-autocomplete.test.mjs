@@ -1,3 +1,4 @@
+import { assertFast } from "./helpers/timing.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
@@ -33,7 +34,7 @@ test("Usa compras e entradas recentes quando o catálogo está vazio", () => {
 });
 test("Cinco mil produtos abaixo de 50 ms", () => {
   const state = makeState({ products: Array.from({ length: 5000 }, (_, i) => ({ name: "Produto " + i, buys: i })) });
-  const start = performance.now();
-  assert.equal(suggestNames(state, "p", { now: 0 }).length, 6);
-  assert.ok(performance.now() - start < 50);
+  assertFast(() => {
+    assert.equal(suggestNames(state, "p", { now: 0 }).length, 6);
+  }, 50, "shopping-autocomplete");
 });

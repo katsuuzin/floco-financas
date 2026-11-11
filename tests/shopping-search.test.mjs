@@ -1,3 +1,4 @@
+import { assertFast } from "./helpers/timing.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
@@ -36,7 +37,7 @@ test("Histórico filtra loja, data e preço com fronteiras inclusivas", () => {
 });
 test("Pesquisa em cinco mil compras termina abaixo de 100 ms", () => {
   const data = makeState({ purchases: Array.from({ length: 5000 }, (_, i) => makePurchase({ id: String(i) })) });
-  const start = performance.now();
-  assert.equal(searchPurchases(data, "ficticio").length, 5000);
-  assert.ok(performance.now() - start < 100);
+  assertFast(() => {
+    assert.equal(searchPurchases(data, "ficticio").length, 5000);
+  }, 100, "shopping-search");
 });

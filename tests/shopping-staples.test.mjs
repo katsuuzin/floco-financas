@@ -1,3 +1,4 @@
+import { assertFast } from "./helpers/timing.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
@@ -34,7 +35,7 @@ test("Virada UTC e dia civil explícito preservam o limite de dias", () => {
 });
 test("Dois mil básicos são avaliados em menos de 100 ms", () => {
   const shoppingStaples = Array.from({ length: 2000 }, (_, n) => ({ ...item, name: "Arroz " + n, staple: true, everyDays: 1 }));
-  const start = performance.now();
-  assert.equal(staplesToRestock({ shoppingStaples }, "2026-01-08").length, 2000);
-  assert.ok(performance.now() - start < 100);
+  assertFast(() => {
+    assert.equal(staplesToRestock({ shoppingStaples }, "2026-01-08").length, 2000);
+  }, 100, "shopping-staples");
 });

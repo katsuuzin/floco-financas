@@ -8,7 +8,12 @@ import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
 import { validateBackup, today } from "../finance.mjs";
 import { keepShoppingOnRestore } from "../shopping.mjs";
+import { checkShoppingBackup } from "../shoppingBackupCheck.mjs";
+import { repairShoppingBackup } from "../shoppingBackupRepair.mjs";
+import { summarizeBackupIssues } from "../shoppingBackupMessages.mjs";
 import { exportCSV } from "./SettingsScreen";
+
+const NL = String.fromCharCode(10);
 export default function DataToolsScreen() {
   const nav = useNav();
   const { current, perform, confirm } = useStore();
@@ -45,9 +50,29 @@ export default function DataToolsScreen() {
       const a = selected.assets[0];
       if ((a.size || 0) > 20 * 1024 * 1024)
         throw Error("Limite de 20 MB para backup JSON.");
-      const state = validateBackup(
-        JSON.parse(await FileSystem.readAsStringAsync(a.uri)),
-      );
+      const raw = JSON.parse(await FileSystem.readAsStringAsync(a.uri));
+      const check = checkShoppingBackup(raw);
+      if (!check.ok) {
+        // Lista de compras com defeito no backup: mostra o problema em português e oferece reparo.
+        const fixed = repairShoppingBackup(raw);
+        const shown = summarizeBackupIssues(check.errors, { max: 3 }).text;
+        const more = "";
+        if (!checkShoppingBackup(fixed.data).ok)
+          throw Error("A lista de compras do backup tem erros sem reparo:" + NL + shown + more);
+        Alert.alert(
+          "Backup com problemas na lista de compras",
+          shown + more + NL + NL + "O reparo corrige ou remove só esses itens da lista de compras. O restante do backup não muda.",
+          [
+            { text: "Cancelar", style: "cancel" },
+            { text: "Reparar e continuar", onPress: () => void run(async () => proceed(fixed.data)) },
+          ],
+        );
+        return;
+      }
+      proceed(raw);
+    });
+  const proceed = (raw: any) => {
+      const state = validateBackup(raw);
       confirm(
         "Restaurar backup do Floco?",
         "Esta ação substitui os registros. Uma cópia dos dados atuais será guardada localmente antes da troca.",
@@ -63,7 +88,7 @@ export default function DataToolsScreen() {
           }),
         "Restaurar",
       );
-    });
+  };
   return (
     <>
       {busy && (

@@ -1,6 +1,7 @@
+import { assertFast, measure } from "./helpers/timing.mjs";
+import { applyStatementFilter } from "../src/statementFilter.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { performance } from "node:perf_hooks";
 import { shoppingSummary } from "../src/shopping.mjs";
 import { tripSummary, pendingByCategory } from "../src/shoppingTrip.mjs";
 import { suggestPrices } from "../src/shoppingSuggestPrice.mjs";
@@ -76,15 +77,19 @@ test("Massa de desempenho tem 2.000 itens, 600 produtos e 40.000 linhas de compr
 
 for (const [name, budget, run] of cases) {
   test("Orçamento de desempenho de " + name, (t) => {
-    const timings = [];
-    for (let i = 0; i < 3; i++) {
-      const start = performance.now();
-      const result = run();
-      timings.push(performance.now() - start);
-      assert.notEqual(result, undefined);
-    }
-    const median = timings.sort((a, b) => a - b)[1];
+    const median = assertFast(() => assert.notEqual(run(), undefined), budget, name);
     t.diagnostic("PERF " + name + " " + median.toFixed(2) + " ms");
-    assert.ok(median < budget, name + " levou " + median.toFixed(2) + " ms (limite " + budget + " ms).");
   });
 }
+
+test("Dobrar o extrato custa menos de três vezes a filtragem", () => {
+  const rows = Array.from({ length: 40_000 }, (_, i) => ({
+    id: String(i), accountId: i % 2 ? "b" : "a", description: "Café de teste",
+  }));
+  const filters = { accountIds: ["a"], text: "cafe" };
+  const half = rows.slice(0, rows.length / 2);
+  assert.equal(applyStatementFilter(rows, filters).length, 20_000);
+  const small = measure(() => applyStatementFilter(half, filters), { runs: 11 });
+  const large = measure(() => applyStatementFilter(rows, filters), { runs: 11 });
+  assert.ok(large < small * 3, `Dobrar: ${small.toFixed(2)} ms → ${large.toFixed(2)} ms`);
+});

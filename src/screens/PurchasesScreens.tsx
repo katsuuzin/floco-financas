@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Pressable, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { Pressable, useWindowDimensions, View } from "react-native";
 import { Box, Button, Empty, Field, I, Muted, Section, Segmented, T, styles as k } from "../ui/kit";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
@@ -7,7 +7,7 @@ import { useNav } from "../app/nav";
 import { formatCnpj } from "../nfce.mjs";
 import { today } from "../finance.mjs";
 import { restockCandidates } from "../shoppingRhythm.mjs";
-import { addShoppingItem } from "../shopping.mjs";
+import { activeShoppingState, addShoppingItem } from "../shopping.mjs";
 import { priceSummary, productsOf, purchasesOf, removePurchase } from "../shoppingPurchases.mjs";
 import RestockList from "./RestockList";
 import { monthlyReport } from "../shoppingReport.mjs";
@@ -28,17 +28,25 @@ export function PurchasesScreen() {
   const nav = useNav();
   const [tab, setTab] = useState<"compras" | "produtos">("compras");
   const [query, setQuery] = useState("");
+  const [resultStatus, setResultStatus] = useState("");
+  const { fontScale } = useWindowDimensions();
+  const largeText = fontScale >= 1.5;
 
   const purchases: any[] = purchasesByDate(state);
   const products: any[] = tab === "produtos" ? searchProducts(state, query) : [];
   const now = new Date();
   const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const month = monthSummary(state, ym);
+  useEffect(() => {
+    const timer = setTimeout(() => setResultStatus(tab === "produtos" && query.trim() ?
+      `${products.length} ${products.length === 1 ? "produto encontrado" : "produtos encontrados"}` : ""), 350);
+    return () => clearTimeout(timer);
+  }, [tab, query, products.length]);
 
   return (
     <>
       <Segmented
-        label="Ver"
+        label="Histórico de compras"
         values={[
           ["compras", "Compras"],
           ["produtos", "Produtos"],
@@ -46,6 +54,7 @@ export function PurchasesScreen() {
         value={tab}
         onChange={setTab}
       />
+      <Muted accessibilityLiveRegion="polite">{resultStatus}</Muted>
 
       {tab === "compras" ? (
         purchases.length === 0 ? (
@@ -70,13 +79,13 @@ export function PurchasesScreen() {
                 <Pressable
                   key={p.id}
                   accessibilityRole="button"
-                  accessibilityLabel={`Compra em ${p.marketName || "mercado"}, ${brDate(p.date)}, ${p.items.length} itens`}
+                  accessibilityLabel={`Compra em ${p.marketName || "mercado"}, ${brDate(p.date)}, ${p.items.length} ${p.items.length === 1 ? "item" : "itens"}, ${show(p.totalCents)}`}
                   onPress={() => nav.push({ name: "purchaseDetail", id: p.id })}
                   android_ripple={{ color: c.soft }}
-                  style={[k.row, i < all.length - 1 && k.hairline, { borderBottomColor: c.line, padding: 16, minHeight: 72, gap: 12 }]}
+                  style={[k.row, largeText && { flexDirection: "column", alignItems: "stretch" }, i < all.length - 1 && k.hairline, { borderBottomColor: c.line, padding: 16, minHeight: 72, gap: 12 }]}
                 >
                   <View style={{ flex: 1, gap: 2 }}>
-                    <T numberOfLines={1} style={{ fontFamily: "SoraSemi" }}>
+                    <T style={{ fontFamily: "SoraSemi" }}>
                       {displayName(p.marketName) || "Compra manual"}
                     </T>
                     <Muted>{`${brDate(p.date)} · ${p.items.length} ${p.items.length === 1 ? "item" : "itens"}`}</Muted>
@@ -98,7 +107,7 @@ export function PurchasesScreen() {
           {productsOf(state).length === 0 ? (
             <Empty icon="tag" title="Nenhum produto ainda" body="Os produtos aparecem quando você salva uma compra." />
           ) : products.length === 0 ? (
-            <Muted style={{ marginTop: 12 }}>Nenhum produto com esse nome.</Muted>
+            <Muted style={{ marginTop: 12 }}>Nenhum produto encontrado. Tente outro nome ou limpe a busca.</Muted>
           ) : (
             <>
               <Section title={`${products.length} ${products.length === 1 ? "produto" : "produtos"}`} />
@@ -112,10 +121,10 @@ export function PurchasesScreen() {
                       accessibilityLabel={`${displayName(p.name)}, último preço ${p.lastPriceCents != null ? show(p.lastPriceCents) : "sem preço"}, comprado ${p.buys} ${p.buys === 1 ? "vez" : "vezes"}`}
                       onPress={() => nav.push({ name: "productDetail", id: p.id })}
                       android_ripple={{ color: c.soft }}
-                      style={[k.row, i < all.length - 1 && k.hairline, { borderBottomColor: c.line, padding: 16, minHeight: 72, gap: 12 }]}
+                      style={[k.row, largeText && { flexDirection: "column", alignItems: "stretch" }, i < all.length - 1 && k.hairline, { borderBottomColor: c.line, padding: 16, minHeight: 72, gap: 12 }]}
                     >
                       <View style={{ flex: 1, gap: 2 }}>
-                        <T numberOfLines={2}>{displayName(p.name)}</T>
+                        <T>{displayName(p.name)}</T>
                         <Muted>{`comprado ${p.buys}x${tr.dir === "up" ? ` · subiu ${String(tr.pct).replace(".", ",")}%` : tr.dir === "down" ? ` · caiu ${String(tr.pct).replace(".", ",")}%` : ""}`}</Muted>
                       </View>
                       <T style={{ fontVariant: ["tabular-nums"] }}>{p.lastPriceCents != null ? `${show(p.lastPriceCents)}${unitSuffix(p.unit)}` : ""}</T>
@@ -175,7 +184,7 @@ export function PurchaseDetailScreen({ id }: { id: string }) {
         {p.items.map((i: any, idx: number) => (
           <View key={idx} style={[k.row, idx < p.items.length - 1 && k.hairline, { borderBottomColor: c.line, padding: 12, gap: 8 }]}>
             <View style={{ flex: 1 }}>
-              <T numberOfLines={2}>{displayName(i.name)}</T>
+              <T>{displayName(i.name)}</T>
               <Muted>{`${String(i.qty).replace(".", ",")}${i.unit ? ` ${i.unit}` : "x"} · ${show(i.unitPriceCents)}${unitSuffix(i.unit)}`}</Muted>
             </View>
             <T style={{ fontVariant: ["tabular-nums"] }}>{show(i.totalCents)}</T>
@@ -184,7 +193,7 @@ export function PurchaseDetailScreen({ id }: { id: string }) {
       </Box>
 
       <View style={{ marginTop: 16, gap: 8 }}>
-        <Button title="Registrar como despesa" icon="dollar-sign" onPress={() => nav.push({ name: "form", kind: "transaction", initial: expenseDraftFromPurchase(p) })} />
+        <Button title="Registrar despesa" icon="dollar-sign" onPress={() => nav.push({ name: "form", kind: "transaction", initial: expenseDraftFromPurchase(p) })} />
         <Button title="Apagar compra" icon="trash-2" danger secondary onPress={remove} />
       </View>
     </>
@@ -254,7 +263,7 @@ export function ProductDetailScreen({ id }: { id: string }) {
           <View key={`${x.purchaseId}-${i}`} style={[k.row, i < pts.length - 1 && k.hairline, { borderBottomColor: c.line, padding: 12, gap: 8 }]}>
             <View style={{ flex: 1 }}>
               <T>{brDate(x.date)}</T>
-              {!!x.market && <Muted numberOfLines={1}>{displayName(x.market)}</Muted>}
+              {!!x.market && <Muted>{displayName(x.market)}</Muted>}
             </View>
             <T style={{ fontVariant: ["tabular-nums"] }}>{`${show(x.priceCents)}${suffix}`}</T>
           </View>
@@ -297,7 +306,7 @@ function SummarySection() {
     }
   } catch {}
   try {
-    const pending = itemsOf(state).filter((i: any) => !i.inCart);
+    const pending = itemsOf(activeShoppingState(state)).filter((i: any) => !i.inCart);
     const best: any = pending.length ? cheapestStore(state, pending) : null;
     if (best) lines.push(`Sua lista costuma sair mais barata em ${best.store}: cerca de ${show(best.totalCents)}.`);
   } catch {}

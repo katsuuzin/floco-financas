@@ -1,3 +1,4 @@
+import { assertFast } from "./helpers/timing.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
@@ -42,7 +43,7 @@ test("Analisa cinco mil compras em menos de 200 ms", () => {
   const shoppingPurchases = Array.from({ length: 5000 }, (_, i) => ({
     date: "2026-01-" + String(1 + i % 28).padStart(2, "0"), items: [line("Leite", 100 + i % 28)],
   }));
-  const start = performance.now();
-  assert.ok(basketInflation({ shoppingPurchases }, { now: "2026-01-31" }));
-  assert.ok(performance.now() - start < 200);
+  assertFast(() => {
+    assert.ok(basketInflation({ shoppingPurchases }, { now: "2026-01-31" }));
+  }, 200, "shopping-inflation");
 });

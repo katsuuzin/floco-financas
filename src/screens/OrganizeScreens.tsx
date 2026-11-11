@@ -1,84 +1,85 @@
 // Contas, Cartões, Orçamento e Metas — telas empilhadas a partir de Mais.
 import React, { useState } from "react";
-import { View, Pressable, ScrollView } from "react-native";
-import { T, Muted, I, Box, Section, Button, Empty, IconButton, Progress, Segmented, styles as k } from "../ui/kit";
+import { Alert, View, Pressable, ScrollView } from "react-native";
+import { T, Muted, I, Box, Section, Button, Choice, Field, Empty, IconButton, Progress, Segmented, space, styles as k } from "../ui/kit";
 import { minimumPayment, invoiceBreakdown } from "../invoices.mjs";
-import { useTheme } from "../ui/theme";
+import { SheetModal } from "../ui/pickers";
+import { entityColors, useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
-import { invoice, invoiceDueDate, totalBalance, today, monthKey, moveItem } from "../finance.mjs";
+import { invoice, invoiceDueDate, totalBalance, today, monthKey, parseMoney, uid, applyPotYieldChange } from "../finance.mjs";
 import { normalizeBudget, budgetUsage, budgetHistory } from "../analysis.mjs";
 import { toInput } from "../app/forms";
-import { archiveGoal, boxReport, isBox, undoYield, yieldAccount, goalForecast, completeGoal, removeGoalMove } from "../goals.mjs";
+import { archiveGoal, isBox, goalForecast, completeGoal, removeGoalMove, registerYield, undoYield, yieldAccount } from "../goals.mjs";
 import TransactionRow from "./TransactionRow";
 import MonthBar from "./MonthBar";
 import { AccountList } from "./HomeScreen";
+import CategoryIcon, { categoryStyleOf } from "../ui/CategoryIcon";
+import { archiveAccount, moveAccount, unarchiveAccount, visibleAccounts } from "../accountOrder.mjs";
+import { archivePot, depositToPot, linkGoalToPot, potSummary, withdrawFromPot } from "../goalPots.mjs";
 
 export function AccountsScreen() {
-  const { state, perform, show } = useStore();
+  const { state, perform, show, confirm, current } = useStore();
   const nav = useNav();
-  const archived = state.accounts.filter((a: any) => a.archived);
-  const active = state.accounts.filter((a: any) => !a.archived);
+  const active = visibleAccounts(state);
+  const archived = visibleAccounts(state, { includeArchived: true }).filter((a: any) => a.archived);
   const [ordering, setOrdering] = useState(false);
-  const move = (id: string, delta: number) =>
-    perform((s: any) => ({ ...s, accounts: moveItem(s.accounts, id, delta) }));
+  const [showArchived, setShowArchived] = useState(false);
+  const move = (id: string, delta: number) => void perform((s: any) => {
+    const ordered = visibleAccounts(s, { includeArchived: true });
+    const visible = ordered.filter((a: any) => !a.archived);
+    const other = visible[visible.findIndex((a: any) => a.id === id) + delta];
+    if (!other) return s;
+    return { ...s, accounts: moveAccount(ordered, id, ordered.indexOf(other)) };
+  }, "Ordem salva");
+  const archive = (id: string) => {
+    const date = today();
+    const preview: any = archiveAccount(current(), id, { now: date } as Parameters<typeof archiveAccount>[2]);
+    const blockers = preview.blockers ?? [];
+    const force = blockers.length === 1 && blockers[0].code === "saldo";
+    const apply = () => void perform((s: any) => {
+      const next: any = archiveAccount(s, id, { force, now: date } as Parameters<typeof archiveAccount>[2]);
+      if (next.error) throw Error(next.blockers?.map((blocker: any) => blocker.message).join("\n") || next.error);
+      return next;
+    }, "Conta arquivada");
+    if (preview.error && !force) {
+      Alert.alert("Conta não arquivada", blockers.map((blocker: any) => blocker.message).join("\n") || preview.error);
+      return;
+    }
+    confirm("Arquivar conta?", force ? "A conta tem saldo e sairá do saldo total. Os lançamentos continuam no histórico." :
+      "A conta sai dos seletores. Os lançamentos continuam no histórico.", apply, "Arquivar");
+  };
   return (
     <>
       <Box>
         <Muted>Saldo total</Muted>
         <T style={[k.balanceValue, { fontSize: 28, marginTop: 4 }]}>{show(totalBalance(state))}</T>
       </Box>
-      <Section
-        title="Contas ativas"
-        action={ordering ? "Concluir" : "Adicionar"}
-        onPress={() => (ordering ? setOrdering(false) : nav.push({ name: "form", kind: "account" }))}
-      />
-      {ordering ? (
-        <Box style={{ paddingVertical: 0 }}>
-          {active.map((a: any, i: number) => (
-            <View key={a.id} style={[k.row, i < active.length - 1 && k.hairline, { minHeight: 64, gap: 4 }]}>
-              <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: a.color || "#FFCB45" }} />
-              <T style={{ flex: 1, fontFamily: "SoraSemi", marginLeft: 8 }} numberOfLines={1}>
-                {a.name}
-              </T>
-              <IconButton name="arrow-up" label={`Subir ${a.name}`} onPress={() => move(a.id, -1)} />
-              <IconButton name="arrow-down" label={`Descer ${a.name}`} onPress={() => move(a.id, 1)} />
-            </View>
-          ))}
+      <Section title="Contas ativas" action={ordering ? "Concluir" : "Adicionar"}
+        onPress={() => ordering ? setOrdering(false) : nav.push({ name: "form", kind: "account" })} />
+      {ordering ? active.map((a: any, i: number) => (
+        <Box key={a.id} style={{ gap: 8 }}>
+          <T>{a.name}</T>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
+            <Button secondary title="Subir" disabled={i === 0} onPress={() => move(a.id, -1)} />
+            <Button secondary title="Descer" disabled={i === active.length - 1} onPress={() => move(a.id, 1)} />
+          </View>
         </Box>
-      ) : (
-        <>
-          <AccountList />
-          {active.length > 1 && (
-            <View style={{ marginTop: 10 }}>
-              <Button secondary icon="list" title="Reordenar contas" onPress={() => setOrdering(true)} />
-            </View>
-          )}
-        </>
+      )) : (
+        <View style={{ gap: space.sm }}>
+          <AccountList onArchive={archive} />
+          {active.length > 1 && <Button secondary icon="list" title="Reordenar contas" onPress={() => setOrdering(true)} />}
+        </View>
       )}
-      {!!archived.length && (
-        <>
-          <Section title="Arquivadas" />
-          {archived.map((a: any) => (
-            <Box key={a.id} style={[k.row, { justifyContent: "space-between" }]}>
-              <T>{a.name}</T>
-              <Button
-                title="Restaurar"
-                secondary
-                onPress={() =>
-                  perform(
-                    (s: any) => ({
-                      ...s,
-                      accounts: s.accounts.map((x: any) => (x.id === a.id ? { ...x, archived: false } : x)),
-                    }),
-                    "Conta restaurada",
-                  )
-                }
-              />
-            </Box>
-          ))}
-        </>
-      )}
+      {!!archived.length && <View style={{ gap: space.sm, marginTop: space.sm }}>
+        <Button secondary title={showArchived ? "Ocultar arquivadas" : `Arquivadas (${archived.length})`}
+          onPress={() => setShowArchived(!showArchived)} />
+        {showArchived && archived.map((a: any) => <Box key={a.id} style={{ gap: 8 }}>
+          <T>{a.name}</T>
+          <Button title={`Desarquivar ${a.name}`} secondary
+            onPress={() => void perform((s: any) => unarchiveAccount(s, a.id), "Conta restaurada")} />
+        </Box>)}
+      </View>}
     </>
   );
 }
@@ -109,6 +110,7 @@ export function CardsScreen({ cardId }: { cardId?: string }) {
       .filter((t: any) => t.invoicePayment?.startsWith(card.id + ":"))
       .reduce((n: number, t: any) => n + t.amount, 0);
   const due = invoiceDueDate(card, month).split("-").reverse().join("/");
+  const entity = entityColors(card.color, c);
   return (
     <>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={k.chips}>
@@ -126,14 +128,14 @@ export function CardsScreen({ cardId }: { cardId?: string }) {
         <IconButton name="plus" label="Adicionar cartão" onPress={() => nav.push({ name: "form", kind: "card" })} />
       </ScrollView>
       <MonthBar />
-      <View style={{ padding: 24, borderRadius: 16, backgroundColor: card.color || "#311E0D", marginTop: 4 }}>
+      <View style={{ padding: 24, borderRadius: 16, backgroundColor: entity.backgroundColor, marginTop: 4 }}>
         <View style={k.row}>
-          <I name="credit-card" color="#FFFFFF" size={28} />
+          <I name="credit-card" color={entity.color} size={28} />
           <View style={{ flex: 1 }} />
           <IconButton
             name="edit-2"
             label="Editar cartão"
-            color="#FFFFFF"
+            color={entity.color}
             onPress={() =>
               nav.push({
                 name: "form",
@@ -148,11 +150,11 @@ export function CardsScreen({ cardId }: { cardId?: string }) {
             }
           />
         </View>
-        <T style={{ color: "#FFFFFF", fontFamily: "SoraSemi", fontSize: 19 }}>{card.name}</T>
-        <T style={{ color: "#F5E4D1", marginTop: 6 }}>•••• {card.lastFour || "••••"}</T>
+        <T style={{ color: entity.color, fontFamily: "SoraSemi", fontSize: 19 }}>{card.name}</T>
+        <T style={{ color: entity.color, marginTop: 6 }}>•••• {card.lastFour || "••••"}</T>
         <View style={[k.row, { marginTop: 22, justifyContent: "space-between" }]}>
-          <T style={{ color: "#F5E4D1", fontSize: 11 }}>Fecha dia {card.closingDay}</T>
-          <T style={{ color: "#F5E4D1", fontSize: 11 }}>Vence {due}</T>
+          <T style={{ color: entity.color, fontSize: 11 }}>Fecha dia {card.closingDay}</T>
+          <T style={{ color: entity.color, fontSize: 11 }}>Vence {due}</T>
         </View>
       </View>
       <Section title="Fatura do mês" />
@@ -182,7 +184,7 @@ export function CardsScreen({ cardId }: { cardId?: string }) {
             nav.push({
               name: "form",
               kind: "payment",
-              initial: { cardId: card.id, month, accountId: card.accountId || state.accounts[0]?.id },
+              initial: { cardId: card.id, month, accountId: card.accountId || visibleAccounts(state)[0]?.id },
             })
           }
         />
@@ -270,6 +272,7 @@ export function BudgetsScreen() {
           return (
             <Box key={b.id}>
               <View style={[k.row, { justifyContent: "space-between" }]}>
+                <CategoryIcon look={categoryStyleOf(state, b.categories[0] || "Outros")} />
                 <View style={{ flex: 1 }}>
                   <T style={{ fontFamily: "SoraSemi" }}>{label}</T>
                   <Muted style={{ fontSize: 11 }}>
@@ -337,9 +340,61 @@ export function GoalsScreen() {
   const { state, show, perform, confirm } = useStore();
   const nav = useNav();
   const [showArchived, setShowArchived] = useState(false);
+  const [tab, setTab] = useState<"metas" | "caixinhas">("metas");
+  const [potActions, setPotActions] = useState<string | null>(null);
+  const [potForm, setPotForm] = useState<{ action: "create" | "deposit" | "withdraw" | "archive" | "yield" | "transfer" | "rename"; id: string } | null>(null);
+  const [potName, setPotName] = useState("");
+  const [potAmount, setPotAmount] = useState("");
+  const [potDestination, setPotDestination] = useState("");
+  const [potTarget, setPotTarget] = useState("");
+  const accounts = visibleAccounts(state);
+  const pots = (state.pots ?? []).filter((pot: any) => !pot.archived);
+  const archivedPots = (state.pots ?? []).filter((pot: any) => pot.archived);
   const active = state.goals.filter((g: any) => !g.archived);
-  const boxes = active.filter(isBox);
   const metas = active.filter((g: any) => !isBox(g));
+  const openPot = (action: "deposit" | "withdraw" | "archive" | "yield" | "transfer" | "rename", id: string) => {
+    setPotActions(null);
+    const pot = pots.find((item: any) => item.id === id);
+    const fallback = accounts[0]?.id ?? "";
+    const reserve = yieldAccount(pot);
+    setPotName(pot.name);
+    setPotAmount("");
+    setPotTarget("");
+    setPotDestination(action === "archive" ? "" :
+      action === "deposit" ? fallback : accounts.some((account: any) => account.id === reserve) ? reserve : fallback);
+    setPotForm({ action, id });
+  };
+  const savePot = () => {
+    if (!potForm || potForm.action === "create") return;
+    const { action, id } = potForm;
+    void perform((s: any) => {
+      const date = today();
+      if (action === "rename") {
+        const name = potName.trim();
+        if (!name) throw Error("Informe o nome da caixinha.");
+        return { ...s, pots: s.pots.map((pot: any) => pot.id === id ? { ...pot, name } : pot) };
+      }
+      if (action === "yield") return applyPotYieldChange(s, id, (draft: any) =>
+        registerYield(draft, id, { date, amount: parseMoney(potAmount), accountId: potDestination }));
+      if (action === "transfer") {
+        if (!potTarget || potTarget === id) throw Error("Escolha outra caixinha.");
+        const movement = { date, amount: parseMoney(potAmount), accountId: potDestination };
+        const from: any = withdrawFromPot(s, id, movement as any);
+        if (from.error) throw Error(from.error);
+        const to: any = depositToPot(from, potTarget, movement as any);
+        if (to.error) throw Error(to.error);
+        return to;
+      }
+      const next: any = action === "archive" ? archivePot(s, id, {
+        date, toPotId: potDestination.startsWith("p:") ? potDestination.slice(2) : undefined,
+        toAccountId: potDestination.startsWith("a:") ? potDestination.slice(2) : undefined,
+      } as any) : (action === "deposit" ? depositToPot : withdrawFromPot)(s, id, {
+        date, amount: parseMoney(potAmount), accountId: potDestination,
+      } as any);
+      if (next.error) throw Error(next.error);
+      return next;
+    }, action === "archive" ? "Caixinha arquivada" : "Movimento salvo").then((ok) => { if (ok) setPotForm(null); });
+  };
   const archived = state.goals.filter((g: any) => g.archived);
   const edit = (g: any) => nav.push({ name: "form", kind: "goal", initial: { ...g, goalKind: g.kind || "box", target: toInput(g.target) } });
   const remove = (g: any) =>
@@ -366,102 +421,97 @@ export function GoalsScreen() {
       </View>
     </>
   );
-  if (!state.goals.length)
-    return (
-      <Empty
-        icon="target"
-        title="Um plano para chegar lá"
-        body="Crie uma caixinha para separar dinheiro numa conta, ou uma meta para acompanhar um objetivo."
-        action="Criar"
-        onPress={() => nav.push({ name: "form", kind: "goal" })}
-      />
-    );
   return (
     <>
-      <Section title="Caixinhas" action="Criar" onPress={() => nav.push({ name: "form", kind: "goal" })} />
-      <Muted style={{ marginBottom: 12 }}>
-        Caixinhas reservam dinheiro dentro da conta. O saldo total continua o mesmo; o disponível diminui.
-      </Muted>
-      {boxes.length === 0 && <Muted style={{ marginBottom: 12 }}>Nenhuma caixinha ativa.</Muted>}
-      {boxes.map((g: any) => {
-        const report = boxReport(g).slice(0, 3);
-        return (
-          <Box key={g.id}>
-            {header(g)}
-            <View style={{ gap: 8 }}>
-              <Button title="Guardar dinheiro" icon="plus" onPress={() => nav.push({ name: "form", kind: "deposit", initial: { goalId: g.id } })} />
-              {g.saved > 0 && (
-                <Button
-                  title="Registrar rendimento"
-                  secondary
-                  icon="trending-up"
-                  onPress={() => nav.push({ name: "form", kind: "yield", initial: { goalId: g.id, accountId: yieldAccount(g), description: "" } })}
-                />
-              )}
-              {g.saved > 0 && (
-                <Button title="Retirar" secondary icon="minus" onPress={() => nav.push({ name: "form", kind: "withdraw", initial: { goalId: g.id } })} />
-              )}
-              {g.saved > 0 && boxes.length > 1 && (
-                <Button
-                  title="Transferir para outra caixinha"
-                  secondary
-                  icon="shuffle"
-                  onPress={() =>
-                    nav.push({
-                      name: "form",
-                      kind: "reserveTransfer",
-                      initial: { goalId: g.id, destinationGoalId: boxes.find((x: any) => x.id !== g.id)?.id || "" },
-                    })
-                  }
-                />
-              )}
-            </View>
-            {report.length > 0 && (
-              <View style={{ marginTop: 12, gap: 2 }}>
-                <Muted style={{ fontFamily: "SoraSemi" }}>Movimento por mês</Muted>
-                {report.map((r: any) => (
-                  <Muted key={r.month}>
-                    {r.month.split("-").reverse().join("/")} · guardou {show(r.deposits)} · retirou {show(r.withdrawals)}{r.yields ? ` · rendeu ${show(r.yields)}` : ""}
-                  </Muted>
-                ))}
-              </View>
-            )}
-            {(g.history || []).filter((h: any) => h.type === "yield").slice(-3).reverse().map((h: any) => (
-              <View key={h.id} style={[k.row, { justifyContent: "space-between", minHeight: 44 }]}>
-                <Muted style={{ flex: 1 }}>
-                  Rendimento {h.date.split("-").reverse().join("/")} · +{show(h.amount)}
-                </Muted>
-                <Button
-                  title="Desfazer"
-                  secondary
-                  onPress={() =>
-                    confirm("Desfazer rendimento?", `Remove a receita de ${show(h.amount)} e tira esse valor da caixinha.`, () => perform((s: any) => undoYield(s, g.id, h.id), "Rendimento desfeito"), "Desfazer")
-                  }
-                />
-              </View>
-            ))}
-            <View style={[k.row, { gap: 8, marginTop: 12 }]}>
-              {g.saved === 0 && (
-                <View style={{ flex: 1 }}>
-                  <Button title="Arquivar" secondary icon="archive" onPress={() => perform((s: any) => archiveGoal(s, g.id), "Caixinha arquivada")} />
-                </View>
-              )}
-              <View style={{ flex: 1 }}>
-                <Button title="Excluir" danger onPress={() => remove(g)} />
-              </View>
-            </View>
-          </Box>
-        );
-      })}
-      <Section title="Metas" />
+      <Segmented label="Planejamento" values={[["metas", "Metas"], ["caixinhas", "Caixinhas"]]}
+        value={tab} onChange={(value) => { setTab(value); setPotForm(null); }} />
+      {tab === "caixinhas" ? (
+        <View style={{ gap: space.sm, marginTop: space.sm }}>
+          <Button title="Criar caixinha" icon="plus" onPress={() => setPotForm({ action: "create", id: "" })} />
+          {!pots.length && <Muted>Nenhuma caixinha ativa.</Muted>}
+          {potForm?.action === "create" && <Box style={{ gap: 8 }}>
+            <Field label="Nome da caixinha" value={potName} onChange={setPotName} maxLength={80} />
+            <Button title="Salvar caixinha" disabled={!potName.trim()} onPress={() => {
+              const name = potName.trim();
+              void perform((s: any) => ({ ...s, pots: [...(s.pots || []),
+                { id: uid(), name, saved: 0, deposits: [], history: [] }] }), "Caixinha criada")
+                .then((ok) => { if (ok) { setPotForm(null); setPotName(""); } });
+            }} />
+            <Button title="Cancelar" secondary onPress={() => setPotForm(null)} />
+          </Box>}
+          {pots.map((pot: any) => <Box key={pot.id} style={{ gap: 8 }}>
+            <T accessibilityRole="header">{pot.name}</T>
+            <Muted>Guardado {show(pot.saved)}</Muted>
+            {potSummary({ pots: [pot] }, today()).pots[0]?.monthly.slice(0, 3).map((row: any) =>
+              <Muted key={row.month}>{row.month.split("-").reverse().join("/")} · guardou {show(row.deposits)} · retirou {show(row.withdrawals)}
+                {row.yields ? " · rendeu " + show(row.yields) : ""}</Muted>)}
+            {!potForm || potForm.id !== pot.id ? <>
+              <Button title="Depositar" onPress={() => openPot("deposit", pot.id)} />
+              <Button title="Mais ações" secondary icon="more-horizontal" onPress={() => setPotActions(pot.id)} />
+            </> : null}
+            {potActions === pot.id && <SheetModal title={`Ações de ${pot.name}`} onClose={() => setPotActions(null)}>
+              <ScrollView contentContainerStyle={{ gap: space.sm, padding: space.lg }} keyboardShouldPersistTaps="handled">
+              {pot.saved > 0 && <>
+                <Button title="Retirar" secondary onPress={() => openPot("withdraw", pot.id)} />
+                <Button title="Registrar rendimento" secondary onPress={() => openPot("yield", pot.id)} />
+                {pots.length > 1 && <Button title="Transferir entre caixinhas" secondary onPress={() => openPot("transfer", pot.id)} />}
+              </>}
+              <Button title="Renomear caixinha" secondary onPress={() => openPot("rename", pot.id)} />
+              {(pot.history || []).filter((entry: any) => entry.type === "yield").slice(-5).reverse().map((entry: any) =>
+                <Button key={entry.id} title={`Desfazer rendimento de ${entry.date.split("-").reverse().join("/")} · ${show(entry.amount)}`} secondary onPress={() => {
+                  setPotActions(null);
+                  confirm("Desfazer rendimento?", "O lançamento e o valor guardado serão retirados.", () =>
+                    void perform((s: any) => applyPotYieldChange(s, pot.id, (draft: any) => undoYield(draft, pot.id, entry.id)), "Rendimento desfeito"), "Desfazer");
+                }} />)}
+              <Button title="Arquivar" secondary onPress={() => openPot("archive", pot.id)} />
+              </ScrollView>
+            </SheetModal>}
+            {potForm && potForm.id === pot.id && <>
+              {potForm.action === "archive" ? (pot.saved > 0 && <Choice label="Destino do saldo"
+                values={[
+                  ...pots.filter((item: any) => item.id !== pot.id).map((item: any) => ["p:" + item.id, item.name] as [string, string]),
+                  ...accounts.map((item: any) => ["a:" + item.id, item.name] as [string, string]),
+                ]} value={potDestination} onChange={setPotDestination} />) : potForm.action === "rename" ?
+                <Field label="Nome da caixinha" value={potName} onChange={setPotName} maxLength={80} autoFocus /> : <>
+                <Choice label="Conta" values={accounts.map((item: any) => [item.id, item.name] as [string, string])}
+                  value={potDestination} onChange={setPotDestination} />
+                {potForm.action === "transfer" && <Choice label="Caixinha de destino" values={pots.filter((item: any) => item.id !== pot.id)
+                  .map((item: any) => [item.id, item.name] as [string, string])} value={potTarget} onChange={setPotTarget} />}
+                <Field label="Valor (R$)" value={potAmount} onChange={setPotAmount} numeric autoFocus />
+              </>}
+              <Button title={potForm.action === "archive" ? "Confirmar arquivamento" : potForm.action === "rename" ? "Salvar nome" : "Confirmar valor"}
+                disabled={potForm.action === "archive" ? pot.saved > 0 && !potDestination : potForm.action === "rename" ? !potName.trim() :
+                  !potDestination || !potAmount.trim() || (potForm.action === "transfer" && !potTarget)}
+                onPress={savePot} />
+              <Button title="Cancelar" secondary onPress={() => setPotForm(null)} />
+            </>}
+          </Box>)}
+          {archivedPots.length > 0 && <Section title="Caixinhas arquivadas" />}
+          {archivedPots.map((pot: any) => <Box key={pot.id} style={{ gap: 8 }}>
+            <T>{pot.name}</T>
+            <Button title="Desarquivar caixinha" secondary onPress={() => void perform((s: any) => ({
+              ...s, pots: (s.pots || []).map((item: any) => item.id === pot.id ? { ...item, archived: false } : item),
+            }), "Caixinha restaurada")} />
+          </Box>)}
+        </View>
+      ) : <>
+      <Section title="Metas" action="Criar" onPress={() => nav.push({ name: "form", kind: "goal", initial: { goalKind: "goal" } })} />
       <Muted style={{ marginBottom: 12 }}>Metas acompanham um objetivo sem separar dinheiro.</Muted>
       {metas.length === 0 && <Muted style={{ marginBottom: 12 }}>Nenhuma meta. Toque em Criar e escolha Meta.</Muted>}
       {metas.map((g: any) => {
-        const fc = goalForecast(g);
+        const linked = (state.pots ?? []).find((pot: any) => pot.id === g.potId);
+        const progress = linked ? { ...g, saved: linked.saved, moves: [] } : g;
+        const fc = goalForecast(progress);
         const moves = [...(g.moves || [])].sort((a: any, b: any) => b.date.localeCompare(a.date)).slice(0, 5);
         return (
         <Box key={g.id}>
-          {header(g)}
+          {header(progress)}
+          <Choice label="Caixinha vinculada" values={[["", "Sem caixinha"], ...pots.map((pot: any) => [pot.id, pot.name] as [string, string])]}
+            value={g.potId ?? ""} onChange={(id) => void perform((s: any) => {
+              const next: any = linkGoalToPot(s, g.id, id || null);
+              if (next.error) throw Error(next.error);
+              return next;
+            }, "Vínculo salvo")} />
           {g.completedAt && <T style={{ color: c.green, fontFamily: "SoraSemi", marginBottom: 6 }}>Concluída em {g.completedAt.split("-").reverse().join("/")}</T>}
           {!g.completedAt && (
             <View style={{ marginBottom: 10, gap: 2 }}>
@@ -484,23 +534,15 @@ export function GoalsScreen() {
             </View>
           )}
           <View style={{ gap: 8 }}>
-            <Button
-              title="Depositar"
-              icon="plus"
-              onPress={() => nav.push({ name: "form", kind: "goalDeposit", initial: { goalId: g.id, description: "" } })}
-            />
+            {!linked && <Button title="Depositar" icon="plus" onPress={() => nav.push({ name: "form", kind: "goalDeposit", initial: { goalId: g.id, description: "" } })} />}
             <Button
               title={g.completedAt ? "Reabrir" : "Concluir"}
               secondary
               icon={g.completedAt ? "rotate-ccw" : "check-circle"}
               onPress={() => perform((s: any) => completeGoal(s, g.id, !g.completedAt), g.completedAt ? "Meta reaberta" : "Meta concluída")}
             />
-            <Button
-              title="Corrigir progresso"
-              secondary
-              icon="edit-3"
-              onPress={() => nav.push({ name: "form", kind: "goalProgress", initial: { goalId: g.id, amount: toInput(g.saved) } })}
-            />
+            {!linked && <Button title="Corrigir progresso" secondary icon="edit-3"
+              onPress={() => nav.push({ name: "form", kind: "goalProgress", initial: { goalId: g.id, amount: toInput(g.saved) } })} />}
             {moves.length > 0 && (
               <View style={{ gap: 2 }}>
                 <Muted style={{ fontFamily: "SoraSemi" }}>Histórico</Muted>
@@ -548,6 +590,7 @@ export function GoalsScreen() {
             ))}
         </>
       )}
+      </>}
     </>
   );
 }

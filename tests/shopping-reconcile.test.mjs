@@ -1,3 +1,4 @@
+import { assertFast } from "./helpers/timing.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
@@ -32,7 +33,7 @@ test("Um centavo de diferença entra, receitas, transferências e vínculos exis
 });
 test("Filtra vinte mil transações em até duzentos milissegundos", () => {
   const data = state(...Array.from({ length: 20000 }, (_, i) => tx(String(i), { amount: 100 + i })));
-  const start = performance.now();
-  assert.equal(findMatchingTransactions(data, purchase).length, 2);
-  assert.ok(performance.now() - start < 200);
+  assertFast(() => {
+    assert.equal(findMatchingTransactions(data, purchase).length, 2);
+  }, 200, "shopping-reconcile");
 });

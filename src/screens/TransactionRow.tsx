@@ -7,7 +7,7 @@ import { useNav } from "../app/nav";
 import { money } from "../finance.mjs";
 import { invoiceShiftOf } from "../invoices.mjs";
 import { trashTransaction } from "../trash.mjs";
-import { lookOf } from "../looks.mjs";
+import { categoryStyleOf, tagStyleOf } from "../ui/CategoryIcon";
 import CategoryIcon from "../ui/CategoryIcon";
 import { categoryLabel } from "../categories.mjs";
 import { toInput } from "../app/forms";
@@ -111,7 +111,7 @@ export default function TransactionRow({ t, withDate = false, last = false }: { 
     d.showCategory === "category" ? categoryLabel(t.category, t.subcategory) : "",
     card?.name || account?.name,
     t.installments > 1 ? `${t.installment}/${t.installments}` : "",
-    d.showTags && tags.length ? tags.map((x: string) => "#" + x).join(" ") : "",
+
   ].filter(Boolean);
   const badges = [!t.confirmed ? "Pendente" : "", t.refund ? "Estorno" : "", t.adjustment ? "Ajuste" : "", t.boxYield ? "Rendimento" : "", t.ignored ? "Fora da análise" : ""].filter(Boolean);
   return (
@@ -129,13 +129,19 @@ export default function TransactionRow({ t, withDate = false, last = false }: { 
           <I name="repeat" size={18} color={c.primary} />
         </View>
       ) : (
-        <CategoryIcon look={lookOf(state, t.category || "Outros")} size={38} />
+        <CategoryIcon look={categoryStyleOf(state, t.category || "Outros")} size={38} />
       )}
       <View style={{ flex: 1, gap: 2 }}>
         <T numberOfLines={1} style={{ fontFamily: "SoraSemi", fontSize: 14 }}>
           {t.description}
         </T>
         <Muted numberOfLines={1}>{meta.join(" · ")}</Muted>
+        {d.showTags && !!tags.length && <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
+          {state.tags.filter((tag: any) => (t.tags || []).includes(tag.id)).map((tag: any) =>
+            <View key={tag.id} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <CategoryIcon look={tagStyleOf(tag)} size={20} /><Muted>#{tag.name}</Muted>
+            </View>)}
+        </View>}
         {d.showNotes && !!t.notes && (
           <Muted numberOfLines={1} style={{ fontStyle: "italic" }}>
             {t.notes}

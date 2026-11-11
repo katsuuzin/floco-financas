@@ -7,6 +7,23 @@ import { SvgXml } from "react-native-svg";
 import Feather from "@expo/vector-icons/Feather";
 import { calenSvg, calenTones } from "../calenArt.mjs";
 import { useTheme } from "./theme";
+import { ALLOWED_ICONS, defaultStyleFor, readableOn, sanitizeStyle } from "../categoryStyle.mjs";
+import { CALEN_PREFIX, ICONS, isCalenChoice, lookOf } from "../looks.mjs";
+import { hasCalenIcon } from "../calenArt.mjs";
+
+export function categoryStyleOf(state: any, name: string): { icon: string; color: string; image?: string } {
+  const styles = state.categoryLooks ?? {};
+  if (!Object.hasOwn(styles, name)) return sanitizeStyle(defaultStyleFor(name));
+  const style = styles[name];
+  if (!ALLOWED_ICONS.includes(style?.icon) && (ICONS.includes(style?.icon) ||
+      isCalenChoice(style?.icon) && hasCalenIcon(style.icon.slice(CALEN_PREFIX.length)))) return lookOf(state, name);
+  return sanitizeStyle(style);
+}
+
+export function tagStyleOf(tag: any) {
+  const preset = defaultStyleFor(tag?.name);
+  return sanitizeStyle({ icon: tag?.icon ?? preset.icon, color: tag?.color ?? preset.color });
+}
 
 export default function CategoryIcon({ look, size = 38, solid = false }: { look: { icon: string; color: string; image?: string }; size?: number; solid?: boolean }) {
   const { dark } = useTheme();
@@ -21,7 +38,7 @@ export default function CategoryIcon({ look, size = 38, solid = false }: { look:
       {xml ? (
         <SvgXml xml={xml} width={size * 0.66} height={size * 0.66} />
       ) : (
-        <Feather name={look.icon as any} size={size * 0.48} color={solid ? "#FFFFFF" : look.color} />
+        <Feather name={look.icon as any} size={size * 0.48} color={solid ? readableOn(look.color) : look.color} />
       )}
     </View>
   );

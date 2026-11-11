@@ -111,8 +111,8 @@ test("erros: vazio, texto qualquer, endereço fora do governo, chave curta ou co
 });
 
 test("NF-e (modelo 55) e modelos desconhecidos não passam por cupom", () => {
-  assert.throws(() => parseNfceInput(EXEMPLO_NFE), /NF-e/);
-  assert.throws(() => parseNfceInput(chave({ mod: "59" })), /não é uma NFC-e/);
+  assert.throws(() => parseNfceInput(EXEMPLO_NFE), /nota fiscal de uma compra de mercado/);
+  assert.throws(() => parseNfceInput(chave({ mod: "59" })), /nota fiscal de uma compra de mercado/);
 });
 
 test("código de estado inexistente é recusado", () => {

@@ -1,3 +1,4 @@
+import { assertFast } from "./helpers/timing.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
@@ -22,10 +23,10 @@ test("Preço digitado, inclusive zero, não é substituído", () => {
   const data = state([item("1", "Café", { priceCents: 0 }), item("2", "Café", { priceCents: 500 })], [product("Café", 900)]);
   assert.equal(applySuggestedPrices(data), data);
 });
-test("Usa preço por unidade do histórico sem multiplicar pela quantidade", () => {
+test("Item com unidade recebe o total da linha: preço por unidade do histórico vezes a quantidade", () => {
   const data = state([item("1", "Banana", { qty: 2.5, unit: "kg" }), item("2", "Banana")],
     [product("Banana", 400, [], "kg")]);
-  assert.deepEqual(suggestPrices(data).map(({ id, priceCents }) => [id, priceCents]), [["1", 400]]);
+  assert.deepEqual(suggestPrices(data).map(({ id, priceCents }) => [id, priceCents]), [["1", 1000]]);
 });
 test("Ignora pontos inválidos e pode recuperar o último ponto válido", () => {
   const data = state([item("1", "Café"), item("2", "Sal")], [
@@ -64,7 +65,7 @@ test("500 itens e 5 mil compras em menos de 200 ms", () => {
   const catalog = Array.from({ length: 5000 }, (_, i) => product("Produto " + i, 500 + i, [point("2026-01-01", 500 + i, String(i))]));
   const data = state(catalog.slice(-500).map(({ name }, i) => item(String(i), name)), catalog,
     catalog.map(({ name }, i) => ({ id: String(i), items: [{ name }] })));
-  const start = performance.now();
-  assert.equal(suggestPrices(data).length, 500);
-  assert.ok(performance.now() - start < 200);
+  assertFast(() => {
+    assert.equal(suggestPrices(data).length, 500);
+  }, 200, "shopping-suggest-price");
 });

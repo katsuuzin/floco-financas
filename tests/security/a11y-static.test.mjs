@@ -8,7 +8,9 @@ const paths = [
   "src/screens/ShoppingScreen.tsx", "src/screens/ScanNotaScreen.tsx",
   "src/screens/NfceConsultaScreen.tsx", "src/screens/PurchasesScreens.tsx",
   "src/screens/RestockList.tsx", "src/screens/ShoppingPastePanel.tsx",
-  "src/ui/ShoppingIcons.tsx",
+  "src/ui/ShoppingIcons.tsx", "src/screens/ShoppingTripScreen.tsx", "src/screens/ScanProductScreen.tsx",
+  "src/screens/TransactionsScreen.tsx", "src/screens/TrashScreen.tsx", "src/screens/OrganizeScreens.tsx",
+  "src/screens/FormScreen.tsx",
 ];
 
 const walk = (node, visit) => {
@@ -25,6 +27,8 @@ const hasLabel = (node, name) => {
 const at = (node, source) => source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
 const target = /^(Pressable|IconButton|Button|TouchableOpacity|TouchableHighlight|TouchableWithoutFeedback)$/;
 const visibleProp = /^(title|label|accessibilityLabel|accessibilityHint|placeholder|message|description|body|text)$/;
+const namesThatMustWrap = new Set(["ShoppingScreen.tsx", "ShoppingTripScreen.tsx", "ScanProductScreen.tsx",
+  "ScanNotaScreen.tsx", "NfceConsultaScreen.tsx", "PurchasesScreens.tsx", "ShoppingPastePanel.tsx", "RestockList.tsx"]);
 const english = /^(?:Loading|Error|Submit|Cancel)(?:\b|$)/i;
 const dynamicStatus = /^(?:Verificando a permissão|Lendo a foto|Interpretando…|Adicionando…|Restam\b|A soma dos itens\b|Consultando a nota|Nenhum item encontrado|Compra salva no histórico)/i;
 
@@ -80,12 +84,14 @@ for (const path of paths) {
     walk(source, (node) => {
       if (!ts.isJsxOpeningElement(node) && !ts.isJsxSelfClosingElement(node)) return;
       const tag = node.tagName.getText();
+      if (namesThatMustWrap.has(path.split("/").at(-1)) && /^(T|Muted)$/.test(tag) && prop(node, "numberOfLines"))
+        report(node, "Texto do conteúdo precisa quebrar em fontes ampliadas.");
       if (/^(Pressable|IconButton)$/.test(tag) &&
           !hasLabel(node, "accessibilityLabel") && !(tag === "IconButton" && hasLabel(node, "label")) &&
           !hasVisibleChildren(node)) {
         report(node, tag + " sem nome acessível ou texto filho.");
       }
-      if (tag === "Pressable" && literals(value(node, "accessibilityRole")).includes("checkbox") &&
+      if (tag === "Pressable" && literals(value(node, "accessibilityRole")).some((role) => role === "checkbox" || role === "switch") &&
           !value(node, "accessibilityState")) {
         report(node, "Caixa de seleção sem accessibilityState.");
       }
@@ -115,6 +121,10 @@ for (const path of paths) {
       if ((status || isErrorOrNotice) && !hasLiveRegion(node)) {
         report(node, "Sem accessibilityLiveRegion: " + (status || "erro ou aviso"));
       }
+
+      if (/\/Scan(?:Nota|Product)Screen\.tsx$/u.test(path) && literals(value(node, "label")).includes("Lanterna") &&
+          (tag !== "Toggle" || !value(node, "value") || !value(node, "onChange")))
+        report(node, "Lanterna sem alternância acessível.");
 
       if (path.endsWith("/ShoppingIcons.tsx") && tag === "Svg") {
         svgFound = true;

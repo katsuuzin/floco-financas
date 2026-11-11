@@ -1,10 +1,12 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { View, Pressable } from "react-native";
-import { T, Muted, I, Field, Choice, Toggle, Button, IconButton, Segmented, AmountField, styles as k } from "../ui/kit";
+import { T, Muted, I, Field, Choice, Toggle, Button, Box, IconButton, Segmented, AmountField, styles as k } from "../ui/kit";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
-import { buildChange, defaults, formTitles } from "../app/forms";
+import { buildChange, buildExpenseBatchChange, defaults, formTitles, toInput, type BatchExpense } from "../app/forms";
+import { batchDuplicates, buildExpenseBatch, validateBatch } from "../multiExpenseDraft.mjs";
+import { safeCentsFromBr } from "../hardened.mjs";
 import { categoryNames } from "../planning.mjs";
 import { CategoryRow } from "../ui/pickers";
 import { spendTypeConfig } from "../spendTypes.mjs";
@@ -15,6 +17,7 @@ import { parseSignedMoney } from "../adjust.mjs";
 import { parseMoney } from "../finance.mjs";
 import { minimumPayment, chosenInvoiceMonth } from "../invoices.mjs";
 import { previewOf, contractStatus } from "../contracts.mjs";
+import { archiveAccount, visibleAccounts } from "../accountOrder.mjs";
 
 const COLORS: [string, string][] = [
   ["#311E0D", "Marrom"],
@@ -26,6 +29,120 @@ const COLORS: [string, string][] = [
 ];
 
 export default function FormScreen({ kind, initial }: { kind: string; initial?: any }) {
+  return kind === "expenseBatch" ? <ExpenseBatchReview initial={initial} /> : <RegularFormScreen kind={kind} initial={initial} />;
+}
+
+function ExpenseBatchReview({ initial }: { initial: any }) {
+  const { state, perform, show, confirm } = useStore();
+  const nav = useNav();
+  const accounts = visibleAccounts(state);
+  const [accountId, setAccountId] = useState(() => accounts[0]?.id || "");
+  const [draft] = useState(() => buildExpenseBatch(
+    { ...state, shoppingItems: initial?.shoppingItems || [] },
+    { date: today(), accountId, split: true } as Parameters<typeof buildExpenseBatch>[1],
+  ));
+  const [expenses, setExpenses] = useState<BatchExpense[]>(draft.expenses);
+  const [editing, setEditing] = useState<{ index: number; text: string } | null>(null);
+  const [error, setError] = useState("");
+  const [savedIds, setSavedIds] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const lock = useRef(false);
+  const batch = { expenses: expenses.map((expense) => ({ ...expense, accountId })), totalCents: draft.totalCents };
+  const validation = validateBatch(batch);
+  const duplicates = batchDuplicates(state, batch);
+
+  const applyAmount = () => {
+    if (!editing) return;
+    const amount = safeCentsFromBr(editing.text);
+    const difference = amount === null ? 0 : amount - expenses[editing.index].amountCents;
+    const other = expenses.reduce((largest, expense, index) =>
+      index !== editing.index && (largest < 0 || expense.amountCents > expenses[largest].amountCents) ? index : largest, -1);
+    if (amount === null || amount <= 0 || (difference !== 0 && (other < 0 || expenses[other].amountCents - difference <= 0))) {
+      setError("Informe um valor positivo que mantenha as outras despesas e o total do carrinho.");
+      return;
+    }
+    setExpenses(expenses.map((expense, index) => index === editing.index ? { ...expense, amountCents: amount } :
+      index === other ? { ...expense, amountCents: expense.amountCents - difference } : expense));
+    setEditing(null);
+    setError("");
+  };
+
+  const save = async () => {
+    if (lock.current || !validation.ok || !accounts.some((account: any) => account.id === accountId)) return;
+    lock.current = true;
+    setBusy(true);
+    let ids: string[] = [];
+    const change = buildExpenseBatchChange(batch);
+    const saved = await perform((current: any) => {
+      const oldIds = new Set(current.transactions.map((transaction: any) => transaction.id));
+      const next = change(current);
+      ids = next.transactions.filter((transaction: any) => !oldIds.has(transaction.id)).map((transaction: any) => transaction.id);
+      return next;
+    }, "Despesas salvas no aparelho");
+    if (saved) setSavedIds(ids);
+    lock.current = false;
+    setBusy(false);
+  };
+
+  const undo = async () => {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    const ids = new Set(savedIds);
+    if (await perform((current: any) => ({
+      ...current, transactions: current.transactions.filter((transaction: any) => !ids.has(transaction.id)),
+    }), "Registro das despesas desfeito")) setSavedIds([]);
+    lock.current = false;
+    setBusy(false);
+  };
+
+  return (
+    <View style={{ gap: 16 }}>
+      <View style={[k.row, { justifyContent: "space-between", gap: 8 }]}>
+        <T accessibilityRole="header" style={[k.pageTitle, { flex: 1 }]}>Revisar despesas</T>
+        {!savedIds.length && !busy && <IconButton name="x" label="Cancelar revisão de despesas" onPress={() => nav.back()} />}
+      </View>
+      {savedIds.length ? (
+        <>
+          <T accessibilityLiveRegion="polite">Despesas salvas no aparelho.</T>
+          <Button title="Desfazer registro das despesas" disabled={busy} secondary onPress={() => void undo()} />
+          <Button title="Concluir" disabled={busy} onPress={() => nav.back()} />
+        </>
+      ) : (
+        <>
+          <T>Total do carrinho {show(draft.totalCents ?? 0)}</T>
+          {draft.skipped.length > 0 && <Muted>Itens sem preço ficaram de fora: {draft.skipped.map((item: any) => item.name).join(", ")}.</Muted>}
+          {expenses.length > 1 && <Muted>Ao editar um valor, a maior das outras despesas absorve a diferença.</Muted>}
+          <Choice label="Conta" values={accounts.map((account: any) => [account.id, account.name])} value={accountId} onChange={setAccountId} />
+          {expenses.map((expense, index) => (
+            <Box key={index} style={{ gap: 10 }}>
+              <T>{expense.description}</T>
+              <CategoryRow state={state} type="expense" category={expense.category} subcategory={expense.subcategory}
+                label={`Categoria da despesa ${index + 1}`}
+                onChange={(category, subcategory) => setExpenses(expenses.map((row, i) => i === index ? { ...row, category, subcategory } : row))} />
+              {editing?.index === index ? (
+                <>
+                  <Field label={`Valor da despesa ${index + 1}`} value={editing.text} onChange={(text) => setEditing({ index, text })} numeric autoFocus />
+                  <Button title="Aplicar valor" secondary onPress={applyAmount} />
+                  <Button title="Cancelar edição do valor" secondary onPress={() => { setEditing(null); setError(""); }} />
+                </>
+              ) : (
+                <Button title={`Editar valor da despesa ${index + 1} · ${show(expense.amountCents)}`} disabled={editing !== null || expenses.length === 1}
+                  secondary onPress={() => setEditing({ index, text: toInput(expense.amountCents) })} />
+              )}
+            </Box>
+          ))}
+          {duplicates.length > 0 && <T accessibilityLiveRegion="polite">{duplicates.length} {duplicates.length === 1 ? "possível duplicata" : "possíveis duplicatas"}. Confira antes de salvar.</T>}
+          {(error || !validation.ok) && <T accessibilityLiveRegion="polite">{error || ("message" in validation ? validation.message : "")}</T>}
+          <Button title={busy ? "Salvando…" : "Salvar tudo"} disabled={busy || !!editing || !validation.ok || !accounts.some((account: any) => account.id === accountId)}
+            onPress={() => duplicates.length ? confirm("Salvar despesas?", "Há despesas parecidas no extrato.", () => void save(), "Salvar tudo") : void save()} />
+        </>
+      )}
+    </View>
+  );
+}
+
+function RegularFormScreen({ kind, initial }: { kind: string; initial?: any }) {
   const { c } = useTheme();
   const { state, commit, setNotice, perform, confirm, show } = useStore();
   const nav = useNav();
@@ -36,7 +153,7 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const set = (key: string, value: any) => setForm((f: any) => ({ ...f, [key]: value }));
-  const accounts = state.accounts.filter((a: any) => !a.archived || a.id === form.accountId);
+  const accounts = visibleAccounts(state);
   const cards = state.cards.filter((x: any) => !x.archived || x.id === form.cardId);
 
   const save = async (again = false) => {
@@ -59,7 +176,7 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
   const removeAccount = () => {
     const used =
       state.transactions.some((t: any) => t.accountId === form.id || t.destinationId === form.id) ||
-      state.goals.some((g: any) => g.deposits.some((d: any) => d.accountId === form.id)) ||
+      [...state.goals, ...(state.pots || [])].some((g: any) => (g.deposits || []).some((d: any) => d.accountId === form.id)) ||
       (state.recurrences || []).some((r: any) => r.accountId === form.id) ||
       (state.financings || []).some((r: any) => r.accountId === form.id) ||
       state.cards.some((x: any) => x.accountId === form.id);
@@ -69,7 +186,11 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
         "Esta conta tem histórico. Ela sai das listas e dos formulários, mas o histórico e os relatórios continuam corretos. Dá para restaurar em Contas.",
         () =>
           perform(
-            (s: any) => ({ ...s, accounts: s.accounts.map((a: any) => (a.id === form.id ? { ...a, archived: true } : a)) }),
+            (s: any) => {
+              const next: any = archiveAccount(s, form.id, { now: today() } as Parameters<typeof archiveAccount>[2]);
+              if (next.error) throw Error(next.blockers?.map((blocker: any) => blocker.message).join("\n") || next.error);
+              return next;
+            },
             "Conta arquivada",
           ).then((ok) => ok && nav.back()),
         "Arquivar",
@@ -377,7 +498,7 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
                   kind: "adjustBalance",
                   initial: {
                     accountId: form.id,
-                    sourceId: state.accounts.find((a: any) => !a.archived && a.id !== form.id)?.id || "",
+                    sourceId: accounts.find((a: any) => a.id !== form.id)?.id || "",
                     category: "Outros",
                     description: "",
                   },
@@ -385,7 +506,7 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
               }
             />
           )}
-          <Choice label="Cor" values={COLORS} value={form.color || "#311E0D"} onChange={(v) => set("color", v)} />
+          <Choice label="Cor" values={COLORS} value={form.color || COLORS[0][0]} onChange={(v) => set("color", v)} />
           <Toggle label="Ocultar saldo desta conta" value={!!form.hideBalance} onChange={(v) => set("hideBalance", v)} />
           <Toggle
             label="Incluir no saldo total"
@@ -423,7 +544,7 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
             onChange={(v) => set("businessDayDue", v)}
             hint="Se cair no sábado ou domingo, a data passa para a segunda-feira. Feriados não são considerados."
           />
-          <Choice label="Cor" values={COLORS} value={form.color || "#311E0D"} onChange={(v) => set("color", v)} />
+          <Choice label="Cor" values={COLORS} value={form.color || COLORS[0][0]} onChange={(v) => set("color", v)} />
           <Muted>Mudar as datas não altera as faturas de compras já registradas.</Muted>
         </>
       )}
@@ -546,7 +667,7 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
           diff = null;
         }
         const up = diff !== null && diff > 0;
-        const others = state.accounts.filter((a: any) => !a.archived && a.id !== form.accountId);
+        const others = accounts.filter((a: any) => a.id !== form.accountId);
         return (
           <>
             <Muted>
@@ -941,7 +1062,7 @@ export default function FormScreen({ kind, initial }: { kind: string; initial?: 
       })()}
 
       {!!error && (
-        <T accessibilityRole="alert" style={{ color: c.red }}>
+        <T accessibilityRole="alert" accessibilityLiveRegion="polite" style={{ color: c.red }}>
           {error}
         </T>
       )}

@@ -1,3 +1,4 @@
+import { assertFast } from "./helpers/timing.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { emptyState } from "../src/finance.mjs";
@@ -180,12 +181,9 @@ test("entradas hostis não travam (cada uma em menos de 500 ms)", () => {
     "total sem número": "Valor a pagar R$:" + " ".repeat(900_000),
   };
   for (const [nome, html] of Object.entries(casos)) {
-    const t0 = performance.now();
-    try {
-      parseNfceHtml(html);
-    } catch {}
-    const ms = performance.now() - t0;
-    assert.ok(ms < 500, `${nome}: ${Math.round(ms)} ms`);
+    assertFast(() => {
+      try { parseNfceHtml(html); } catch {}
+    }, 500, nome);
   }
 });
 

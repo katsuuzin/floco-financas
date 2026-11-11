@@ -1,4 +1,5 @@
 import test from "node:test";
+import { assertFast } from "./helpers/timing.mjs";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
 import { parseShared } from "../src/shoppingImportShared.mjs";
@@ -55,21 +56,19 @@ const cases = [
 for (const [name, parse, validate, allowedError] of cases) {
   const label = name === "parseItemText" ? "Achado: " + name : name;
   test(label + " aceita ou recusa 500 entradas determinísticas com retorno definido", () => {
-    const slow = [];
     const before = Object.getOwnPropertyDescriptors(Object.prototype);
     for (const [index, input] of generate(74313).entries()) {
-      const start = performance.now();
       let result;
       let failure;
-      try { result = parse(input); } catch (error) { failure = error; }
-      const elapsed = performance.now() - start;
-      if (elapsed >= 200) slow.push("entrada " + index + " em " + elapsed.toFixed(1) + " ms");
+      assertFast(() => {
+        failure = undefined;
+        try { result = parse(input); } catch (error) { failure = error; }
+      }, 200, name + " na entrada " + index);
       if (failure) {
         assert.ok(allowedError && failure.constructor === Error && allowedError.test(failure.message),
           name + " lançou erro inesperado na entrada " + index + ": " + failure.message);
       } else assert.ok(validate(result), name + " retornou valor inválido na entrada " + index);
       assert.deepEqual(Object.getOwnPropertyDescriptors(Object.prototype), before);
     }
-    assert.deepEqual(slow, [], name + " excedeu 200 ms: " + slow.join(", "));
   });
 }

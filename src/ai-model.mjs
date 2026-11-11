@@ -13,6 +13,17 @@ export function looksLikeSecret(value) {
   return v.length >= 30 && !/\s/.test(v) && /[A-Z]/.test(v) && /[a-z]/.test(v) && /\d/.test(v);
 }
 
+// Gemini: a URL da API é .../models/<id>:generateContent. Quem cola "models/gemini-2.5-flash" (como aparece na
+// documentação do Google) ou "gemini-2.5-flash:generateContent" faria o Google responder "unexpected model name
+// format". Aqui fica só o id: sem "models/", sem ":método", sem barras. Devolve "" se não sobrar um id válido.
+export function geminiModelId(value) {
+  let v = String(value ?? "").trim();
+  v = v.replace(/:[A-Za-z]+$/, "");
+  v = v.slice(v.lastIndexOf("/") + 1);
+  if (!v || looksLikeSecret(v)) return "";
+  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(v) ? v : "";
+}
+
 // Nome de modelo válido ou "" (o chamador usa o modelo padrão do provedor).
 export function cleanModel(value) {
   const v = String(value ?? "").trim();

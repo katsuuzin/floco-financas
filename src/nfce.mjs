@@ -99,7 +99,7 @@ export function parseNfceInput(input) {
   if (!/^\d{44}$/.test(chave)) throw Error("A chave de acesso da nota deve ter 44 dígitos.");
   const info = parseChave(chave);
   if (chaveDv(chave.slice(0, 43)) !== info.dv) throw Error("A chave não confere (dígito verificador). Confira se leu o QR inteiro.");
-  if (info.model !== "65") throw Error(info.model === "55" ? "Esta é uma NF-e (modelo 55), não um cupom de NFC-e." : "Esta nota não é uma NFC-e (modelo 65).");
+  if (info.model !== "65") throw Error("Use a nota fiscal de uma compra de mercado, com código QR.");
   if (!info.uf) throw Error("O código do estado na chave não existe.");
   if (!/^[0-9]{1,4}$/.test(version || "0")) throw Error("Versão do QR inválida.");
 

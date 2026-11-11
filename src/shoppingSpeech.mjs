@@ -1,4 +1,4 @@
-import { shoppingSummary } from "./shopping.mjs";
+import { lineTotal, shoppingSummary } from "./shopping.mjs";
 
 const count = (n, singular, plural) => n + " " + (n === 1 ? singular : plural);
 const validCount = (n) => Number.isSafeInteger(n) && n >= 0 ? n : 0;
@@ -27,7 +27,7 @@ export function describeItem(item) {
   const name = clean(item?.name) || "Item sem nome";
   const quantity = Number.isFinite(item?.qty) && item.qty > 0 ? item.qty : 1;
   const unit = Object.hasOwn(units, item?.unit) ? units[item.unit] : ["unidade", "unidades"];
-  const price = item?.unit ? item?.priceCents : item?.priceCents * quantity;
+  const price = item?.priceCents == null ? null : lineTotal({ ...item, qty: quantity });
   const money = item?.priceCents == null ? "sem preço" : describeMoney(price);
   const label = String(quantity).replace(".", ",") + " " + (quantity === 1 ? unit[0] : unit[1]);
   return bounded(name, label + ", " + (item?.inCart ? "no carrinho" : "pendente") + ", " + money);

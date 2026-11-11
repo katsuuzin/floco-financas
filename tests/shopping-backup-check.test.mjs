@@ -1,3 +1,4 @@
+import { assertFast } from "./helpers/timing.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
@@ -45,7 +46,7 @@ test("Valida tamanho UTF-8, arrays gigantes e 24 pontos", () => {
 });
 test("Cinco mil compras são validadas abaixo de 300 ms", () => {
   const data = makeState({ purchases: Array.from({ length: 5000 }, (_, i) => makePurchase({ id: "c" + i })) });
-  const start = performance.now();
-  assert.equal(checkShoppingBackup(data).ok, true);
-  assert.ok(performance.now() - start < 300);
+  assertFast(() => {
+    assert.equal(checkShoppingBackup(data).ok, true);
+  }, 300, "shopping-backup-check");
 });

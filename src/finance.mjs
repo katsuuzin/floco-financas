@@ -1,5 +1,5 @@
 // All monetary values are integer centavos. Dates are local ISO calendar dates.
-import { sanitizeShoppingItems, sanitizePurchases, sanitizeProducts } from "./shoppingData.mjs";
+import { sanitizeShoppingItems, sanitizeShoppingLists, sanitizeShoppingTemplates, sanitizeShoppingStaples, sanitizePurchases, sanitizeProducts } from "./shoppingData.mjs";
 export const uid = () =>
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 export const today = () => {
@@ -33,6 +33,10 @@ export function addMonths(date, count) {
   return `${result.getFullYear()}-${String(result.getMonth() + 1).padStart(2, "0")}-${String(result.getDate()).padStart(2, "0")}`;
 }
 import { migrateSubcategories, LEGACY_ROOTS, CATALOG } from "./categories.mjs";
+import { migratePotsFromGoals } from "./goalPots.mjs";
+import { ALLOWED_COLORS, ALLOWED_ICONS, defaultStyleFor } from "./categoryStyle.mjs";
+import { CALEN_PREFIX, CATEGORY_COLORS, ICONS, PALETTE, isCalenChoice } from "./looks.mjs";
+import { hasCalenIcon } from "./calenArt.mjs";
 export const categories = [
   "Alimentação",
   "Mercado",
@@ -93,7 +97,7 @@ export const ACCOUNT_TYPES = [
 export const includedAccounts = (state) =>
   state.accounts.filter((a) => a.includeInTotal !== false);
 export const totalBalance = (state) =>
-  includedAccounts(state).reduce((n, a) => n + balance(state, a.id), 0);
+  includedAccounts(state).filter((a) => a.archived !== true).reduce((n, a) => n + balance(state, a.id), 0);
 export const accountBalanceHidden = (state, id) =>
   Boolean(
     state.settings.hide || state.accounts.find((a) => a.id === id)?.hideBalance,
@@ -307,6 +311,21 @@ export function spent(state, category, month) {
     )
     .reduce((n, t) => n + analysisAmount(t), 0);
 }
+export function migratePotState(state) {
+  const next = migratePotsFromGoals(state);
+  if (next === state) return state;
+  return { ...next, goals: next.goals.map((goal) =>
+    goal.kind === "goal" && !Array.isArray(goal.deposits) ? { ...goal, deposits: [] } : goal) };
+}
+
+export function applyPotYieldChange(state, id, change) {
+  const pot = state.pots?.find((item) => item.id === id);
+  if (!pot) throw Error("Escolha uma caixinha.");
+  const updated = change({ ...state, goals: [{ ...pot, kind: "box" }] });
+  const { kind, ...nextPot } = updated.goals[0];
+  return { ...state, transactions: updated.transactions, pots: state.pots.map((item) => item === pot ? nextPot : item) };
+}
+
 export function contribute(state, goalId, amount, accountId, date = today()) {
   const goal = state.goals.find((g) => g.id === goalId);
   if (
@@ -344,7 +363,7 @@ export function contribute(state, goalId, amount, accountId, date = today()) {
   };
 }
 export function reserved(state, accountId) {
-  return state.goals.reduce(
+  return [...(state.goals || []), ...(state.pots || [])].reduce(
     (n, g) =>
       n +
       (g.deposits || [])
@@ -514,9 +533,20 @@ export function validateBackup(value) {
     throw Error("Formato de backup incompatível.");
   value = { ...value };
   // Lista de compras: ausente em backups antigos (quem restaura mantém a lista atual).
-  const shopping = sanitizeShoppingItems(value.shoppingItems);
+  const lists = sanitizeShoppingLists(value.shoppingLists);
+  if (lists) value.shoppingLists = lists;
+  else delete value.shoppingLists;
+  if (!lists?.some((list) => list.id === value.shoppingListId && !list.archived)) delete value.shoppingListId;
+  const templates = sanitizeShoppingTemplates(value.shoppingListTemplates);
+  if (templates === undefined) delete value.shoppingListTemplates;
+  else value.shoppingListTemplates = templates;
+  if (value.shoppingRunOutAlerts !== true) delete value.shoppingRunOutAlerts;
+  const shopping = sanitizeShoppingItems(value.shoppingItems, lists);
   if (shopping === undefined) delete value.shoppingItems;
   else value.shoppingItems = shopping;
+  const staples = sanitizeShoppingStaples(value.shoppingStaples, lists);
+  if (staples === undefined) delete value.shoppingStaples;
+  else value.shoppingStaples = staples;
   const purchases = sanitizePurchases(value.shoppingPurchases);
   if (purchases === undefined) delete value.shoppingPurchases;
   else value.shoppingPurchases = purchases;
@@ -561,6 +591,12 @@ export function validateBackup(value) {
       (a.includeInTotal !== undefined && typeof a.includeInTotal !== "boolean")
     )
       throw Error("Conta inválida.");
+  value.accounts = value.accounts.map(({ order, archived, ...account }) => ({ ...account,
+    ...(Number.isSafeInteger(order) && order >= 0 ? { order } : {}),
+    ...(typeof archived === "boolean" ? { archived } : {}),
+  }));
+  // Índice de contas: as validações abaixo consultam por id milhares de vezes; com .some seria O(n²).
+  const accountIds = new Set(value.accounts.map((a) => a.id));
   for (const c of value.cards)
     if (
       typeof c.name !== "string" ||
@@ -592,12 +628,12 @@ export function validateBackup(value) {
       t.cardId
         ? !value.cards.some((c) => c.id === t.cardId) ||
           !/^\d{4}-\d{2}$/.test(t.invoiceMonth)
-        : !value.accounts.some((a) => a.id === t.accountId)
+        : !accountIds.has(t.accountId)
     )
       throw Error("Lançamento sem conta/cartão válido.");
     if (
       t.type === "transfer" &&
-      (!value.accounts.some((a) => a.id === t.destinationId) ||
+      (!accountIds.has(t.destinationId) ||
         t.accountId === t.destinationId)
     )
       throw Error("Transferência inválida.");
@@ -623,7 +659,7 @@ export function validateBackup(value) {
               !integer(h.amount) ||
               h.amount <= 0 ||
               !isDate(h.date) ||
-              !value.accounts.some((a) => a.id === h.accountId),
+              !accountIds.has(h.accountId),
           ))) ||
       (g.completedAt && !isDate(g.completedAt)) ||
       (g.moves !== undefined &&
@@ -648,7 +684,7 @@ export function validateBackup(value) {
           !integer(d.amount) ||
           d.amount <= 0 ||
           !isDate(d.date) ||
-          !value.accounts.some((a) => a.id === d.accountId),
+          !accountIds.has(d.accountId),
       ) ||
       // Caixinha: o guardado é a soma dos depósitos. Meta sem conta: progresso manual, sem depósitos.
       (g.kind === "goal"
@@ -657,7 +693,7 @@ export function validateBackup(value) {
     )
       throw Error("Meta inválida.");
   const positive = (n) => integer(n) && n > 0 && n <= 99999999999;
-  const account = (id) => value.accounts.some((a) => a.id === id);
+  const account = (id) => accountIds.has(id);
   for (const key of ["tags", "customCategories"]) {
     const names = new Set();
     for (const row of value[key]) {
@@ -777,6 +813,42 @@ export function validateBackup(value) {
   }
   if (value.transactions.some((t) => t.loanSettlement && !linked.has(t.id)))
     throw Error("Recebimento sem histórico da dívida.");
+  if (value.categoryLooks && typeof value.categoryLooks === "object" && !Array.isArray(value.categoryLooks)) {
+    value.categoryLooks = Object.fromEntries(Object.entries(value.categoryLooks).filter(([name]) =>
+      !["__proto__", "constructor", "prototype"].includes(name)).map(([name, style]) => {
+      const fallback = defaultStyleFor(name);
+      const icon = style?.icon;
+      const color = style?.color;
+      return [name, {
+        icon: ALLOWED_ICONS.includes(icon) || ICONS.includes(icon) ||
+          (isCalenChoice(icon) && hasCalenIcon(icon.slice(CALEN_PREFIX.length))) ? icon : fallback.icon,
+        color: ALLOWED_COLORS.includes(color) || PALETTE.includes(color) || CATEGORY_COLORS.includes(color) ? color : fallback.color,
+      }];
+    }));
+  } else delete value.categoryLooks;
+  value.tags = value.tags.map(({ icon, color, ...tag }) => ({
+    ...tag, ...(ALLOWED_ICONS.includes(icon) ? { icon } : {}), ...(ALLOWED_COLORS.includes(color) || PALETTE.includes(color) ? { color } : {}),
+  }));
+  if (Object.hasOwn(value, "pots")) {
+    const ids = new Set();
+    value.pots = (Array.isArray(value.pots) ? value.pots : []).slice(0, 100000).filter((pot) => {
+      if (!pot || typeof pot.id !== "string" || !pot.id || ids.has(pot.id) ||
+          typeof pot.name !== "string" || !pot.name.trim() || !integer(pot.saved) || pot.saved < 0 ||
+          !Array.isArray(pot.deposits) || pot.deposits.some((d) => !d || !positive(d.amount) || !isDate(d.date) || !account(d.accountId)) ||
+          pot.deposits.reduce((n, d) => n + d.amount, 0) !== pot.saved) return false;
+      ids.add(pot.id);
+      return true;
+    }).map((pot) => ({ ...pot, archived: pot.archived === true, history: (Array.isArray(pot.history) ? pot.history : []).filter((h) =>
+      h && ["deposit", "withdrawal", "yield"].includes(h.type) && positive(h.amount) && isDate(h.date) &&
+      (!h.accountId || account(h.accountId))) }));
+    value.goals = value.goals.map((goal) => {
+      if (goal.potId == null || ids.has(goal.potId)) return goal;
+      const { potId, ...rest } = goal;
+      return rest;
+    });
+  } else {
+    value.goals = value.goals.map(({ potId, ...goal }) => goal);
+  }
   return migrateSubcategories({
     ...value,
     // Preferências (layout, extrato, lembretes, cor...) seguem junto. O bloqueio biométrico

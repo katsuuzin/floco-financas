@@ -1,3 +1,4 @@
+import { assertFast } from "./helpers/timing.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
@@ -62,8 +63,8 @@ test("Entradas hostis são recusadas em até 500 ms por caso", () => {
     doc().replace("&amp;", "&externa;"),
   ];
   for (const input of samples) {
-    const start = performance.now();
-    assert.throws(() => parseNfceXml(input), /XML|Entidade|CDATA|Atributo/);
-    assert.ok(performance.now() - start < 500);
+    assertFast(() => {
+      assert.throws(() => parseNfceXml(input), /XML|Entidade|CDATA|Atributo/);
+    }, 500, "nfce-xml");
   }
 });

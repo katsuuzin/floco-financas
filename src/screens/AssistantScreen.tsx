@@ -388,6 +388,7 @@ export default function AssistantScreen() {
                 await setKey(keyText.trim(), ai.provider);
                 setKeyText("");
                 setHasKey(true);
+                setError("Chave salva neste aparelho. Toque em Testar conexão para conferir.");
               })
             }
           />
@@ -439,7 +440,7 @@ export default function AssistantScreen() {
       {!!error && (
         <Muted
           style={{
-            color: error.startsWith("Conexão ok") ? c.green : c.red,
+            color: /^(Conexão ok|Chave salva)/.test(error) ? c.green : c.red,
             marginTop: 8,
           }}
         >

@@ -20,6 +20,22 @@ import { bankProfile } from "../banks.mjs";
 import { setGoalProgress, registerYield, addGoalDeposit } from "../goals.mjs";
 import { adjustBalance, parseSignedMoney } from "../adjust.mjs";
 import { setInvoiceTotal, chosenInvoiceMonth } from "../invoices.mjs";
+import { visibleAccounts } from "../accountOrder.mjs";
+import { validateBatch } from "../multiExpenseDraft.mjs";
+
+export type BatchExpense = { amountCents: number; category: string; subcategory?: string; description: string; date: string; accountId: string };
+
+export function buildExpenseBatchChange(batch: { expenses: BatchExpense[]; totalCents: number | null }) {
+  return (state: any) => {
+    const result = validateBatch(batch);
+    if ("message" in result) throw Error(result.message);
+    const accounts = new Set(visibleAccounts(state).map((account: any) => account.id));
+    return batch.expenses.reduce((current, { amountCents, ...expense }) => {
+      if (!accounts.has(expense.accountId)) throw Error("Escolha uma conta ativa.");
+      return addTransaction(current, { ...expense, type: "expense", amount: amountCents, confirmed: true });
+    }, state);
+  };
+}
 
 export const toInput = (cents: number) => (cents / 100).toFixed(2).replace(".", ",");
 const optionalMoney = (text: string) =>
@@ -31,6 +47,7 @@ const day = (text: string, label: string) => {
 };
 
 export const formTitles: Record<string, (f: any) => string> = {
+  expenseBatch: () => "Revisar despesas",
   transaction: (f) =>
     f.editId
       ? "Editar lançamento"
@@ -80,8 +97,8 @@ export function defaults(kind: string, state: any, initial: any = {}) {
     category: "Alimentação",
     subcategory: "",
     spendType: "",
-    accountId: state.accounts.find((a: any) => !a.archived)?.id || "",
-    destinationId: state.accounts.filter((a: any) => !a.archived)[1]?.id || "",
+    accountId: visibleAccounts(state)[0]?.id || "",
+    destinationId: visibleAccounts(state)[1]?.id || "",
     cardId: "",
     repeat: "single",
     installments: "2",

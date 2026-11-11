@@ -60,10 +60,10 @@ export function nextToGet(state, { limit = 5 } = {}) {
 
 export function pendingByCategory(state) {
   const groups = new Map();
-  for (const { id, name, qty, unit, category, priceCents } of sortedPending(state)) {
+  for (const { id, name, qty, unit, category, priceCents, deal } of sortedPending(state)) {
     if (!groups.has(category)) groups.set(category, { category, count: 0, items: [] });
     const group = groups.get(category);
-    group.items.push({ id, name, qty, unit, priceCents });
+    group.items.push({ id, name, qty, unit, priceCents, ...(deal ? { deal } : {}) });
     group.count++;
   }
   return [...groups.values()];

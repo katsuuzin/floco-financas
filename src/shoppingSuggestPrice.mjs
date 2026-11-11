@@ -23,6 +23,15 @@ function recentPrices(product) {
     .map(({ priceCents }) => priceCents);
 }
 
+// Item com unidade (kg, g, l, ml) guarda o total da linha; o histórico guarda o preço por unidade.
+// Então 0,5 kg a R$ 8,00/kg vira R$ 4,00. Sem unidade, o preço é por item e não muda.
+function portionPrice(item, unitPriceCents) {
+  if (!item.unit) return unitPriceCents;
+  const qty = Number(item.qty);
+  if (!Number.isFinite(qty) || qty <= 0) return unitPriceCents;
+  return Math.max(1, Math.round(unitPriceCents * qty));
+}
+
 function indexHistory(state) {
   const exact = new Map();
   const bucketsByUnit = new Map();
@@ -95,7 +104,7 @@ export function suggestPrices(state) {
     if (!memo.has(key)) memo.set(key, bestMatch(item, history));
     const match = memo.get(key);
     return match ? [{
-      id: item.id, name: item.name, priceCents: match.priceCents,
+      id: item.id, name: item.name, priceCents: portionPrice(item, match.priceCents),
       source: match.source, basedOn: match.basedOn,
     }] : [];
   });

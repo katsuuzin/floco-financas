@@ -1,3 +1,4 @@
+import { visibleAccounts } from "./accountOrder.mjs";
 import React, { useState } from "react";
 import {
   View,
@@ -232,7 +233,7 @@ export default function ReceiptPanel({ state, c, onChange, onClose }: any) {
             {choices(
               "accountId",
               "Conta",
-              state.accounts.map((a: any) => [a.id, a.name]),
+              visibleAccounts(state).map((a: any) => [a.id, a.name]),
             )}
             {choices("cardId", "Pagamento", [
               ["", "Conta / débito"],

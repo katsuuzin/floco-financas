@@ -1,3 +1,4 @@
+import { assertFast } from "./helpers/timing.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
@@ -51,7 +52,7 @@ test("Cinco mil compras são verificadas abaixo de 300 ms", () => {
     issuedTime: new Date(i * 1000).toISOString().slice(11, 19),
   }));
   const state = makeState({ purchases });
-  const start = performance.now();
-  assert.equal(findDuplicatePurchases(state).length, 0);
-  assert.ok(performance.now() - start < 300);
+  assertFast(() => {
+    assert.equal(findDuplicatePurchases(state).length, 0);
+  }, 300, "shopping-duplicates");
 });

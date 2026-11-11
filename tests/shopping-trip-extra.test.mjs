@@ -1,3 +1,4 @@
+import { assertFast } from "./helpers/timing.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
@@ -40,14 +41,14 @@ test("Nome vazio e duas categorias desconhecidas preservam os itens depois das c
 test("Cinco mil itens têm resumo e próximos produtos em menos de 100 ms", () => {
   const shoppingItems = Array.from({ length: 5000 }, (_, i) =>
     item(String(i), { inCart: i % 2 === 0, category: i % 3 === 0 ? "Limpeza" : "Hortifrúti" }));
-  const start = performance.now();
-  const summary = tripSummary({ shoppingItems });
-  const next = nextToGet({ shoppingItems });
-  const groups = pendingByCategory({ shoppingItems });
-  assert.equal(summary.progress, 0.5);
-  assert.equal(next.length, 5);
-  assert.equal(groups.reduce((sum, group) => sum + group.count, 0), 2500);
-  assert.ok(performance.now() - start < 100);
+  assertFast(() => {
+    const summary = tripSummary({ shoppingItems });
+    const next = nextToGet({ shoppingItems });
+    const groups = pendingByCategory({ shoppingItems });
+    assert.equal(summary.progress, 0.5);
+    assert.equal(next.length, 5);
+    assert.equal(groups.reduce((sum, group) => sum + group.count, 0), 2500);
+  }, 100, "shopping-trip-extra");
 });
 test("Sem itens, exibe tempo independentemente do progresso", () => {
   for (const [now, expected] of [[59_000, "menos de 1 min"], [60_000, "1 min"],

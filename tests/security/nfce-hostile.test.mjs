@@ -1,3 +1,4 @@
+import { assertFast } from "../helpers/timing.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
@@ -27,9 +28,9 @@ test("Recusa HTTP e um domínio comum fora da lista", () => {
 // Achado do parser: entrada vazia ou texto comum termina rápido e produz erro em português.
 for (const input of ["", "Recibo sem tabela de itens"]) {
   test(`Leitor encerra rápido sem uma tabela: ${JSON.stringify(input)}`, () => {
-    const start = performance.now();
-    assert.throws(() => parseNfceHtml(input), /Não achei|não contém|vazi|não consegui/i);
-    assert.ok(performance.now() - start < 300);
+    assertFast(() => {
+      assert.throws(() => parseNfceHtml(input), /Não achei|não contém|vazi|não consegui/i);
+    }, 300, "nfce-hostile");
   });
 }
 
@@ -38,9 +39,9 @@ test("Lê um lote sintético de 200 itens válidos em até 300 ms", () => {
   const rows = Array.from({ length: 200 }, (_, i) =>
     `<tr id="Item${i}"><td><span class="txtTit">Produto ${i}</span><span class="Rqtd">1</span><span class="RUN">UN</span><span class="RvlUnit">2,00</span><span class="valor">2,00</span></td></tr>`);
   const html = `<html><table>${rows.join("")}</table><span class="chave">${chave}</span></html>`;
-  const start = performance.now();
-  assert.equal(parseNfceHtml(html).items.length, 200);
-  assert.ok(performance.now() - start < 300);
+  assertFast(() => {
+    assert.equal(parseNfceHtml(html).items.length, 200);
+  }, 300, "nfce-hostile");
 });
 
 // Achado da ponte: uma mensagem válida precisa corresponder ao contrato de referência.

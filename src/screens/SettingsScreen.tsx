@@ -121,7 +121,7 @@ export default function SettingsScreen() {
                 style={{ alignItems: "center", gap: 4, width: 56 }}
               >
                 <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: hex, alignItems: "center", justifyContent: "center", borderWidth: on ? 3 : 0, borderColor: c.text }}>
-                  {on && <I name="check" size={18} color="#311E0D" />}
+                  {on && <I name="check" size={18} color={c.heroText} />}
                 </View>
                 <Muted style={{ fontSize: 11 }}>{name}</Muted>
               </Pressable>

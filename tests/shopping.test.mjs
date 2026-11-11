@@ -14,6 +14,13 @@ import {
   removeItem,
   restoreItem,
   clearCart,
+  configureShoppingItem,
+  createShoppingList,
+  activeShoppingState,
+  editActiveShoppingItems,
+  migrateShoppingLists,
+  lineTotal,
+  restockStaples,
   shoppingSummary,
   groupByCategory,
   shareText,
@@ -22,6 +29,60 @@ import {
   purchaseDraft,
   MAX_ITEMS,
 } from "../src/shopping.mjs";
+
+test("backup antigo e campos de promoção e recorrência inválidos", () => {
+  const state = addShoppingItem(emptyState(), "3 leite", { id: "leite", now: 1 });
+  const old = validateBackup(state);
+  assert.equal(old.shoppingStaples, undefined);
+  assert.equal(old.shoppingItems[0].deal, undefined);
+  assert.equal(old.shoppingItems[0].staple, undefined);
+  const bad = validateBackup({ ...state, shoppingStaples: [null, { id: "x", staple: true, everyDays: -3 }],
+    shoppingItems: state.shoppingItems.map((item) => ({ ...item, staple: "sim", everyDays: "7", deal: { type: "percent", value: 101 } })) });
+  assert.deepEqual(bad.shoppingStaples, []);
+  assert.equal(bad.shoppingItems[0].deal, undefined);
+  assert.equal(bad.shoppingItems[0].staple, undefined);
+});
+
+test("promoção e recorrência sobrevivem ao backup e o item volta na data prevista", () => {
+  const initial = addShoppingItem(emptyState(), "3 leite", { id: "leite", now: 1 });
+  const edited = configureShoppingItem(initial, "leite", { text: "3 leite", price: "5,00", category: "Frios e laticínios",
+    everyDays: 7, deal: { type: "buyXPayY", x: 3, y: 2 } });
+  const restored = validateBackup(edited);
+  assert.equal(lineTotal(restored.shoppingItems[0]), 1000);
+  const cleared = clearCart(toggleCart(restored, "leite"), "2026-01-01");
+  assert.equal(restockStaples(cleared, "2026-01-07"), cleared);
+  const next = restockStaples(cleared, "2026-01-08");
+  assert.equal(next.shoppingItems[0].name, "Leite");
+  assert.equal(next.shoppingItems[0].priceCents, null);
+  assert.equal(restockStaples(next, "2026-01-08"), next);
+  assert.deepEqual(keepShoppingOnRestore(initial, cleared).shoppingStaples, cleared.shoppingStaples);
+});
+
+test("backup antigo ou inválido mantém uma lista padrão e alertas desligados", () => {
+  const old = validateBackup(addShoppingItem(emptyState(), "Leite", { id: "l" }));
+  assert.equal(old.shoppingLists, undefined);
+  assert.equal(old.shoppingRunOutAlerts, undefined);
+  const corrupted = validateBackup({ ...old, shoppingLists: [{ id: "__proto__", name: "X" }],
+    shoppingListId: "sem lista", shoppingListTemplates: { inválido: true }, shoppingRunOutAlerts: "sim" });
+  const migrated = migrateShoppingLists(corrupted);
+  assert.deepEqual(migrated.shoppingLists, [{ id: "main", name: "Minha lista", archived: false }]);
+  assert.deepEqual(migrated.shoppingListTemplates, []);
+  assert.equal(migrated.shoppingRunOutAlerts, undefined);
+  assert.equal(migrated.shoppingItems[0].listId, "main");
+});
+
+test("listas separadas sobrevivem ao backup, à edição e à limpeza do carrinho", () => {
+  let state = migrateShoppingLists(addShoppingItem(emptyState(), "Leite", { id: "l" }));
+  state = createShoppingList(toggleCart(state, "l"), "Feira");
+  state = addShoppingItem(state, "Uva", { id: "u" });
+  state = validateBackup(toggleCart(state, "u"));
+  assert.deepEqual(activeShoppingState(state).shoppingItems.map((item) => item.id), ["u"]);
+  assert.deepEqual(clearCart(state).shoppingItems.map((item) => item.id), ["l"]);
+  const next = editActiveShoppingItems(state, (scope) => ({ ...scope, shoppingItems: [{ ...scope.shoppingItems[0], id: "l" }] }));
+  assert.equal(new Set(next.shoppingItems.map((item) => item.id)).size, 2);
+  const { shoppingItems, ...legacy } = emptyState();
+  assert.deepEqual(keepShoppingOnRestore(legacy, state).shoppingLists, state.shoppingLists);
+});
 
 const add = (s, text, id) => addShoppingItem(s, text, { id, now: 1 });
 const sample = () => {
@@ -149,7 +210,7 @@ test("backup: ausente devolve undefined; válido é normalizado; inválido falha
   assert.equal(ok[0].category, "Outros");
   assert.equal(ok[0].inCart, false);
   assert.equal(ok[0].listId, "main");
-  assert.throws(() => sanitizeShoppingItems("x"), /inválido/);
+  assert.throws(() => sanitizeShoppingItems("x"), /lista de compras deste backup é inválida/);
   assert.throws(() => sanitizeShoppingItems([{ id: "x", name: "a", qty: 1 }, { id: "x", name: "b", qty: 1 }]), /Identificadores/);
   assert.throws(() => sanitizeShoppingItems([{ id: "x", name: "a", qty: 0 }]), /inválido/);
   assert.throws(() => sanitizeShoppingItems([{ id: "x", name: "a", qty: 1, priceCents: -5 }]), /inválido/);

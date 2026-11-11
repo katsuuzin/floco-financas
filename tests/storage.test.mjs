@@ -60,6 +60,20 @@ test("migração completa preserva todos os dados e saldos", () => {
     assert.equal(balance(back, a.id), balance(s, a.id));
 });
 
+test("coleções opcionais novas sobrevivem vazias, preenchidas e removidas no SQLite", () => {
+  const db = memoryDb();
+  const empty = { ...emptyState(), pots: [], shoppingStaples: [], shoppingListTemplates: [] };
+  save(db, null, empty);
+  assert.ok(sameData(load(db), empty));
+  const populated = { ...empty, shoppingListTemplates: [{ id: "modelo", name: "Feira", items: [] }] };
+  save(db, empty, populated);
+  assert.ok(sameData(load(db), populated));
+  const { shoppingListTemplates, ...without } = empty;
+  save(db, populated, empty);
+  save(db, empty, without);
+  assert.ok(sameData(load(db), without));
+});
+
 test("só os registros alterados são regravados", () => {
   const s = demoState();
   const account = s.accounts[0].id;

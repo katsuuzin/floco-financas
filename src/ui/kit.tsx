@@ -2,6 +2,9 @@
 // então campos de texto não perdem o foco enquanto o usuário digita.
 import React, { useState } from "react";
 import {
+  AccessibilityInfo,
+  findNodeHandle,
+  useWindowDimensions,
   View,
   Text,
   Pressable,
@@ -14,8 +17,20 @@ import {
   StyleProp,
 } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
+import MotionPressable from "./motion";
 import { useTheme } from "./theme";
-import { evaluate, hasOperator, toAmountText } from "../calc.mjs";
+import { evaluateAmount, isExpression } from "../amountExpression.mjs";
+
+export type ViewControl = React.ComponentRef<typeof View>;
+export type TextControl = React.ComponentRef<typeof TextInput>;
+
+export function focusAccessibility(target: ViewControl | TextControl | null | undefined) {
+  if (!target) return;
+  requestAnimationFrame(() => {
+    const handle = findNodeHandle(target);
+    if (handle != null) AccessibilityInfo.setAccessibilityFocus(handle);
+  });
+}
 
 export type Icon = React.ComponentProps<typeof Feather>["name"];
 
@@ -59,8 +74,10 @@ export function Button({
   danger = false,
   disabled = false,
   accessibilityLiveRegion,
+  controlRef,
 }: {
   title: string;
+  controlRef?: React.Ref<ViewControl>;
   onPress: () => void;
   icon?: Icon;
   secondary?: boolean;
@@ -71,14 +88,15 @@ export function Button({
   const { c } = useTheme();
   const fg = danger ? c.red : secondary ? c.primary : c.onPrimary;
   return (
-    <Pressable
+    <MotionPressable kind="button"
+      ref={controlRef}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={title}
       accessibilityLiveRegion={accessibilityLiveRegion}
       accessibilityState={{ disabled }}
       onPress={onPress}
-      style={({ pressed }) => [
+      style={[
         styles.button,
         {
           backgroundColor: danger
@@ -86,13 +104,13 @@ export function Button({
             : secondary
               ? c.soft
               : c.primary,
-          opacity: disabled ? 0.5 : pressed ? 0.75 : 1,
+          opacity: disabled ? 0.5 : 1,
         },
       ]}
     >
       {icon && <I name={icon} color={fg} />}
-      <T style={{ color: fg, fontFamily: "SoraSemi", fontSize: 14 }}>{title}</T>
-    </Pressable>
+      <T style={{ flexShrink: 1, textAlign: "center", color: fg, fontFamily: "SoraSemi", fontSize: 14 }}>{title}</T>
+    </MotionPressable>
   );
 }
 
@@ -101,26 +119,33 @@ export function IconButton({
   label,
   onPress,
   color,
+  disabled = false,
 }: {
   name: Icon;
   label: string;
   onPress: () => void;
   color?: string;
+  disabled?: boolean;
 }) {
   const { c } = useTheme();
+  const [pressed, setPressed] = useState(false);
   return (
-    <Pressable
+    <MotionPressable kind="icon"
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
       hitSlop={4}
-      style={({ pressed }) => [
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
+      style={[
         styles.iconButton,
-        { backgroundColor: pressed ? c.soft : "transparent" },
+        { backgroundColor: pressed && !disabled ? c.soft : "transparent", opacity: disabled ? 0.5 : 1 },
       ]}
     >
       <I name={name} color={color || c.primary} />
-    </Pressable>
+    </MotionPressable>
   );
 }
 
@@ -246,8 +271,10 @@ export function Field({
   hint,
   maxLength,
   onSubmit,
+  inputRef,
 }: {
   label: string;
+  inputRef?: React.Ref<TextControl>;
   value: string;
   onChange: (v: string) => void;
   onSubmit?: () => void;
@@ -264,6 +291,7 @@ export function Field({
     <View style={{ gap: 8 }}>
       <T style={styles.label}>{label}</T>
       <TextInput
+        ref={inputRef}
         secureTextEntry={secure}
         autoCorrect={!secure}
         accessibilityLabel={label}
@@ -284,7 +312,7 @@ export function Field({
           {
             backgroundColor: c.surface,
             color: c.text,
-            borderColor: c.line,
+            borderColor: c.muted,
             fontFamily: "Sora",
           },
           multiline && { minHeight: 96, textAlignVertical: "top" },
@@ -321,7 +349,7 @@ export function Choice<K extends string>({
           values.map(([key, name]) => {
             const on = value === key;
             return (
-              <Pressable
+              <MotionPressable kind="chip"
                 accessibilityRole="radio"
                 accessibilityLabel={name}
                 accessibilityState={{ checked: on }}
@@ -339,7 +367,7 @@ export function Choice<K extends string>({
                 <T style={{ fontSize: 12, color: on ? c.onPrimary : c.text }}>
                   {name}
                 </T>
-              </Pressable>
+              </MotionPressable>
             );
           })
         ) : (
@@ -408,14 +436,14 @@ export function ListItem({
 }) {
   const { c } = useTheme();
   return (
-    <Pressable
+    <MotionPressable kind="row"
       accessibilityRole="button"
       accessibilityLabel={detail ? `${label}, ${detail}` : label}
       onPress={onPress}
       android_ripple={{ color: c.soft }}
-      style={({ pressed }) => [
+      style={[
         styles.listItem,
-        { backgroundColor: pressed ? c.soft : c.surface },
+        { backgroundColor: c.surface },
       ]}
     >
       {icon && (
@@ -431,7 +459,7 @@ export function ListItem({
         {!!detail && <Muted>{detail}</Muted>}
       </View>
       {right ?? <I name="chevron-right" size={18} />}
-    </Pressable>
+    </MotionPressable>
   );
 }
 
@@ -490,7 +518,7 @@ export function Chips<K extends string>({
   );
 }
 
-// Seletor segmentado (2 a 4 opções curtas) — uma linha, sem quebra.
+// Seletor segmentado. Com fonte ampliada, as opções ganham largura para quebrar.
 export function Segmented<K extends string>({
   label,
   values,
@@ -503,29 +531,29 @@ export function Segmented<K extends string>({
   onChange: (v: K) => void;
 }) {
   const { c } = useTheme();
+  const { fontScale } = useWindowDimensions();
   return (
     <View style={{ gap: space.sm }}>
       {!!label && <T style={styles.label}>{label}</T>}
       <View
         accessibilityRole="radiogroup"
         accessibilityLabel={label}
-        style={[styles.segmented, { backgroundColor: c.soft }]}
+        style={[styles.segmented, { backgroundColor: c.soft, flexDirection: fontScale >= 1.5 ? "column" : "row" }]}
       >
         {values.map(([key, name]) => {
           const on = key === value;
           return (
-            <Pressable
+            <MotionPressable kind="chip"
               key={key}
               accessibilityRole="radio"
               accessibilityState={{ checked: on }}
               accessibilityLabel={name}
               onPress={() => onChange(key)}
-              style={[styles.segment, on && { backgroundColor: c.primary }]}
+              style={[styles.segment, { minHeight: 48 }, fontScale >= 1.5 && { flex: 0 }, on && { backgroundColor: c.primary }]}
             >
               <T
-                numberOfLines={1}
-                adjustsFontSizeToFit
                 style={{
+                  textAlign: "center",
                   fontSize: 12,
                   fontFamily: on ? "SoraSemi" : "Sora",
                   color: on ? c.onPrimary : c.muted,
@@ -533,7 +561,7 @@ export function Segmented<K extends string>({
               >
                 {name}
               </T>
-            </Pressable>
+            </MotionPressable>
           );
         })}
       </View>
@@ -556,18 +584,18 @@ export function AmountField({
   label?: string;
 }) {
   const { c } = useTheme();
-  // L1: teclado de cálculo. A conta fica visível; o valor do formulário recebe o resultado.
   const [pad, setPad] = useState(false);
-  const [expr, setExpr] = useState("");
-  const press = (key: string) => {
-    const next = key === "C" ? "" : key === "⌫" ? expr.slice(0, -1) : key === "=" ? expr : expr + key;
-    const result = evaluate(next);
-    const shown = key === "=" && result != null && result > 0 ? toAmountText(result) : next;
-    setExpr(shown);
-    if (result != null && result > 0) onChange(toAmountText(result));
-    else if (!next) onChange("");
+  const expression = isExpression(value);
+  const preview = expression ? evaluateAmount(value) : null;
+  const calculate = () => {
+    if (preview?.ok && preview.display !== undefined) onChange(preview.display);
   };
-  const preview = pad && hasOperator(expr) ? evaluate(expr) : null;
+  const press = (key: string) => {
+    if (key === "=") { calculate(); return; }
+    if (key === "C") onChange("");
+    else if (key === "⌫") onChange(value.slice(0, -1));
+    else if (value.length < 100) onChange(value + key);
+  };
   return (
     <View style={[styles.amountBox, { backgroundColor: c.surface }]}>
       <Muted>{label}</Muted>
@@ -583,16 +611,17 @@ export function AmountField({
         </T>
         <TextInput
           accessibilityLabel={`${label} em reais`}
-          value={pad ? expr : value}
+          value={value}
           editable={!pad}
           onChangeText={onChange}
           placeholder="0,00"
           placeholderTextColor={c.muted}
           keyboardType="decimal-pad"
           autoFocus={autoFocus}
-          maxLength={16}
+          maxLength={100}
           style={{
             flex: 1,
+            minHeight: 48,
             fontSize: 34,
             fontFamily: "SoraBold",
             color: color || c.text,
@@ -602,26 +631,29 @@ export function AmountField({
         <IconButton
           name={pad ? "x" : "divide"}
           label={pad ? "Fechar calculadora" : "Abrir calculadora"}
-          onPress={() => {
-            if (!pad) setExpr(value);
-            setPad(!pad);
-          }}
+          onPress={() => setPad(!pad)}
         />
       </View>
+      <View accessibilityLiveRegion="polite">
+        {preview && <Muted style={{ color: preview.ok ? c.muted : c.red }}>
+          {preview.ok ? "= R$ " + preview.display : preview.message}
+        </Muted>}
+      </View>
+      {!pad && expression && <Button title="Calcular" secondary disabled={!preview?.ok} onPress={calculate} />}
       {pad && (
         <>
-          <Muted accessibilityLiveRegion="polite" style={{ minHeight: 18 }}>
-            {preview != null ? "= R$ " + toAmountText(preview) : hasOperator(expr) ? "Conta incompleta" : " "}
-          </Muted>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
-            {["7", "8", "9", "÷", "4", "5", "6", "×", "1", "2", "3", "−", ",", "0", "⌫", "+", "C", "="].map((key) => {
+            {["7", "8", "9", "÷", "4", "5", "6", "×", "1", "2", "3", "−", ",", "0", "⌫", "+", "(", ")", "C",
+              ...(expression ? ["="] : [])].map((key) => {
               const op = "÷×−+=".includes(key);
-              const names: Record<string, string> = { "÷": "dividir", "×": "multiplicar", "−": "menos", "+": "mais", "⌫": "apagar", C: "limpar", "=": "igual", ",": "vírgula" };
+              const names: Record<string, string> = { "÷": "dividir", "×": "multiplicar", "−": "menos", "+": "mais", "⌫": "apagar", C: "limpar", "=": "Calcular", ",": "vírgula", "(": "Abrir parênteses", ")": "Fechar parênteses" };
               return (
                 <Pressable
                   key={key}
                   accessibilityRole="button"
                   accessibilityLabel={names[key] || key}
+                  accessibilityState={{ disabled: key === "=" && !preview?.ok }}
+                  disabled={key === "=" && !preview?.ok}
                   onPress={() => press(key)}
                   android_ripple={{ color: c.soft }}
                   style={{

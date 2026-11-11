@@ -1,28 +1,22 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Pressable, View } from "react-native";
+import { Alert, Pressable, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Box, Button, Empty, Field, I, Muted, Section, T, styles as k } from "../ui/kit";
+import { Box, Button, Empty, Field, I, Muted, Section, T, focusAccessibility, type ViewControl, styles as k } from "../ui/kit";
 import { useTheme } from "../ui/theme";
 import CategoryIcon from "../ui/ShoppingIcons";
 import { useStore } from "../app/store";
-import { useNav } from "../app/nav";
-import { itemsOf, lineTotal, purchaseDraft, toggleCart } from "../shopping.mjs";
-import { formatElapsed, pendingByCategory, tripSummary } from "../shoppingTrip.mjs";
-import { sortByAisles } from "../shoppingAisles.mjs";
-import { budgetStatus } from "../shoppingBudget.mjs";
+import { reviewExpenses, useNav } from "../app/nav";
+import { activeShoppingState, itemsOf, toggleCart } from "../shopping.mjs";
 import { endSession, parseSession, resumeSession, serializeSession, startSession } from "../shoppingTripSession.mjs";
-import { describeItem, describeProgress } from "../shoppingSpeech.mjs";
-import { parseMoney } from "../finance.mjs";
+import { finishPlan, parseLimitInput, tripViewModel } from "../shoppingTripView.mjs";
 
 const SESSION_KEY = "floco.tripSession";
 const BUDGET_KEY = "floco.tripBudgetCents";
 
-const qtyText = (i: any) => (i.unit ? `${String(i.qty).replace(".", ",")} ${i.unit}` : i.qty > 1 ? `${i.qty}x` : "");
-
 // Modo compra: tela para usar no mercado. Total do carrinho, progresso, tempo e o que falta pegar.
 export default function ShoppingTripScreen() {
   const { c } = useTheme();
-  const { state, perform, show } = useStore();
+  const { state, perform } = useStore();
   const nav = useNav();
   // O horário de início fica guardado: sair e voltar (até 3 h) não zera o tempo.
   const [session, setSession] = useState<{ startedAt: number; lastSeenAt: number } | null>(null);
@@ -30,6 +24,16 @@ export default function ShoppingTripScreen() {
   const [limitCents, setLimitCents] = useState(0);
   const [limitText, setLimitText] = useState("");
   const [editLimit, setEditLimit] = useState(false);
+  const [limitError, setLimitError] = useState("");
+  const limitButton = useRef<ViewControl>(null);
+  const cartControls = useRef(new Map<string, ViewControl>());
+  const [cartFocus, setCartFocus] = useState("");
+  const [cartStatus, setCartStatus] = useState("");
+  useEffect(() => {
+    if (!cartFocus) return;
+    focusAccessibility(cartControls.current.get(cartFocus));
+    setCartFocus("");
+  }, [cartFocus, state.shoppingItems]);
   const sessionRef = useRef(session);
   sessionRef.current = session;
   useEffect(() => {
@@ -62,38 +66,52 @@ export default function ShoppingTripScreen() {
     };
   }, []);
   const saveLimit = () => {
-    const cents = limitText.trim() ? parseMoney(limitText) : 0;
-    const ok = Number.isSafeInteger(cents) && cents >= 0;
-    const value = ok ? cents : 0;
+    const result = parseLimitInput(limitText);
+    if (!result.ok) {
+      setLimitError(result.message ?? "Confira o limite da compra.");
+      return;
+    }
+    const value = result.cents ?? 0;
+    setLimitError("");
     setLimitCents(value);
     setEditLimit(false);
+    requestAnimationFrame(() => focusAccessibility(limitButton.current));
     (value > 0 ? AsyncStorage.setItem(BUDGET_KEY, String(value)) : AsyncStorage.removeItem(BUDGET_KEY)).catch(() => {});
   };
   const finish = () => {
-    setSession(endSession());
+    sessionRef.current = endSession();
+    setSession(sessionRef.current);
     AsyncStorage.removeItem(SESSION_KEY).catch(() => {});
   };
 
-  const sum = tripSummary(state, { startedAt: session?.startedAt ?? now, now });
-  const budget = budgetStatus({ limitCents, cartCents: sum.cartCents, pendingEstimateCents: sum.pendingEstimateCents });
-  const groups = sortByAisles(pendingByCategory(state)); // na ordem do caminho no mercado
-  const inCart: any[] = itemsOf(state).filter((i: any) => i.inCart);
-  const draft = purchaseDraft(state);
-  const pct = Math.round(sum.progress * 100);
+  const selectedState = activeShoppingState(state);
+  const view = tripViewModel(selectedState, { session, limitCents, now });
+  const { cart, progress, elapsed, budget, groups, inCart, estimate, spoken } = view;
+  const pct = progress.percent;
 
-  if (sum.total === 0) {
+  if (view.empty) {
     return <Empty icon="shopping-cart" title="Nenhum item na lista" body="Adicione itens na lista de compras para usar o Modo compra." />;
   }
 
-  const toggle = (id: string) => void perform((s: any) => toggleCart(s, id), "");
-  const cartLabel = `No carrinho: ${show(sum.cartCents)}${sum.cartUnpriced ? `, ${sum.cartUnpriced} sem preço` : ""}`;
+  const toggle = async (item: any) => {
+    const action = item.inCart ? "item tirado do carrinho" : "item colocado no carrinho";
+    if (await perform((s: any) => toggleCart(s, item.id), action)) {
+      setCartStatus(`${item.name} ${item.inCart ? "voltou aos pendentes" : "foi para o carrinho"}.`);
+      setCartFocus(item.id);
+    }
+  };
+  const bindCartControl = (id: string, node: ViewControl | null) => {
+    if (node) cartControls.current.set(id, node);
+    else cartControls.current.delete(id);
+  };
 
   return (
     <>
-      <View accessible accessibilityLabel={`${cartLabel}. ${describeProgress(sum)} Tempo ${formatElapsed(sum.elapsedMinutes)}.${limitCents > 0 ? " " + budget.message : ""}`}>
+      <Muted accessibilityLiveRegion="polite">{cartStatus}</Muted>
+      <View accessible accessibilityLabel={[spoken.header, estimate.text, budget.visible ? budget.text.split(" · ")[0] : ""].filter(Boolean).join(" ")}>
         <Box style={{ gap: 8 }}>
           <Muted>No carrinho</Muted>
-          <T style={{ fontFamily: "SoraBold", fontSize: 32, lineHeight: 40 }}>{show(sum.cartCents)}</T>
+          <T style={{ fontFamily: "SoraBold", fontSize: 32, lineHeight: 40 }}>{cart.text}</T>
           <View
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
@@ -102,19 +120,17 @@ export default function ShoppingTripScreen() {
             <View style={{ width: `${pct}%`, height: 8, backgroundColor: c.primary }} />
           </View>
           <Muted>
-            {`${sum.inCartCount} de ${sum.total} ${sum.total === 1 ? "item" : "itens"} · ${formatElapsed(sum.elapsedMinutes)}`}
+            {`${progress.items} de ${progress.total} ${progress.total === 1 ? "item" : "itens"} · ${elapsed.text}`}
           </Muted>
-          {(sum.cartUnpriced > 0 || sum.pendingCount > 0) && (
+          {(cart.unpriced > 0 || estimate.text) && (
             <Muted>
-              {sum.cartUnpriced > 0 ? `${sum.cartUnpriced} no carrinho sem preço. ` : ""}
-              {sum.pendingCount > 0 && sum.pendingEstimateCents > 0
-                ? `Falta pegar cerca de ${show(sum.pendingEstimateCents)}${sum.pendingUnpriced ? ` (+${sum.pendingUnpriced} sem preço)` : ""}. Total estimado ${show(sum.grandEstimateCents)}.`
-                : ""}
+              {cart.unpriced > 0 ? `${cart.unpriced} no carrinho sem preço. ` : ""}
+              {estimate.text}
             </Muted>
           )}
-          {limitCents > 0 && (
-            <T style={{ color: budget.level === "over" ? c.red : budget.level === "near" ? c.amber : c.muted }}>
-              {`Limite ${show(limitCents)} · ${budget.message}`}
+          {budget.visible && (
+            <T style={{ color: budget.color === "over" ? c.red : budget.color === "near" ? c.amber : c.muted }}>
+              {budget.text}
             </T>
           )}
         </Box>
@@ -123,12 +139,14 @@ export default function ShoppingTripScreen() {
       <View style={{ marginTop: 12, gap: 8 }}>
         {editLimit ? (
           <>
-            <Field label="Limite da compra (R$)" value={limitText} onChange={setLimitText} numeric placeholder="Ex.: 250,00" hint="Deixe vazio para tirar o limite." />
+            <Field label="Limite da compra (R$)" value={limitText} onChange={(text) => { setLimitText(text); setLimitError(""); }} numeric autoFocus placeholder="Ex.: 250,00" hint="Deixe vazio para tirar o limite." />
+            <View accessibilityLiveRegion="polite">{!!limitError && <Muted style={{ color: c.red }}>{limitError}</Muted>}</View>
             <Button title="Salvar limite" onPress={saveLimit} />
           </>
         ) : (
           <Button
-            title={limitCents > 0 ? "Alterar limite" : "Definir limite de gasto"}
+            title={budget.action}
+            controlRef={limitButton}
             icon="target"
             secondary
             onPress={() => {
@@ -139,7 +157,7 @@ export default function ShoppingTripScreen() {
         )}
       </View>
 
-      {sum.pendingCount === 0 ? (
+      {progress.pending === 0 ? (
         <View style={{ marginTop: 16 }}>
           <Box>
             <T style={{ fontFamily: "SoraSemi" }}>Tudo no carrinho</T>
@@ -147,13 +165,13 @@ export default function ShoppingTripScreen() {
           </Box>
         </View>
       ) : (
-        groups.map((g) => (
+        groups.map((g: any) => (
           <View key={g.category}>
             <Section title={`${g.category} (${g.count})`} icon={<CategoryIcon category={g.category} />} />
             <Box style={{ padding: 0, overflow: "hidden" }}>
               {g.items.map((i: any, idx: number) => (
                 <View key={i.id} style={idx < g.items.length - 1 && [k.hairline, { borderBottomColor: c.line }]}>
-                  <TripRow item={i} checked={false} onToggle={() => toggle(i.id)} show={show} />
+                  <TripRow item={i} bindControl={(node: ViewControl | null) => bindCartControl(i.id, node)} onToggle={() => void toggle(i)} />
                 </View>
               ))}
             </Box>
@@ -167,7 +185,7 @@ export default function ShoppingTripScreen() {
           <Box style={{ padding: 0, overflow: "hidden" }}>
             {inCart.map((i: any, idx: number) => (
               <View key={i.id} style={idx < inCart.length - 1 && [k.hairline, { borderBottomColor: c.line }]}>
-                <TripRow item={i} checked onToggle={() => toggle(i.id)} show={show} />
+                <TripRow item={i} bindControl={(node: ViewControl | null) => bindCartControl(i.id, node)} onToggle={() => void toggle(i)} />
               </View>
             ))}
           </Box>
@@ -175,17 +193,35 @@ export default function ShoppingTripScreen() {
       )}
 
       <View style={{ marginTop: 16, gap: 8 }}>
-        {draft.items > 0 && (
+        {view.canFinish && (
           <Button
-            title="Finalizar e registrar despesa"
+            title="Registrar despesa"
             icon="dollar-sign"
             onPress={() => {
-              finish();
-              nav.push({
-                name: "form",
-                kind: "transaction",
-                initial: { type: "expense", amount: draft.amountText, description: draft.description },
-              });
+              const plan = finishPlan(selectedState);
+              if (!plan.ok || !plan.expense) return;
+              const expense = plan.expense;
+              const open = () => {
+                finish();
+                nav.push({
+                  name: "form",
+                  kind: "transaction",
+                  initial: { type: "expense", amount: expense.amount, description: expense.description },
+                });
+              };
+              const single = () => {
+                if (view.duplicateWarning) {
+                  Alert.alert("Já existe uma despesa parecida", "Há uma despesa de mercado com valor e data próximos. Registrar mesmo assim?", [
+                    { text: "Cancelar", style: "cancel" },
+                    { text: "Registrar", onPress: open },
+                  ]);
+                } else open();
+              };
+              Alert.alert("Registrar compra", plan.warning || "Escolha como registrar o total.", [
+                { text: "Cancelar", style: "cancel" },
+                { text: "Uma despesa", onPress: single },
+                { text: "Dividir por categoria", onPress: () => nav.push(reviewExpenses(itemsOf(selectedState))) },
+              ]);
             }}
           />
         )}
@@ -195,16 +231,15 @@ export default function ShoppingTripScreen() {
   );
 }
 
-function TripRow({ item, checked, onToggle, show }: any) {
+function TripRow({ item, onToggle, bindControl }: any) {
   const { c } = useTheme();
-  const lt = lineTotal(item);
-  const total = lt == null ? null : Math.round(lt);
-  const q = qtyText(item);
+  const { inCart: checked, totalText, quantityText: q } = item;
   return (
     <Pressable
+      ref={bindControl}
       accessibilityRole="checkbox"
       accessibilityState={{ checked }}
-      accessibilityLabel={describeItem({ ...item, inCart: checked })}
+      accessibilityLabel={item.spoken}
       accessibilityHint="Toque duas vezes para alternar"
       onPress={onToggle}
       style={[k.row, { minHeight: 60, paddingHorizontal: 8, gap: 0 }]}
@@ -226,14 +261,14 @@ function TripRow({ item, checked, onToggle, show }: any) {
         </View>
       </View>
       <View style={{ flex: 1, paddingVertical: 6 }}>
-        <T numberOfLines={2} style={checked ? { color: c.muted, textDecorationLine: "line-through" } : undefined}>
+        <T style={checked ? { color: c.muted, textDecorationLine: "line-through" } : undefined}>
           {item.name}
         </T>
-        {(q !== "" || total != null) && (
+        {(q || totalText) && (
           <Muted>
             {q}
-            {q !== "" && total != null ? " · " : ""}
-            {total != null ? show(total) : ""}
+            {q && totalText ? " · " : ""}
+            {totalText}
           </Muted>
         )}
       </View>

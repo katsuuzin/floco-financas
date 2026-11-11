@@ -1,7 +1,10 @@
-import React, { useMemo, useState } from "react";
-import { View, TextInput, Pressable } from "react-native";
-import { Box, Button, Chips, Empty, I, IconButton, Muted, T, styles as k } from "../ui/kit";
-import { applyFilters, activeCount, emptyFilters, toggle, calendarWeeks, dailyNet } from "../tx-filters.mjs";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { View, TextInput, Pressable, ScrollView, useWindowDimensions } from "react-native";
+import { Box, Button, Chips, Empty, I, Muted, T, focusAccessibility, type ViewControl, styles as k } from "../ui/kit";
+import { applyFilters, centsOf, emptyFilters, toggle } from "../tx-filters.mjs";
+import { activeFilterCount, applyStatementFilter, describeFilter, sanitizeFilter } from "../statementFilter.mjs";
+import { dayDetail, monthGrid } from "../statementCalendar.mjs";
+import { toAmountText } from "../calc.mjs";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
@@ -9,6 +12,7 @@ import { monthKey, money, includedAccounts, signedAmount } from "../finance.mjs"
 import { displayOf } from "./PersonalizeScreens";
 import TransactionRow from "./TransactionRow";
 import MonthBar from "./MonthBar";
+import CategoryIcon, { categoryStyleOf, tagStyleOf } from "../ui/CategoryIcon";
 
 type Filter = "all" | "income" | "expense" | "transfer" | "pending";
 const norm = (s: string) =>
@@ -32,15 +36,47 @@ export function matches(t: any, query: string, notes = true) {
 
 export default function TransactionsScreen() {
   const { c } = useTheme();
-  const { state, show } = useStore();
+  const { state, show, perform } = useStore();
   const { month } = useNav();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
-  const [adv, setAdv] = useState(emptyFilters());
+  const saved = state.settings?.display?.statementFilter;
+  const core = useMemo(() => sanitizeFilter(saved), [saved]);
+  const extras = useMemo(() => ({
+    cards: Array.isArray(saved?.cards) ? saved.cards.filter((id: unknown) => typeof id === "string" && id.startsWith("c:")) : [],
+    categories: Array.isArray(saved?.categories) ? saved.categories.filter((name: unknown) => typeof name === "string") : [],
+    sort: ["dateAsc", "amountAsc", "amountDesc"].includes(saved?.sort) ? saved.sort : "date",
+  }), [saved]);
+  const [adv, setAdv] = useState<{ sources: string[]; categories: string[]; tags: string[]; types: string[]; min: string; max: string; sort: string }>({ ...emptyFilters(), types: [] });
   const [panel, setPanel] = useState(false);
+  const filterButton = useRef<ViewControl>(null);
+  const filterHeading = useRef<ViewControl>(null);
+  const visitedFilters = useRef(false);
+  useEffect(() => {
+    if (!visitedFilters.current) return;
+    focusAccessibility(panel ? filterHeading.current : filterButton.current);
+  }, [panel]);
   const [cal, setCal] = useState(false);
   const [day, setDay] = useState<string | null>(null);
-  const advCount = activeCount(adv);
+  const advCount = activeFilterCount(core) + Number(extras.cards.length > 0 && core.accountIds.length === 0) +
+    Number(extras.categories.length > 0) + Number(extras.sort !== "date");
+  const summary = describeFilter(core, { accounts: state.accounts, tags: state.tags });
+  const openFilters = () => {
+    visitedFilters.current = true;
+    if (!panel) setAdv({ ...extras, types: core.types,
+      sources: [...core.accountIds.map((id: string) => "a:" + id), ...extras.cards], tags: core.tagIds,
+      min: core.minCents === null ? "" : toAmountText(core.minCents),
+      max: core.maxCents === null ? "" : toAmountText(core.maxCents) });
+    setPanel(!panel);
+  };
+  const saveFilters = (clear = false) => {
+    const next = clear ? undefined : { ...sanitizeFilter({
+      accountIds: adv.sources.filter((id: string) => id.startsWith("a:")).map((id: string) => id.slice(2)),
+      tagIds: adv.tags, types: adv.types, minCents: centsOf(adv.min), maxCents: centsOf(adv.max),
+    }), cards: adv.sources.filter((id: string) => id.startsWith("c:")), categories: adv.categories, sort: adv.sort };
+    void perform((s: any) => ({ ...s, settings: { ...s.settings, display: { ...s.settings?.display, statementFilter: next } } }), "")
+      .then((ok) => { if (ok) setPanel(false); });
+  };
   const d = displayOf(state);
   const filtered = useMemo(() => {
     const rows = state.transactions
@@ -58,12 +94,16 @@ export default function TransactionsScreen() {
                 : t.type === filter,
       )
       .filter((t: any) => matches(t, search, d.searchNotes));
-    return applyFilters(rows, adv);
-  }, [state.transactions, month, filter, search, adv, d.onlyConfirmed, d.searchNotes]);
+    const sources = extras.cards.length ? [...core.accountIds.map((id: string) => "a:" + id), ...extras.cards] : [];
+    const selected = applyStatementFilter(rows, sources.length ? { ...core, accountIds: [] } : core);
+    return applyFilters(selected, { ...emptyFilters(), sources, categories: extras.categories, sort: extras.sort });
+  }, [state.transactions, month, filter, search, core, extras, d.onlyConfirmed, d.searchNotes]);
   // Dia escolhido no calendário (só vale para o mês exibido).
   const pickedDay = day && monthKey(day) === month ? day : null;
-  const found = pickedDay ? filtered.filter((t: any) => t.date === pickedDay) : filtered;
-  const byAmount = adv.sort === "amountDesc" || adv.sort === "amountAsc";
+  const detail = pickedDay ? dayDetail(filtered, pickedDay) : null;
+  const found = detail?.transactions ?? filtered;
+  const byAmount = extras.sort === "amountDesc" || extras.sort === "amountAsc";
+  const grid = cal ? monthGrid(filtered, month) : null;
   const days = useMemo(() => {
     const rows = found;
     const map = new Map<string, any[]>();
@@ -119,46 +159,49 @@ export default function TransactionsScreen() {
       <View style={[k.row, { gap: 4, marginTop: 2 }]}>
         <Pressable
           accessibilityRole="button"
+          ref={filterButton}
           accessibilityLabel={panel ? "Fechar filtros" : advCount ? `Filtros, ${advCount} ativos` : "Abrir filtros"}
           accessibilityState={{ expanded: panel }}
-          onPress={() => setPanel(!panel)}
+          onPress={openFilters}
           hitSlop={8}
-          style={[k.compactChip, k.row, { gap: 8, backgroundColor: advCount ? c.primary : c.surface, borderColor: advCount ? c.primary : c.line }]}
+          style={[k.compactChip, k.row, { minHeight: 48, gap: 8, backgroundColor: advCount ? c.primary : c.surface, borderColor: advCount ? c.primary : c.line }]}
         >
           <I name="sliders" size={16} color={advCount ? c.onPrimary : c.text} />
           <T style={{ fontSize: 13, fontFamily: "SoraSemi", color: advCount ? c.onPrimary : c.text }}>
             {advCount ? `Filtros · ${advCount}` : "Filtros"}
           </T>
         </Pressable>
-        <IconButton
-          name={cal ? "list" : "calendar"}
-          label={cal ? "Fechar calendário" : "Ver calendário do mês"}
-          onPress={() => {
-            setCal(!cal);
-            setDay(null);
-          }}
-        />
+        <Button secondary title={cal ? "Ver lista" : "Ver calendário"} onPress={() => { setCal(!cal); setDay(null); }} />
         <View style={{ flex: 1 }} />
         <Muted accessibilityLiveRegion="polite">
           {found.length} {found.length === 1 ? "lançamento" : "lançamentos"} · {(total < 0 ? "−" : "") + show(Math.abs(total))}
         </Muted>
       </View>
-      {cal && <MonthCalendar month={month} net={dailyNet(filtered) as Record<string, number>} day={pickedDay} onPick={(d) => setDay(d === pickedDay ? null : d)} />}
+      {advCount > 0 && (
+        <View style={{ gap: 8 }}>
+          <Muted>{[summary, extras.cards.length ? "Cartões selecionados" : "", extras.categories.length ? "Categorias selecionadas" : "",
+            extras.sort !== "date" ? "Ordem personalizada" : ""].filter(Boolean).join(" · ")}</Muted>
+          <Button secondary title="Limpar filtros" onPress={() => saveFilters(true)} />
+        </View>
+      )}
+      {grid && <MonthCalendar weeks={grid.weeks} day={pickedDay} onPick={setDay} />}
       {pickedDay && (
-        <Pressable accessibilityRole="button" onPress={() => setDay(null)} style={[k.row, { gap: 6, marginTop: 8 }]}>
-          <I name="x-circle" size={16} color={c.primary} />
-          <T style={{ color: c.primary, fontSize: 13, fontFamily: "SoraSemi" }}>
-            Só {new Date(pickedDay + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })} · mostrar o mês todo
-          </T>
-        </Pressable>
+        <View style={{ gap: 6, marginTop: 8 }}>
+          <T accessibilityRole="header">{new Date(pickedDay + "T12:00:00Z").toLocaleDateString("pt-BR", { day: "2-digit", month: "long", timeZone: "UTC" })}</T>
+          {detail && <Muted accessibilityLiveRegion="polite">Entradas {show(detail.incomeCents ?? 0)} · Despesas {show(detail.expenseCents ?? 0)}</Muted>}
+          <Button secondary title="Fechar detalhe do dia" onPress={() => setDay(null)} />
+        </View>
       )}
       {panel && (
         <Box style={{ marginTop: 10, gap: 6 }}>
+          <View ref={filterHeading} accessible accessibilityRole="header"><T>Filtros do extrato</T></View>
           <Pick title="Conta ou cartão" opts={sourceOpts} on={adv.sources} set={(v) => setAdv({ ...adv, sources: toggle(adv.sources, v) })} />
           {catOpts.length > 0 && (
-            <Pick title="Categoria" opts={catOpts.map((x) => [x, x])} on={adv.categories} set={(v) => setAdv({ ...adv, categories: toggle(adv.categories, v) })} />
+            <Pick title="Categoria" badge={(name) => categoryStyleOf(state, name)} opts={catOpts.map((x) => [x, x])} on={adv.categories} set={(v) => setAdv({ ...adv, categories: toggle(adv.categories, v) })} />
           )}
-          {tagOpts.length > 0 && <Pick title="Tags" opts={tagOpts} on={adv.tags} set={(v) => setAdv({ ...adv, tags: toggle(adv.tags, v) })} />}
+          {tagOpts.length > 0 && <Pick title="Tags" badge={(id) => tagStyleOf((state.tags || []).find((tag: any) => tag.id === id))} opts={tagOpts} on={adv.tags} set={(v) => setAdv({ ...adv, tags: toggle(adv.tags, v) })} />}
+          <Pick title="Tipos de lançamento" opts={[["income", "Receitas"], ["expense", "Despesas"], ["transfer", "Transferências"]]}
+            on={adv.types} set={(v) => setAdv({ ...adv, types: toggle(adv.types, v) })} />
           <Muted style={{ marginTop: 6 }}>Faixa de valor (R$)</Muted>
           <View style={[k.row, { gap: 10 }]}>
             {(["min", "max"] as const).map((key) => (
@@ -170,7 +213,7 @@ export default function TransactionsScreen() {
                 keyboardType="decimal-pad"
                 value={adv[key]}
                 onChangeText={(v) => setAdv({ ...adv, [key]: v })}
-                style={[k.input, { flex: 1, marginTop: 0, backgroundColor: c.bg, color: c.text, borderColor: c.line }]}
+                style={[k.input, { flex: 1, marginTop: 0, backgroundColor: c.bg, color: c.text, borderColor: c.muted }]}
               />
             ))}
           </View>
@@ -186,10 +229,10 @@ export default function TransactionsScreen() {
             on={[adv.sort]}
             set={(v) => setAdv({ ...adv, sort: v })}
           />
-          {advCount > 0 && <Button secondary icon="x" title="Limpar filtros" onPress={() => setAdv(emptyFilters())} />}
+          <Button title="Aplicar filtros" onPress={() => saveFilters()} />
         </Box>
       )}
-      {byAmount && found.length ? (
+      {cal && !pickedDay ? null : byAmount && found.length ? (
         <Box style={{ padding: 0, marginTop: 14, overflow: "hidden" }}>
           {found.map((t: any, i: number) => (
             <TransactionRow key={t.id} t={t} withDate last={i === found.length - 1} />
@@ -240,7 +283,7 @@ export default function TransactionsScreen() {
 }
 
 // Grupo de chips de seleção múltipla, quebrando linha (o painel não rola na horizontal).
-function Pick({ title, opts, on, set, single = false }: { title: string; opts: [string, string][]; on: string[]; set: (v: string) => void; single?: boolean }) {
+function Pick({ title, opts, on, set, single = false, badge }: { title: string; opts: [string, string][]; on: string[]; set: (v: string) => void; single?: boolean; badge?: (id: string) => { icon: string; color: string } }) {
   const { c } = useTheme();
   if (!opts.length) return null;
   return (
@@ -257,9 +300,10 @@ function Pick({ title, opts, on, set, single = false }: { title: string; opts: [
               accessibilityLabel={label}
               onPress={() => set(key)}
               hitSlop={{ top: 4, bottom: 4 }}
-              style={[k.compactChip, k.row, { gap: 6, backgroundColor: sel ? c.primary : c.bg, borderColor: sel ? c.primary : c.line }]}
+              style={[k.compactChip, k.row, { minHeight: 48, gap: 6, backgroundColor: sel ? c.primary : c.bg, borderColor: sel ? c.primary : c.line }]}
             >
               {sel && <I name="check" size={14} color={c.onPrimary} />}
+              {badge && <CategoryIcon look={badge(key)} size={24} />}
               <T style={{ fontSize: 13, fontFamily: sel ? "SoraSemi" : "Sora", color: sel ? c.onPrimary : c.text }}>{label}</T>
             </Pressable>
           );
@@ -269,61 +313,41 @@ function Pick({ title, opts, on, set, single = false }: { title: string; opts: [
   );
 }
 
-// L12: calendário do mês com o resultado de cada dia; tocar num dia filtra o extrato.
-function MonthCalendar({ month, net, day, onPick }: { month: string; net: Record<string, number>; day: string | null; onPick: (d: string) => void }) {
+// O calendário rola horizontalmente em larguras em que sete alvos de 48 dp não cabem.
+function MonthCalendar({ weeks, day, onPick }: { weeks: any[][]; day: string | null; onPick: (date: string) => void }) {
   const { c } = useTheme();
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  const short = (v: number) => {
-    const a = Math.abs(v) / 100;
-    return (v < 0 ? "−" : "+") + (a >= 1000 ? (a / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "k" : Math.round(a));
-  };
+  const { fontScale } = useWindowDimensions();
+  const cellStyle = { flex: 1, minWidth: Math.max(48, 32 * fontScale) };
   return (
-    <Box style={{ marginTop: 10, paddingHorizontal: 8, paddingVertical: 10 }}>
-      <View style={{ flexDirection: "row" }}>
-        {["D", "S", "T", "Q", "Q", "S", "S"].map((w, i) => (
-          <Muted key={i} style={{ flex: 1, textAlign: "center", fontSize: 11 }} importantForAccessibility="no">
-            {w}
-          </Muted>
-        ))}
-      </View>
-      {calendarWeeks(month).map((week: (string | null)[], wi: number) => (
-        <View key={wi} style={{ flexDirection: "row" }}>
-          {week.map((d, i) => {
-            if (!d) return <View key={i} style={{ flex: 1 }} />;
-            const v = net[d];
-            const sel = d === day;
-            const n = Number(d.slice(8));
-            return (
-              <Pressable
-                key={d}
-                accessibilityRole="button"
-                accessibilityState={{ selected: sel }}
-                accessibilityLabel={`Dia ${n}${v ? (v < 0 ? ", saldo negativo de " : ", saldo positivo de ") + (Math.abs(v) / 100).toFixed(2).replace(".", ",") + " reais" : ", sem lançamentos"}`}
-                onPress={() => onPick(d)}
-                style={{
-                  flex: 1,
-                  minHeight: 48,
-                  margin: 2,
-                  borderRadius: 12,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: sel ? c.primary : "transparent",
-                  borderWidth: d === today && !sel ? 1 : 0,
-                  borderColor: c.primary,
-                }}
-              >
-                <T style={{ fontSize: 13, fontFamily: sel ? "SoraSemi" : "Sora", color: sel ? c.onPrimary : c.text }}>{n}</T>
-                {v ? (
-                  <T style={{ fontSize: 9, color: sel ? c.onPrimary : v < 0 ? c.red : c.green, fontVariant: ["tabular-nums"] }} numberOfLines={1}>
-                    {short(v)}
-                  </T>
-                ) : null}
-              </Pressable>
-            );
-          })}
+    <Box style={{ marginTop: 10, paddingHorizontal: 8 }}>
+      <ScrollView horizontal contentContainerStyle={{ flexGrow: 1 }}>
+        <View style={{ minWidth: cellStyle.minWidth * 7, flexGrow: 1 }}>
+          <View style={{ flexDirection: "row" }} importantForAccessibility="no-hide-descendants">
+            {["D", "S", "T", "Q", "Q", "S", "S"].map((letter, i) =>
+              <Muted key={i} style={[cellStyle, { textAlign: "center" }]}>{letter}</Muted>)}
+          </View>
+          {weeks.map((week, i) => (
+            <View key={i} style={{ flexDirection: "row" }}>
+              {week.map((cell) => {
+                if (!cell.inMonth) return <View key={cell.date} style={cellStyle} />;
+                const selected = cell.date === day;
+                const number = Number(cell.date.slice(-2));
+                return (
+                  <Pressable key={cell.date} accessibilityRole="button" accessibilityState={{ selected }}
+                    accessibilityLabel={`Dia ${number}, ${cell.count} ${cell.count === 1 ? "lançamento" : "lançamentos"}, intensidade de gasto ${cell.level} de 4`}
+                    onPress={() => onPick(cell.date)}
+                    style={[cellStyle, { minHeight: 48, alignItems: "center", justifyContent: "center",
+                      borderRadius: 12, backgroundColor: selected ? c.primary : c.surface }]}>
+                    <T style={{ color: selected ? c.onPrimary : c.text }}>{number}</T>
+                    {cell.level > 0 && <View importantForAccessibility="no" style={{ height: 4, borderRadius: 2,
+                      width: 6 * cell.level, backgroundColor: selected ? c.onPrimary : c.primary, opacity: 0.35 + 0.15 * cell.level }} />}
+                  </Pressable>
+                );
+              })}
+            </View>
+          ))}
         </View>
-      ))}
+      </ScrollView>
     </Box>
   );
 }

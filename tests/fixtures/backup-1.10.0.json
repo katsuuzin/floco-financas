@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "accounts": [
+    {
+      "id": "conta-a",
+      "name": "Carteira fictícia",
+      "initial": 12345
+    },
+    {
+      "id": "conta-b",
+      "name": "Conta fictícia",
+      "initial": 6000
+    }
+  ],
+  "cards": [],
+  "transactions": [
+    {
+      "id": "entrada",
+      "groupId": "entrada",
+      "accountId": "conta-a",
+      "type": "income",
+      "amount": 123,
+      "date": "2026-10-03",
+      "description": "Entrada de exemplo",
+      "confirmed": true,
+      "category": "Outros",
+      "tags": [
+        "tag-teste"
+      ]
+    },
+    {
+      "id": "saida",
+      "groupId": "saida",
+      "accountId": "conta-b",
+      "type": "expense",
+      "amount": 456,
+      "date": "2026-10-04",
+      "description": "Compra de exemplo",
+      "confirmed": true,
+      "category": "Mercado",
+      "tags": []
+    }
+  ],
+  "budgets": [],
+  "goals": [
+    {
+      "id": "meta",
+      "kind": "goal",
+      "name": "Meta fictícia",
+      "target": 5000,
+      "saved": 111,
+      "deposits": []
+    },
+    {
+      "id": "reserva",
+      "kind": "box",
+      "name": "Caixinha fictícia",
+      "target": 1000,
+      "saved": 237,
+      "deposits": [
+        {
+          "id": "reserva-deposito",
+          "amount": 237,
+          "accountId": "conta-a",
+          "date": "2026-10-04"
+        }
+      ],
+      "history": [
+        {
+          "id": "reserva-deposito",
+          "type": "deposit",
+          "amount": 237,
+          "accountId": "conta-a",
+          "date": "2026-10-04"
+        }
+      ]
+    }
+  ],
+  "recurrences": [],
+  "receivables": [],
+  "financings": [],
+  "customCategories": [],
+  "tags": [
+    {
+      "id": "tag-teste",
+      "name": "Teste"
+    }
+  ],
+  "shoppingItems": [
+    {
+      "id": "leite",
+      "name": "Leite",
+      "qty": 2,
+      "unit": "",
+      "priceCents": 599,
+      "category": "Frios e laticínios",
+      "inCart": false,
+      "createdAt": 1
+    },
+    {
+      "id": "arroz",
+      "name": "Arroz",
+      "qty": 1,
+      "unit": "",
+      "priceCents": 2000,
+      "category": "Mercearia",
+      "inCart": true,
+      "createdAt": 2
+    }
+  ],
+  "shoppingPurchases": [],
+  "shoppingProducts": [],
+  "settings": {
+    "dark": false,
+    "hide": false,
+    "biometric": false
+  },
+  "trash": []
+}

@@ -15,7 +15,8 @@ export const palette = {
     heroText: "#311E0D",
     green: "#704723",
     red: "#B53846",
-    amber: "#94621C",
+    amber: "#88591B",
+    scrim: "rgba(0,0,0,0.45)",
   },
   // Escuro: preto e cinza grafite em camadas; ação no amarelo Solar.
   // Contrastes: texto #F4F4F2 sobre #1D1D20 ≈ 15:1; secundário #A3A3A8 ≈ 6,9:1;
@@ -34,9 +35,19 @@ export const palette = {
     green: "#8FD9A0",
     red: "#FF8A8A",
     amber: "#FFCB45",
+    scrim: "rgba(0,0,0,0.45)",
   },
 };
 export type Colors = typeof palette.light;
+
+export function entityColors(color: unknown, c: Colors) {
+  if (typeof color !== "string" || !/^#[\da-f]{6}$/i.test(color))
+    return { backgroundColor: c.primary, color: c.onPrimary };
+  const channels = [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16) / 255);
+  const [r, g, b] = channels.map((v) => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return { backgroundColor: color, color: luminance > 0.179 ? "#000000" : "#FFFFFF" };
+}
 
 // S1: cores de destaque. Todas claras o bastante para o texto marrom #311E0D por cima (≥ 8:1).
 export const ACCENTS: [string, string][] = [

@@ -3,8 +3,12 @@
 // Valores em centavos inteiros. `listId` é fixo ("main") no MVP: permite várias listas depois sem migrar.
 // Preço: sem unidade, o preço é por unidade e o total é preço × qty; com unidade (g, kg, l, ml),
 // o preço é o da própria porção e o total é o próprio preço.
-import { uid, parseMoney, money } from "./finance.mjs";
-import { MAIN_LIST, addCents, MAX_ITEMS, MAX_NAME, SHOPPING_CATEGORIES, sanitizeShoppingItems } from "./shoppingData.mjs";
+import { uid, parseMoney, money, today } from "./finance.mjs";
+import { applyDeal, validateDeal } from "./shoppingDeals.mjs";
+import { markStaple, staplesToRestock } from "./shoppingStaples.mjs";
+import { productKey } from "./shoppingPurchases.mjs";
+import { createList, flattenLists, fromTemplate, migrateToLists, renameList } from "./shoppingLists.mjs";
+import { MAIN_LIST, addCents, MAX_ITEMS, MAX_NAME, SHOPPING_CATEGORIES, sanitizeShoppingItems, sanitizeItemDeal } from "./shoppingData.mjs";
 
 export { MAIN_LIST, MAX_ITEMS, MAX_NAME, SHOPPING_CATEGORIES, sanitizeShoppingItems };
 
@@ -62,13 +66,60 @@ export function parseItemText(text) {
 
 export const itemsOf = (state) => state.shoppingItems || [];
 
+export const shoppingListsOf = (state) => state.shoppingLists?.length ? state.shoppingLists : [{ id: MAIN_LIST, name: "Minha lista", archived: false }];
+export const activeShoppingList = (state) => shoppingListsOf(state).find((list) => list.id === state.shoppingListId && !list.archived)?.id ??
+  shoppingListsOf(state).find((list) => !list.archived)?.id ?? MAIN_LIST;
+const belongsTo = (item, listId) => (item.listId ?? MAIN_LIST) === listId;
+
+export function migrateShoppingLists(state) {
+  if (!state.shoppingLists?.length)
+    return renameList(migrateToLists(flattenLists({ ...state, shoppingLists: [] })), MAIN_LIST, "Minha lista");
+  if (state.shoppingListId !== undefined && activeShoppingList(state) !== state.shoppingListId)
+    return { ...state, shoppingListId: activeShoppingList(state) };
+  return state;
+}
+
+export function activeShoppingState(state) {
+  if (!state.shoppingLists?.length) return state;
+  const id = activeShoppingList(state);
+  const items = itemsOf(state);
+  const selected = items.filter((item) => belongsTo(item, id));
+  return selected.length === items.length ? state : { ...state, shoppingItems: selected };
+}
+
+export function editActiveShoppingItems(state, change) {
+  const scope = activeShoppingState(state);
+  const id = activeShoppingList(state);
+  const other = itemsOf(state).filter((item) => !belongsTo(item, id));
+  const updated = itemsOf(change(scope));
+  if (other.length + updated.length > MAX_ITEMS) throw Error("As listas chegaram ao limite de itens.");
+  const ids = new Set(other.map((item) => item.id));
+  const items = updated.map((item) => {
+    let key = item.id;
+    while (ids.has(key)) key = uid();
+    ids.add(key);
+    return item.listId === id && key === item.id ? item : { ...item, id: key, listId: id };
+  });
+  return { ...state, shoppingItems: [...other, ...items] };
+}
+
+export function createShoppingList(state, name, template) {
+  if (shoppingListsOf(state).length >= 100) throw Error("As listas chegaram ao limite.");
+  const id = uid();
+  const next = createList(migrateShoppingLists(state), name, { id });
+  if (!template) return { ...next, shoppingListId: id };
+  const result = fromTemplate({ ...template, name }, Date.now(), { id });
+  if (itemsOf(state).length + result.items.length > MAX_ITEMS) throw Error("As listas chegaram ao limite de itens.");
+  return { ...next, shoppingListId: id, shoppingItems: [...itemsOf(state), ...result.items] };
+}
+
 export function addShoppingItem(state, text, { id = uid(), now = Date.now() } = {}) {
   const items = itemsOf(state);
   if (items.length >= MAX_ITEMS) throw Error("A lista chegou ao limite de itens.");
   const { qty, unit, name } = parseItemText(text);
   const item = {
     id,
-    listId: MAIN_LIST,
+    listId: activeShoppingList(state),
     name,
     qty,
     unit,
@@ -125,16 +176,63 @@ export function restoreItem(state, removed, index) {
 }
 
 // Itens no carrinho saem da lista (fim da compra).
-export function clearCart(state) {
-  return { ...state, shoppingItems: itemsOf(state).filter((i) => !i.inCart) };
+export function clearCart(state, date = today()) {
+  const items = itemsOf(state);
+  const active = activeShoppingList(state);
+  const boughtItems = items.filter((item) => item.inCart && (!state.shoppingLists?.length || belongsTo(item, active)));
+  const boughtIds = new Set(boughtItems.map((item) => item.id));
+  const next = { ...state, shoppingItems: items.filter((i) => !boughtIds.has(i.id)) };
+  if (!state.shoppingStaples?.length) return next;
+  const bought = new Set(boughtItems.map((item) => productKey(item.name, item.unit)));
+  return { ...next, shoppingStaples: state.shoppingStaples.map((entry) =>
+    belongsTo(entry, active) && bought.has(productKey(entry.name, entry.unit)) ? { ...entry, lastRestockedAt: date } : entry) };
+}
+
+export function restockStaples(state, date = today()) {
+  const items = itemsOf(state);
+  if (!state.shoppingStaples?.length) return state;
+  const due = shoppingListsOf(state).filter((list) => !list.archived).flatMap((list) => staplesToRestock({ ...state,
+    shoppingItems: items.filter((item) => belongsTo(item, list.id)),
+    shoppingStaples: state.shoppingStaples.filter((item) => belongsTo(item, list.id)),
+  }, date)).slice(0, MAX_ITEMS - items.length);
+  if (!due.length) return state;
+  return { ...state, shoppingItems: [...items, ...due.map(({ lastRestockedAt, deal, ...entry }) =>
+    ({ ...entry, id: uid(), priceCents: null, createdAt: Date.now() }))] };
+}
+
+export function configureShoppingItem(state, id, { text, price, category, everyDays, deal }) {
+  const old = itemsOf(state).find((item) => item.id === id);
+  let next = setItemCategory(setItemPrice(renameItem(state, id, text), id, price), id, category);
+  const item = itemsOf(next).find((entry) => entry.id === id);
+  const promotion = deal ? sanitizeItemDeal(deal) : undefined;
+  if (deal && !promotion) throw Error(validateDeal(deal).reason || "Confira a promoção.");
+  if (promotion?.type === "buyXPayY" && (item.unit || !Number.isInteger(item.qty)))
+    throw Error("Use a promoção por quantidade em itens vendidos por unidade.");
+  if (old?.staple && productKey(old.name, old.unit) !== productKey(item.name, item.unit))
+    next = { ...next, shoppingStaples: (next.shoppingStaples || []).filter((entry) => !belongsTo(entry, old.listId ?? MAIN_LIST) || productKey(entry.name, entry.unit) !== productKey(old.name, old.unit)) };
+  next = mapItem(next, id, (entry) => {
+    const { deal: previous, ...base } = entry;
+    return promotion ? { ...base, deal: promotion } : base;
+  });
+  if (everyDays === null && !old?.staple) return next;
+  const list = item.listId ?? MAIN_LIST;
+  const entries = next.shoppingStaples || [];
+  const own = entries.filter((entry) => belongsTo(entry, list));
+  const record = own.find((entry) => productKey(entry.name, entry.unit) === productKey(item.name, item.unit));
+  const result = markStaple({ ...next, shoppingStaples: own }, id, everyDays);
+  const updated = { ...result, shoppingStaples: [...entries.filter((entry) => !belongsTo(entry, list)), ...result.shoppingStaples] };
+  if (!record?.lastRestockedAt || everyDays === null) return updated;
+  return { ...updated, shoppingStaples: updated.shoppingStaples.map((entry) => entry.id === id ?
+    { ...entry, lastRestockedAt: record.lastRestockedAt } : entry) };
 }
 
 export const lineTotal = (item) =>
-  item.priceCents == null ? null : item.unit ? item.priceCents : Math.min(Number.MAX_SAFE_INTEGER, item.priceCents * item.qty);
+  item.priceCents == null ? null : item.deal ? applyDeal(item, item.deal).totalCents :
+    item.unit ? item.priceCents : Math.min(Number.MAX_SAFE_INTEGER, item.priceCents * item.qty);
 
 // Resumo do bloco da Início: só os pendentes entram no total estimado.
 export function shoppingSummary(state) {
-  const items = itemsOf(state);
+  const items = itemsOf(activeShoppingState(state));
   const pending = items.filter((i) => !i.inCart);
   let estimatedCents = 0;
   let unpriced = 0;
@@ -188,9 +286,20 @@ export function shareText(state) {
 // Vale para a lista, as compras e os produtos, cada um por conta própria.
 export function keepShoppingOnRestore(backup, current) {
   const next = { ...backup };
-  if (backup.shoppingItems === undefined) next.shoppingItems = itemsOf(current);
+  if (backup.shoppingItems === undefined) {
+    next.shoppingItems = itemsOf(current);
+    if (backup.shoppingLists === undefined && current.shoppingLists !== undefined) next.shoppingLists = current.shoppingLists;
+    if (backup.shoppingListId === undefined && current.shoppingListId !== undefined) next.shoppingListId = current.shoppingListId;
+  }
+  if (backup.shoppingListTemplates === undefined && current.shoppingListTemplates !== undefined)
+    next.shoppingListTemplates = current.shoppingListTemplates;
   if (backup.shoppingPurchases === undefined) next.shoppingPurchases = current.shoppingPurchases || [];
   if (backup.shoppingProducts === undefined) next.shoppingProducts = current.shoppingProducts || [];
+  if (backup.shoppingStaples === undefined && current.shoppingStaples !== undefined) {
+    const lists = shoppingListsOf(next);
+    next.shoppingStaples = current.shoppingStaples.map((item) => lists.some((list) => list.id === item.listId) ? item :
+      { ...item, listId: activeShoppingList(next) });
+  }
   // Referências do histórico: toda compra aponta para um produto que existe no catálogo restaurado.
   const ids = new Set((next.shoppingProducts || []).map((p) => p.id));
   for (const p of next.shoppingPurchases || []) {

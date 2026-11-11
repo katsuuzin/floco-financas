@@ -1,6 +1,7 @@
 // Constantes e validação da lista de compras. Só importa nfce.mjs (sem dependências), para o backup (finance.mjs)
 // poder validar a lista sem dependência circular com shopping.mjs.
 import { isChave } from "./nfce.mjs";
+import { validateDeal } from "./shoppingDeals.mjs";
 export const MAIN_LIST = "main";
 // Soma de centavos que nunca passa do maior inteiro seguro (evita total impreciso com dados absurdos).
 export const addCents = (a, b) => Math.min(Number.MAX_SAFE_INTEGER, a + b);
@@ -21,10 +22,72 @@ export const SHOPPING_CATEGORIES = [
   "Outros",
 ];
 
-// Valida e normaliza o que veio do backup. `undefined` = o backup não traz lista.
-export function sanitizeShoppingItems(value) {
+export function sanitizeItemDeal(deal) {
+  if (!validateDeal(deal).ok) return undefined;
+  if (deal.type === "percent") return { type: deal.type, value: deal.value };
+  if (deal.type === "buyXPayY") return { type: deal.type, x: deal.x, y: deal.y };
+  return { type: deal.type, cents: deal.cents };
+}
+
+const recurringDays = (n) => Number.isInteger(n) && n >= 1 && n <= 365;
+const recurringFields = (item) => item.staple === true && recurringDays(item.everyDays) ?
+  { staple: true, everyDays: item.everyDays } : {};
+
+export function sanitizeShoppingStaples(value, lists) {
   if (value === undefined) return undefined;
-  if (!Array.isArray(value) || value.length > MAX_ITEMS) throw Error("Backup inválido: shoppingItems");
+  if (!Array.isArray(value)) return [];
+  const ids = new Set();
+  return value.slice(0, MAX_ITEMS).flatMap((row) => {
+    if (!row || !row.staple || ids.has(row.id)) return [];
+    try {
+      const [item] = sanitizeShoppingItems([row], lists);
+      if (!item.staple) return [];
+      ids.add(item.id);
+      return [{ ...item, inCart: false, ...(isIsoDate(row.lastRestockedAt) ? { lastRestockedAt: row.lastRestockedAt } : {}) }];
+    } catch { return []; }
+  });
+}
+
+const safeListId = (id) => typeof id === "string" && id.length <= 100 && /^[\p{L}\p{N}_-]+$/u.test(id) &&
+  !["__proto__", "constructor", "prototype"].includes(id);
+
+export function sanitizeShoppingLists(value) {
+  if (!Array.isArray(value)) return undefined;
+  const ids = new Set();
+  const names = new Set();
+  const lists = value.slice(0, 100).flatMap((row) => {
+    const name = typeof row?.name === "string" ? row.name.trim() : "";
+    const normalized = name.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
+    if (!safeListId(row?.id) || !name || name.length > 60 || ids.has(row.id) || names.has(normalized)) return [];
+    ids.add(row.id);
+    names.add(normalized);
+    return [{ id: row.id, name, archived: row.archived === true }];
+  });
+  if (lists.length && !lists.some((list) => !list.archived)) lists[0].archived = false;
+  return lists.length ? lists : undefined;
+}
+
+export function sanitizeShoppingTemplates(value) {
+  if (value === undefined) return undefined;
+  const ids = new Set();
+  return (Array.isArray(value) ? value : []).slice(0, 20).flatMap((row) => {
+    const name = typeof row?.name === "string" ? row.name.trim() : "";
+    if (!safeListId(row?.id) || !name || name.length > 60 || ids.has(row.id) || !Array.isArray(row.items)) return [];
+    ids.add(row.id);
+    const items = row.items.slice(0, MAX_ITEMS).flatMap((item, index) => {
+      try {
+        const [{ name, qty, unit, priceCents, category }] = sanitizeShoppingItems([{ ...item, id: String(index) }]);
+        return [{ name, qty, unit, priceCents, category }];
+      } catch { return []; }
+    });
+    return [{ id: row.id, name, items }];
+  });
+}
+
+// Valida e normaliza o que veio do backup. `undefined` = o backup não traz lista.
+export function sanitizeShoppingItems(value, lists) {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length > MAX_ITEMS) throw Error("A lista de compras deste backup é inválida. Escolha outro arquivo.");
   const ids = new Set();
   return value.map((i) => {
     if (!i || typeof i.id !== "string" || ids.has(i.id)) throw Error("Identificadores inválidos: shoppingItems");
@@ -34,9 +97,12 @@ export function sanitizeShoppingItems(value) {
     if (!Number.isFinite(i.qty) || i.qty <= 0 || i.qty > 9999) throw Error("Item de compras inválido.");
     if (i.priceCents != null && !(Number.isSafeInteger(i.priceCents) && i.priceCents > 0 && i.priceCents <= 99999999999))
       throw Error("Item de compras inválido.");
+    const deal = sanitizeItemDeal(i.deal);
     return {
       id: i.id,
-      listId: MAIN_LIST,
+      listId: lists?.some((list) => list.id === i.listId) ? i.listId : lists?.find((list) => !list.archived)?.id ?? MAIN_LIST,
+      ...recurringFields(i),
+      ...(deal ? { deal } : {}),
       name: i.name.trim(),
       qty: i.qty,
       unit: ["", "g", "kg", "ml", "l"].includes(i.unit) ? i.unit : "",
@@ -67,7 +133,7 @@ const text = (v, max) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 // Valida e normaliza `shoppingPurchases` do backup. `undefined` = o backup não traz compras.
 export function sanitizePurchases(value) {
   if (value === undefined) return undefined;
-  if (!Array.isArray(value) || value.length > MAX_PURCHASES) throw Error("Backup inválido: shoppingPurchases");
+  if (!Array.isArray(value) || value.length > MAX_PURCHASES) throw Error("O histórico de compras deste backup é inválido. Escolha outro arquivo.");
   const ids = new Set();
   const chaves = new Set();
   return value.map((p) => {
@@ -117,7 +183,7 @@ export function sanitizePurchases(value) {
 // Valida e normaliza `shoppingProducts` do backup. `undefined` = o backup não traz produtos.
 export function sanitizeProducts(value) {
   if (value === undefined) return undefined;
-  if (!Array.isArray(value) || value.length > MAX_PRODUCTS) throw Error("Backup inválido: shoppingProducts");
+  if (!Array.isArray(value) || value.length > MAX_PRODUCTS) throw Error("O catálogo deste backup é inválido. Escolha outro arquivo.");
   const ids = new Set();
   const keys = new Set();
   return value.map((p) => {

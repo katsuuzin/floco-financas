@@ -1,3 +1,4 @@
+import { assertFast } from "./helpers/timing.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
@@ -44,7 +45,7 @@ test("Cem pares sintéticos são comutativos e idempotentes", () => {
 test("Duas listas de dois mil itens são mescladas abaixo de 200 ms", () => {
   const a = Array.from({ length: 2000 }, (_, i) => row(String(i), 10));
   const b = Array.from({ length: 2000 }, (_, i) => row(String(i + 1000), 10));
-  const start = performance.now();
-  assert.equal(mergeShoppingLists(a, b).length, 3000);
-  assert.ok(performance.now() - start < 200);
+  assertFast(() => {
+    assert.equal(mergeShoppingLists(a, b).length, 3000);
+  }, 200, "shopping-merge");
 });

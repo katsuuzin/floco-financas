@@ -1,10 +1,10 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Linking, View } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { Box, Button, Field, I, Muted, T, styles as k } from "../ui/kit";
+import { Box, Button, Field, I, Muted, T, Toggle, focusAccessibility, type ViewControl, styles as k } from "../ui/kit";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
-import { addShoppingItem } from "../shopping.mjs";
+import { activeShoppingState, addShoppingItem } from "../shopping.mjs";
 import { createOpenFoodFactsLookup, duplicateOf, resolveScan, suggestItemName } from "../scanProduct.mjs";
 
 type Phase = { kind: "scan" } | { kind: "loading"; code: string } | { kind: "result"; res: any };
@@ -20,6 +20,14 @@ export default function ScanProductScreen() {
   const [name, setName] = useState("");
   const [torch, setTorch] = useState(false);
   const lock = useRef(0);
+  const resultHeading = useRef<ViewControl>(null);
+  useEffect(() => { if (phase.kind === "result") focusAccessibility(resultHeading.current); }, [phase]);
+  const status = phase.kind === "loading" ? "Buscando o produto…" :
+    phase.kind === "result" ? "Busca concluída." : permission == null ? "Verificando a permissão da câmera…" : "";
+  const frame = (content: React.ReactNode) => <View>
+    <Muted accessibilityLiveRegion="polite">{status}</Muted>
+    {content}
+  </View>;
   const lookup = useMemo(() => createOpenFoodFactsLookup((url: string, options: any) => fetch(url, options)), []);
 
   const run = async (raw: string) => {
@@ -51,22 +59,15 @@ export default function ScanProductScreen() {
   };
 
   if (phase.kind === "loading") {
-    return (
-      <View accessibilityLiveRegion="polite">
-        <Box>
-          <T style={{ fontFamily: "SoraSemi" }}>Buscando o produto…</T>
-          <Muted>{`Código ${phase.code}`}</Muted>
-        </Box>
-      </View>
-    );
+    return frame(<Box><Muted>{`Código ${phase.code}`}</Muted></Box>);
   }
 
   if (phase.kind === "result") {
     const res = phase.res;
-    const dup = res.status === "invalid" ? null : duplicateOf(state, res.code, name);
-    return (
+    const dup = res.status === "invalid" ? null : duplicateOf(activeShoppingState(state), res.code, name);
+    return frame(
       <>
-        <View accessibilityLiveRegion="polite">
+        <View ref={resultHeading} accessible accessibilityRole="header">
           <Box style={{ gap: 6 }}>
             {res.status === "found" && (
               <View style={[k.row, { gap: 8 }]}>
@@ -94,16 +95,14 @@ export default function ScanProductScreen() {
   }
 
   const granted = !!permission?.granted;
-  return (
+  return frame(
     <>
-      {permission == null ? (
-        <Muted accessibilityLiveRegion="polite">Verificando a permissão da câmera…</Muted>
-      ) : granted ? (
+      {permission == null ? null : granted ? (
         <>
           <View
             accessible
             accessibilityLabel="Visor da câmera. Aponte para o código de barras do produto."
-            style={{ borderRadius: 22, overflow: "hidden", aspectRatio: 1, backgroundColor: "#000" }}
+            style={{ borderRadius: 22, overflow: "hidden", aspectRatio: 1, backgroundColor: c.heroText }}
           >
             <CameraView
               style={{ flex: 1 }}
@@ -114,7 +113,7 @@ export default function ScanProductScreen() {
             />
           </View>
           <View style={{ marginTop: 8 }}>
-            <Button title={torch ? "Desligar lanterna" : "Ligar lanterna"} icon="zap" secondary onPress={() => setTorch(!torch)} />
+            <Toggle label="Lanterna" icon="zap" value={torch} onChange={setTorch} />
           </View>
         </>
       ) : (

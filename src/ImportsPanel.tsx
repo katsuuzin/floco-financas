@@ -1,3 +1,4 @@
+import { visibleAccounts } from "./accountOrder.mjs";
 import React, { useState, useMemo } from "react";
 import {
   View,
@@ -169,7 +170,7 @@ export default function ImportsPanel({ state, c, onChange, onClose }: any) {
     }
   };
   const confirmImport = () => {
-    if (!state.accounts.some((a: any) => a.id === account)) {
+    if (!visibleAccounts(state).some((a: any) => a.id === account)) {
       Alert.alert(
         "Escolha a conta",
         "Selecione uma conta de destino antes de importar.",
@@ -250,9 +251,9 @@ export default function ImportsPanel({ state, c, onChange, onClose }: any) {
         )}
         {button("Escolher arquivo CSV, OFX, PDF ou XLSX", pick)}
         {text("Conta de destino", true)}
-        {!state.accounts.length &&
+        {!visibleAccounts(state).length &&
           text("Cadastre uma conta em Mais → Contas antes de importar.")}
-        {state.accounts.map((a: any) =>
+        {visibleAccounts(state).map((a: any) =>
           button(
             (account === a.id ? "✓ " : "") + a.name,
             () => {

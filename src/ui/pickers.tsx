@@ -1,22 +1,25 @@
 // Linhas compactas com seta que abrem uma lista (estilo "folha de confirmação") e o seletor
 // de Categoria › Subcategoria.
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { View, Modal, Pressable, ScrollView, TextInput, StyleSheet } from "react-native";
-import { T, Muted, I, styles as k } from "./kit";
+import { focusAccessibility, T, Muted, I, type ViewControl, styles as k } from "./kit";
 import type { Icon } from "./kit";
 import { useTheme } from "./theme";
 import { categoryTree, categoryLabel } from "../categories.mjs";
-import { lookOf } from "../looks.mjs";
+import { categoryStyleOf } from "./CategoryIcon";
 import CategoryIcon from "./CategoryIcon";
 
 export function SheetModal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   const { c } = useTheme();
+  const heading = useRef<ViewControl>(null);
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={s.backdrop} onPress={onClose} accessibilityLabel="Fechar" />
-      <View style={[s.sheet, { backgroundColor: c.bg }]}>
+    <Modal visible transparent animationType="slide" onRequestClose={onClose} onShow={() => focusAccessibility(heading.current)}>
+      <Pressable style={[s.backdrop, { backgroundColor: c.scrim }]} onPress={onClose} accessibilityRole="button" accessibilityLabel="Fechar" />
+      <View accessibilityViewIsModal style={[s.sheet, { backgroundColor: c.bg }]}>
         <View style={[s.handle, { backgroundColor: c.line }]} />
-        <T style={{ fontFamily: "SoraSemi", fontSize: 17, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 }}>{title}</T>
+        <View ref={heading} accessible accessibilityRole="header" accessibilityLabel={title}>
+          <T style={{ fontFamily: "SoraSemi", fontSize: 17, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 }}>{title}</T>
+        </View>
         {children}
       </View>
     </Modal>
@@ -196,7 +199,7 @@ export function CategorySheet({
           flat.length ? (
             flat.map((r: any) => (
               <Pressable key={r.cat + "|" + r.sub} accessibilityRole="button" onPress={() => done(r.cat, r.sub)} style={[k.row, s.row, { paddingHorizontal: 16 }]} android_ripple={{ color: c.soft }}>
-                <CategoryIcon look={lookOf(state, r.cat)} size={34} />
+                <CategoryIcon look={categoryStyleOf(state, r.cat)} size={34} />
                 <T style={{ flex: 1 }}>{categoryLabel(r.cat, r.sub)}</T>
               </Pressable>
             ))
@@ -205,7 +208,7 @@ export function CategorySheet({
           )
         ) : (
           tree.map((n: any) => {
-            const look = lookOf(state, n.name);
+            const look = categoryStyleOf(state, n.name);
             const expanded = open === n.name && n.subs.length > 0;
             const on = category === n.name;
             return (
@@ -265,7 +268,7 @@ export function CategoryRow({
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const look = lookOf(state, category || "Outros");
+  const look = categoryStyleOf(state, category || "Outros");
   return (
     <>
       <PickerRow
@@ -282,7 +285,7 @@ export function CategoryRow({
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
+  backdrop: { flex: 1 },
   sheet: { maxHeight: "85%", borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: "hidden" },
   handle: { width: 44, height: 5, borderRadius: 3, alignSelf: "center", marginTop: 8 },
   row: { gap: 12, minHeight: 54, paddingHorizontal: 14, paddingVertical: 6 },

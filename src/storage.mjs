@@ -23,6 +23,7 @@ export const SCHEMA = [
 export const SCHEMA_VERSION = 1;
 
 const isCollection = (value) => Array.isArray(value);
+const optionalCollections = new Set(["pots", "shoppingLists", "shoppingStaples", "shoppingListTemplates"]);
 
 export function diffState(prev, next) {
   const upserts = [];
@@ -34,6 +35,10 @@ export function diffState(prev, next) {
     const after = next[key];
     if (isCollection(after) || (after === undefined && isCollection(before))) {
       const rows = after || [];
+      if (optionalCollections.has(key) && before !== after) {
+        if (isCollection(after) && after.length === 0 && (!isCollection(before) || before.length > 0)) meta.push({ key, json: "[]" });
+        if (isCollection(before) && before.length === 0 && (after === undefined || rows.length > 0)) meta.push({ key, json: null });
+      }
       const old = new Map();
       (isCollection(before) ? before : []).forEach((row, index) =>
         old.set(row.id, { row, index }),

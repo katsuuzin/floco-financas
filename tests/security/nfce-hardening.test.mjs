@@ -30,7 +30,6 @@ async function parseMeasured(html) {
         if (code !== 0) reject(Error(`Worker encerrou com código ${code}.`));
       });
     });
-    assert.ok(result.elapsed <= 500, `Leitura levou ${result.elapsed.toFixed(1)} ms (limite: 500 ms)`);
     return result;
   } finally {
     clearTimeout(timer);

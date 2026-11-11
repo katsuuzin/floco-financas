@@ -48,6 +48,10 @@ export type Route =
   | { name: "productDetail"; id: string }
   | { name: "form"; kind: string; initial?: any };
 
+export function reviewExpenses(shoppingItems: any[]): Route {
+  return { name: "form", kind: "expenseBatch", initial: { shoppingItems } };
+}
+
 type Nav = {
   tab: Tab;
   stack: Route[];

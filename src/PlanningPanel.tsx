@@ -16,7 +16,9 @@ import Feather from "@expo/vector-icons/Feather";
 import { subsOf } from "./categories.mjs";
 import CategoryIcon from "./ui/CategoryIcon";
 import { useTheme } from "./ui/theme";
-import { PALETTE, CATEGORY_COLORS, CALEN_PREFIX, lookOf, setCategoryLook, setTagColor, tagColor } from "./looks.mjs";
+import { CALEN_PREFIX, lookOf } from "./looks.mjs";
+import { ALLOWED_COLORS, ALLOWED_ICONS, defaultStyleFor, readableOn, sanitizeStyle } from "./categoryStyle.mjs";
+import { categoryStyleOf, tagStyleOf } from "./ui/CategoryIcon";
 import { calenIconNames, calenSvg } from "./calenArt.mjs";
 import { SvgXml } from "react-native-svg";
 import * as FileSystem from "expo-file-system/legacy";
@@ -242,50 +244,46 @@ function Options({ c, label, values, value, onChange, multiple = false }: any) {
   );
 }
 // O4/O5: escolha de cor (e ícone, para categorias). Cada opção tem nome falado.
-function LookPicker({ c, icon, image, color, withIcon, onIcon, onColor }: any) {
-  const { dark } = useTheme();
-  const picked = typeof icon === "string" && icon.startsWith(CALEN_PREFIX) ? icon.slice(CALEN_PREFIX.length) : image || "";
-  const colors: string[] = withIcon ? CATEGORY_COLORS : PALETTE;
-  const base = color || colors[0];
+const iconNames: Record<string, string> = {
+  tag: "Etiqueta", "shopping-cart": "Carrinho", "shopping-bag": "Sacola", "credit-card": "Cartão",
+  "dollar-sign": "Dinheiro", "trending-up": "Rendimento", briefcase: "Trabalho", grid: "Casa",
+  bookmark: "Marcador", clipboard: "Prancheta", target: "Meta", shuffle: "Transporte", shield: "Proteção",
+  zap: "Energia", "file-text": "Documento", "check-circle": "Confirmação",
+};
+const colorNames = ["Amarelo intenso", "Amarelo solar", "Marrom", "Laranja", "Azul", "Lilás", "Rosa", "Turquesa",
+  "Verde", "Vermelho", "Grafite", "Branco"];
+
+function LookPicker({ c, icon, color, onIcon, onColor }: any) {
+  const current = sanitizeStyle({ icon, color });
   return (
-    <View style={{ gap: 10, marginTop: 6 }}>
-      <Text style={{ color: c.muted, fontSize: 13 }}>Cor</Text>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-        {colors.map((p: string, i: number) => (
-          <Pressable
-            key={p}
-            accessibilityRole="radio"
-            accessibilityState={{ selected: p === color }}
-            accessibilityLabel={`Cor ${i + 1}`}
-            onPress={() => onColor(p)}
-            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: p, alignItems: "center", justifyContent: "center", borderWidth: p === color ? 3 : 0, borderColor: c.text }}
-          >
-            {p === color && <Feather name="check" size={18} color="#FFFFFF" />}
-          </Pressable>
-        ))}
+    <View style={{ gap: 8, marginBottom: 12 }}>
+      <View style={{ alignSelf: "flex-start", padding: 12, gap: 8, flexDirection: "row",
+        alignItems: "center", borderRadius: 12, backgroundColor: current.color }}>
+        <Feather name={current.icon as any} size={20} color={readableOn(current.color)} />
+        <Txt c={c} style={{ color: readableOn(current.color) }}>Prévia</Txt>
       </View>
-      {withIcon && (
-        <>
-          <Text style={{ color: c.muted, fontSize: 13 }}>Ícone</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {calenIconNames().map((n: string) => (
-              <Pressable
-                key={n}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: n === picked }}
-                accessibilityLabel={`Ícone ${n.replace(/_/g, " ")}`}
-                onPress={() => onIcon(CALEN_PREFIX + n)}
-                style={{ width: 52, height: 52, borderRadius: 16, alignItems: "center", justifyContent: "center", borderWidth: n === picked ? 2 : 1, borderColor: n === picked ? base : c.line, backgroundColor: n === picked ? base + "22" : "transparent" }}
-              >
-                <SvgXml xml={calenSvg(n, base, dark)} width={32} height={32} />
-              </Pressable>
-            ))}
-          </View>
-        </>
-      )}
+      <Txt c={c} bold>Ícone</Txt>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {ALLOWED_ICONS.map((value) => <Pressable key={value} accessibilityRole="radio"
+          accessibilityState={{ checked: value === current.icon }} accessibilityLabel={iconNames[value]}
+          onPress={() => onIcon(value)} style={{ width: 48, minHeight: 48, alignItems: "center", justifyContent: "center",
+            borderRadius: 12, backgroundColor: value === current.icon ? c.primary : c.soft }}>
+          <Feather name={value as any} size={20} color={value === current.icon ? c.onPrimary : c.text} />
+        </Pressable>)}
+      </View>
+      <Txt c={c} bold>Cor</Txt>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {ALLOWED_COLORS.map((value, index) => <Pressable key={value} accessibilityRole="radio"
+          accessibilityState={{ checked: value === current.color }} accessibilityLabel={colorNames[index]}
+          onPress={() => onColor(value)} style={{ width: 48, minHeight: 48, alignItems: "center", justifyContent: "center",
+            borderRadius: 12, borderWidth: 1, borderColor: c.line, backgroundColor: value }}>
+          {value === current.color && <Feather name="check" size={20} color={readableOn(value)} />}
+        </Pressable>)}
+      </View>
     </View>
   );
 }
+
 function LookBadge({ icon, color, image }: any) {
   const chosen = typeof icon === "string" && icon.startsWith(CALEN_PREFIX);
   return <CategoryIcon look={{ icon: chosen ? "tag" : icon, color, image: chosen ? icon.slice(CALEN_PREFIX.length) : image }} size={36} />;
@@ -435,14 +433,20 @@ export default function PlanningPanel({
         change = (s: any) => {
           let n = saveLabel(s, f.kind === "tag" ? "tags" : "customCategories", f);
           const name = f.name.trim();
-          if (f.kind === "category" && (f.lookIcon || f.lookColor))
-            n = setCategoryLook(n, name, { ...(f.lookIcon ? { icon: f.lookIcon } : {}), ...(f.lookColor ? { color: f.lookColor } : {}) });
-          if (f.kind === "tag" && f.lookColor) n = setTagColor(n, n.tags.find((t: any) => t.name === name).id, f.lookColor);
+          if (f.kind === "category" && (f.lookIcon || f.lookColor)) {
+            const style = sanitizeStyle({ ...categoryStyleOf(n, name), ...(f.lookIcon && { icon: f.lookIcon }), ...(f.lookColor && { color: f.lookColor }) });
+            n = { ...n, categoryLooks: { ...n.categoryLooks, [name]: style } };
+          }
+          if (f.kind === "tag" && (f.lookIcon || f.lookColor)) {
+            const style = sanitizeStyle({ ...tagStyleOf(f), ...(f.lookIcon && { icon: f.lookIcon }), ...(f.lookColor && { color: f.lookColor }) });
+            n = { ...n, tags: n.tags.map((t: any) => t.name === name.toLowerCase() ? { ...t, ...style } : t) };
+          }
           return n;
         };
       if (f.kind === "categoryLook")
-        change = (s: any) =>
-          setCategoryLook(s, f.name, { ...(f.lookIcon ? { icon: f.lookIcon } : {}), ...(f.lookColor ? { color: f.lookColor } : {}) });
+        change = (s: any) => ({ ...s, categoryLooks: { ...s.categoryLooks, [f.name]: sanitizeStyle({
+          ...categoryStyleOf(s, f.name), ...(f.lookIcon && { icon: f.lookIcon }), ...(f.lookColor && { color: f.lookColor }),
+        }) } });
       if (f.kind === "recurrence") {
         const amount = parseMoney(f.amount);
         change = (s: any) => saveRecurrence(s, { ...f, amount });
@@ -588,10 +592,8 @@ export default function PlanningPanel({
                     </Txt>
                     <LookPicker
                       c={c}
-                      withIcon
-                      icon={form.lookIcon || lookOf(s, form.name).icon}
-                      image={form.lookIcon ? "" : lookOf(s, form.name).image}
-                      color={form.lookColor || lookOf(s, form.name).color}
+                      icon={form.lookIcon || categoryStyleOf(s, form.name).icon}
+                      color={form.lookColor || categoryStyleOf(s, form.name).color}
                       onIcon={(v: string) => setForm({ ...form, lookIcon: v })}
                       onColor={(v: string) => setForm({ ...form, lookColor: v })}
                     />
@@ -601,10 +603,8 @@ export default function PlanningPanel({
                   <>
                     <LookPicker
                       c={c}
-                      withIcon={form.kind === "category"}
-                      icon={form.lookIcon || lookOf(s, form.name).icon}
-                      image={form.kind === "tag" || form.lookIcon ? "" : lookOf(s, form.name).image}
-                      color={form.lookColor || (form.kind === "tag" ? tagColor(form) : lookOf(s, form.name).color)}
+                      icon={form.lookIcon || (form.kind === "tag" ? tagStyleOf(form).icon : categoryStyleOf(s, form.name).icon)}
+                      color={form.lookColor || (form.kind === "tag" ? tagStyleOf(form).color : categoryStyleOf(s, form.name).color)}
                       onIcon={(v: string) => setForm({ ...form, lookIcon: v })}
                       onColor={(v: string) => setForm({ ...form, lookColor: v })}
                     />
@@ -758,7 +758,7 @@ export default function PlanningPanel({
                               onPress={() => open("categoryLook", { name: n })}
                               style={{ flexDirection: "row", alignItems: "center", gap: 8, minHeight: 48, paddingRight: 12, paddingLeft: 6, borderRadius: 16, backgroundColor: c.bg }}
                             >
-                              <LookBadge {...lookOf(s, n)} />
+                              <LookBadge {...categoryStyleOf(s, n)} />
                               <Text style={{ color: c.text, fontSize: 14 }}>{n}</Text>
                               <Text style={{ color: c.muted, fontSize: 12 }}>{subsOf(s, n).length || ""}</Text>
                             </Pressable>
@@ -774,7 +774,7 @@ export default function PlanningPanel({
                     {(s[labelList] || []).map((r: any) => (
                       <Card key={r.id} c={c}>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                          <LookBadge {...(page === "tags" ? { icon: "hash", color: tagColor(r) } : lookOf(s, r.name))} />
+                          <LookBadge {...(page === "tags" ? tagStyleOf(r) : categoryStyleOf(s, r.name))} />
                           <Txt c={c} bold>
                             {page === "tags" ? "#" + r.name : r.name}
                           </Txt>

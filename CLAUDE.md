@@ -33,16 +33,16 @@ px tsc --noEmit
 
 ## Estado atual
 Pasta do projeto: C:\Users\Kat\Desktop\Projetos de IA\01 - Floco finanças (repositório Git, branch main).
-Versão: 1.10.0 (release publicada no GitHub). Concluído: widgets (W1), extrato PDF (F1), cores de destaque e ícones alternativos, lista de compras (E1) com Modo compra, escanear produto e histórico. Para o que falta, consulte TAREFAS.md e INVENTARIO-FUNCIONAL.md.
+Versão: 1.11.0 (publicada no GitHub sem teste completo, a pedido do dono, que verifica no aparelho; 1.10.0 foi a última testada). Concluído: widgets (W1), extrato PDF (F1), cores de destaque e ícones alternativos, lista de compras (E1) com Modo compra, escanear produto e histórico. Entrou na 1.11.0: filtros e calendário do extrato, calculadora no valor, lixeira com purga, contas reordenáveis e arquivadas, metas e caixinhas separadas, ícone e cor em categorias e tags, notificações duplicadas agrupadas, despesas por categoria em lote, listas múltiplas, recorrentes, promoções, receita, XML da nota, "Está acabando" e movimento nos botões. Testado no emulador só em parte (veja INVENTARIO-FUNCIONAL.md, parágrafo "Pacote 11"): o que não está lá como testado continua sem teste. Para o que falta, consulte TAREFAS.md e INVENTARIO-FUNCIONAL.md.
 
 
 ## Lista de tarefas (em ordem)
 1. Terminar duplicatas de notificação e publicar 1.3.4
-2. Filtros do extrato (conta, tag, faixa de valor)
-3. Lixeira com purga e reordenar/arquivar contas
-4. Calculadora no valor e calendário no extrato
-5. Caixinha separada de meta e arquivar caixinha
-6. Ícone e cor em categorias e tags
+2. Filtros do extrato (conta, tag, faixa de valor) — ligado, falta testar tudo no celular
+3. Lixeira com purga e reordenar/arquivar contas — ligado, lixeira ainda sem teste na tela
+4. Calculadora no valor e calendário no extrato — ligado e testado no emulador
+5. Caixinha separada de meta e arquivar caixinha — ligado e testado no emulador
+6. Ícone e cor em categorias e tags — ligado, sem teste na tela
 7. Widgets restantes (4 de 6)
 8. Extrato bancário em PDF
 9. Ícones alternativos e cores de destaque

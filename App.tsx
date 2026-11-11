@@ -22,6 +22,7 @@ import Feather from "@expo/vector-icons/Feather";
 import { ThemeProvider, useTheme } from "./src/ui/theme";
 import { T, I, Button, IconButton, Muted, styles as k } from "./src/ui/kit";
 import type { Icon } from "./src/ui/kit";
+import MotionPressable from "./src/ui/motion";
 import { StoreProvider, useStore } from "./src/app/store";
 import { NavProvider, useNav, Route, Tab, destination } from "./src/app/nav";
 import { monthKey, today } from "./src/finance.mjs";
@@ -429,7 +430,7 @@ function Shell({
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         // A barra de adicionar da lista fica fora da rolagem: sem isso o teclado a cobre no Android.
-        behavior={Platform.OS === "ios" || top?.name === "shopping" || top?.name === "shoppingTrip" || top?.name === "scanProduct" || top?.name === "scanNota" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" || top?.name === "shopping" || top?.name === "shoppingTrip" || top?.name === "scanProduct" || top?.name === "scanNota" || (top?.name === "form" && top.kind === "expenseBatch") ? "padding" : undefined}
       >
         {top?.name !== "form" && (
           <View style={[s.header, { backgroundColor: pageBg }]}>
@@ -450,7 +451,6 @@ function Shell({
             >
               <T
                 accessibilityRole="header"
-                numberOfLines={1}
                 style={[k.pageTitle, { fontSize: top ? 19 : 22 }]}
               >
                 {!top && nav.tab === "home" ? "Floco Finanças" : title}
@@ -507,17 +507,17 @@ function Shell({
             {TABS.slice(0, 2).map((t) => (
               <TabButton key={t.key} item={t} />
             ))}
-            <Pressable
+            <MotionPressable kind="fab"
               accessibilityRole="button"
               accessibilityLabel="Adicionar lançamento"
               onPress={() => setAdding(true)}
-              style={({ pressed }) => [
+              style={[
                 s.add,
-                { backgroundColor: c.accent, opacity: pressed ? 0.85 : 1 },
+                { backgroundColor: c.accent },
               ]}
             >
               <Feather name="plus" size={28} color={c.heroText} />
-            </Pressable>
+            </MotionPressable>
             {tab4 === "analysis" ? (
               <TabButton item={TABS[2]} />
             ) : (
@@ -713,7 +713,7 @@ function AddSheet({
       <Pressable
         accessibilityLabel="Fechar"
         onPress={onClose}
-        style={s.backdrop}
+        style={[s.backdrop, { backgroundColor: c.scrim }]}
       >
         <Pressable style={[s.sheet, { backgroundColor: c.surface }]}>
           <T style={k.sectionTitle}>Adicionar</T>
@@ -826,7 +826,6 @@ const s = StyleSheet.create({
   },
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
     justifyContent: "flex-end",
   },
   sheet: {
