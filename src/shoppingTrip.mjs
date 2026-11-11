@@ -1,5 +1,5 @@
 import { itemsOf, lineTotal } from "./shopping.mjs";
-import { SHOPPING_CATEGORIES } from "./shoppingData.mjs";
+import { SHOPPING_CATEGORIES, addCents } from "./shoppingData.mjs";
 
 const CATEGORY_ORDER = new Map(SHOPPING_CATEGORIES.map((category, index) => [category, index]));
 const categoryOrder = (category) => CATEGORY_ORDER.get(category) ?? CATEGORY_ORDER.size;
@@ -17,11 +17,11 @@ export function tripSummary(state, { startedAt, now } = {}) {
     if (item.inCart) {
       inCartCount++;
       if (cents === null) cartUnpriced++;
-      else cartCents += cents;
+      else cartCents = addCents(cartCents, cents);
     } else if (cents === null) {
       pendingUnpriced++;
     } else {
-      pendingEstimateCents += cents;
+      pendingEstimateCents = addCents(pendingEstimateCents, cents);
     }
   }
   const total = items.length;
@@ -35,7 +35,7 @@ export function tripSummary(state, { startedAt, now } = {}) {
     cartUnpriced,
     pendingEstimateCents,
     pendingUnpriced,
-    grandEstimateCents: cartCents + pendingEstimateCents,
+    grandEstimateCents: addCents(cartCents, pendingEstimateCents),
     elapsedMinutes: Number.isFinite(duration) && duration >= 0 ? Math.floor(duration / 60_000) : 0,
   };
 }

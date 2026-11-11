@@ -23,7 +23,9 @@ export function normalizeName(name) {
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
-    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/(\d)[.,](?=\d)/g, "$1") // decimal ("1,5") difere de dois números ("1 5")
+    .replace(/[^\p{L}\p{N} ]+/gu, " ")
+    .replace(//g, ".")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -87,7 +89,10 @@ export function recordPurchase(state, input, { id = uid(), now = Date.now(), new
     const at = products.findIndex((p) => p.id === pid);
     const prod = products[at];
     const price = Math.max(1, Math.round(a.total / a.qty));
-    const prices = [...prod.prices, { date: input.date, priceCents: price, purchaseId: id }].slice(-MAX_PRICE_POINTS);
+    // Ordena por data (estável) antes de cortar: uma compra retroativa não expulsa pontos mais recentes.
+    const prices = [...prod.prices, { date: input.date, priceCents: price, purchaseId: id }]
+      .sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0))
+      .slice(-MAX_PRICE_POINTS);
     const newer = !prod.lastBoughtAt || input.date >= prod.lastBoughtAt;
     products[at] = {
       ...prod,
@@ -129,7 +134,18 @@ export function removePurchase(state, id) {
     .filter((prod) => !inGone.has(prod.id) || used.has(prod.id))
     .map((prod) => {
       if (!inGone.has(prod.id)) return prod;
-      const prices = prod.prices.filter((x) => x.purchaseId !== id);
+      let prices = prod.prices.filter((x) => x.purchaseId !== id);
+      // O histórico guarda só os últimos pontos: ao apagar, recupera os das compras restantes que tinham saído.
+      const have = new Set(prices.map((x) => x.purchaseId));
+      for (const p of rest) {
+        if (have.has(p.id)) continue;
+        const its = p.items.filter((i) => i.productId === prod.id);
+        if (!its.length) continue;
+        const qty = its.reduce((s, i) => s + i.qty, 0);
+        const total = its.reduce((s, i) => s + i.totalCents, 0);
+        prices.push({ date: p.date, priceCents: Math.max(1, Math.round(total / qty)), purchaseId: p.id });
+      }
+      prices = prices.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0)).slice(-MAX_PRICE_POINTS);
       const last = prices.length ? prices.reduce((a, b) => (b.date >= a.date ? b : a)) : null;
       return { ...prod, prices, buys: Math.max(1, prod.buys - 1), lastBoughtAt: last ? last.date : prod.lastBoughtAt, lastPriceCents: last ? last.priceCents : prod.lastPriceCents };
     });
@@ -139,7 +155,7 @@ export function removePurchase(state, id) {
 // Último preço conhecido de um produto (por nome e unidade), ou null.
 export function lastKnownPrice(state, name, unit = "") {
   const prod = productsOf(state).find((p) => p.key === productKey(name, unit));
-  return prod ? prod.lastPriceCents : null;
+  return prod && Number.isSafeInteger(prod.lastPriceCents) && prod.lastPriceCents > 0 ? prod.lastPriceCents : null;
 }
 
 // Resumo de um produto para a tela de histórico: último, médio, mínimo e máximo dos pontos guardados.

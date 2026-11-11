@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { chaveDv } from "../src/nfce.mjs";
 import { emptyState, validateBackup } from "../src/finance.mjs";
 import { diffState, assembleState } from "../src/storage.mjs";
 import { addShoppingItem, keepShoppingOnRestore } from "../src/shopping.mjs";
@@ -19,7 +20,8 @@ const seq = () => {
   return () => `p${++n}`;
 };
 const opts = (id) => ({ id, now: 1, newId: seq() });
-const CHAVE = "35" + "2" + "6".repeat(41); // 44 dígitos fictícios
+const CHAVE_BASE = "35" + "2" + "6".repeat(40); // 43 dígitos fictícios
+const CHAVE = CHAVE_BASE + chaveDv(CHAVE_BASE); // 44 dígitos, DV válido
 const compra = (extra = {}) => ({
   date: "2026-11-10",
   marketName: "Mercado Teste",

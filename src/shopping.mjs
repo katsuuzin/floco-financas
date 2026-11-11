@@ -4,7 +4,7 @@
 // Preço: sem unidade, o preço é por unidade e o total é preço × qty; com unidade (g, kg, l, ml),
 // o preço é o da própria porção e o total é o próprio preço.
 import { uid, parseMoney, money } from "./finance.mjs";
-import { MAIN_LIST, MAX_ITEMS, MAX_NAME, SHOPPING_CATEGORIES, sanitizeShoppingItems } from "./shoppingData.mjs";
+import { MAIN_LIST, addCents, MAX_ITEMS, MAX_NAME, SHOPPING_CATEGORIES, sanitizeShoppingItems } from "./shoppingData.mjs";
 
 export { MAIN_LIST, MAX_ITEMS, MAX_NAME, SHOPPING_CATEGORIES, sanitizeShoppingItems };
 
@@ -30,7 +30,10 @@ export function categorize(name) {
 
 // "2 leite", "2x leite", "500g farinha", "1,5 kg tomate", "pão" → { qty, unit, name }
 export function parseItemText(text) {
-  const raw = String(text ?? "").replace(/\s+/g, " ").trim();
+  const raw = String(text ?? "")
+    .replace(/\s+/g, " ")
+    .replace(/(\d)? ?([½¼¾])/g, (_, d, f) => (d || "0") + { "½": ",5", "¼": ",25", "¾": ",75" }[f])
+    .trim();
   if (!raw) throw Error("Digite o nome do item.");
   const m = raw.match(/^(\d+(?:[.,]\d+)?)\s*(?:x\s+|(kg|g|ml|l)\b\s*(?:de\s+)?|\s)(.+)$/i);
   let qty = 1;
@@ -127,7 +130,7 @@ export function clearCart(state) {
 }
 
 export const lineTotal = (item) =>
-  item.priceCents == null ? null : item.unit ? item.priceCents : item.priceCents * item.qty;
+  item.priceCents == null ? null : item.unit ? item.priceCents : Math.min(Number.MAX_SAFE_INTEGER, item.priceCents * item.qty);
 
 // Resumo do bloco da Início: só os pendentes entram no total estimado.
 export function shoppingSummary(state) {
@@ -138,7 +141,7 @@ export function shoppingSummary(state) {
   for (const i of pending) {
     const t = lineTotal(i);
     if (t == null) unpriced += 1;
-    else estimatedCents += t;
+    else estimatedCents = addCents(estimatedCents, t);
   }
   return {
     total: items.length,
@@ -188,6 +191,13 @@ export function keepShoppingOnRestore(backup, current) {
   if (backup.shoppingItems === undefined) next.shoppingItems = itemsOf(current);
   if (backup.shoppingPurchases === undefined) next.shoppingPurchases = current.shoppingPurchases || [];
   if (backup.shoppingProducts === undefined) next.shoppingProducts = current.shoppingProducts || [];
+  // Referências do histórico: toda compra aponta para um produto que existe no catálogo restaurado.
+  const ids = new Set((next.shoppingProducts || []).map((p) => p.id));
+  for (const p of next.shoppingPurchases || []) {
+    for (const i of p.items || []) {
+      if (i.productId && !ids.has(i.productId)) throw Error("Backup inconsistente: uma compra aponta para um produto que não está no catálogo.");
+    }
+  }
   return next;
 }
 
@@ -200,7 +210,7 @@ export function purchaseDraft(state) {
   for (const i of inCart) {
     const t = lineTotal(i);
     if (t != null) {
-      totalCents += t;
+      totalCents = addCents(totalCents, t);
       priced += 1;
     }
   }

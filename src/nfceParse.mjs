@@ -1,6 +1,6 @@
 // Leitura do HTML da consulta pública da NFC-e. Lógica pura: sem rede, sem DOM (o React Native não tem DOMParser).
 // Hoje só o layout de SP é conhecido. Outros estados entram quando houver uma nota real de cada um.
-import { parseChave } from "./nfce.mjs";
+import { isChave, parseChave } from "./nfce.mjs";
 import { expandName } from "./nfceNames.mjs";
 
 // Endereço de consulta por estado (só os confirmados com nota real). A WebView NUNCA abre o endereço que veio
@@ -8,14 +8,15 @@ import { expandName } from "./nfceNames.mjs";
 export const CONSULT_HOSTS = { SP: "www.nfce.fazenda.sp.gov.br" };
 // Hosts que a página pode usar durante a consulta (redirecionamentos do próprio portal), por estado. Lista exata.
 const ALLOWED_HOSTS = { SP: ["www.nfce.fazenda.sp.gov.br", "nfce.fazenda.sp.gov.br"] };
-export const consultSupported = (uf) => !!CONSULT_HOSTS[uf];
-export const allowedHosts = (uf) => (uf ? ALLOWED_HOSTS[uf] || [] : Object.values(ALLOWED_HOSTS).flat());
+const own = (o, k) => typeof k === "string" && Object.hasOwn(o, k);
+export const consultSupported = (uf) => own(CONSULT_HOSTS, uf);
+export const allowedHosts = (uf) => (uf ? (own(ALLOWED_HOSTS, uf) ? ALLOWED_HOSTS[uf] : []) : Object.values(ALLOWED_HOSTS).flat());
 
 // URL para abrir na WebView: sempre montada com o host oficial do estado da chave e o ambiente 1 ou 2.
 export function consultUrl(info) {
+  if (!consultSupported(info.uf)) throw Error(`Ainda não consulto notas de ${info.uf}.`);
   const host = CONSULT_HOSTS[info.uf];
-  if (!host) throw Error(`Ainda não consulto notas de ${info.uf}.`);
-  if (!/^\d{44}$/.test(String(info.chave))) throw Error("Chave de acesso inválida.");
+  if (!isChave(info.chave)) throw Error("Chave de acesso inválida (confira o dígito verificador).");
   const amb = info.tpAmb === "2" ? "2" : "1";
   return `https://${host}/qrcode?p=${info.chave}|3|${amb}`;
 }
@@ -26,6 +27,19 @@ export function isAllowedUrl(url, uf) {
     const u = new URL(url);
     if (u.protocol !== "https:" || u.username || u.password || u.port) return false;
     return allowedHosts(uf).includes(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
+// A chave da nota deve estar no parâmetro `p` (primeiro campo) ou no caminho; em outro parâmetro (ex.: debug=) não vale.
+export function hrefMatchesKey(href, chave) {
+  try {
+    if (typeof chave !== "string" || !/^\d{44}$/.test(chave)) return false;
+    const u = new URL(href);
+    const p = u.searchParams.get("p");
+    if (p != null) return p.split("|")[0] === chave;
+    return u.pathname.includes(chave);
   } catch {
     return false;
   }
@@ -43,9 +57,10 @@ const decode = (s) =>
 const strip = (h) => decode(String(h ?? "").replace(/<br\s*\/?>/gi, " ").replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim();
 // "1.234,56" → 123456 centavos; vazio/inválido → null.
 export function centsFromBr(text) {
-  const m = String(text ?? "").match(/\d{1,3}(?:\.\d{3})*,\d{1,2}|\d+,\d{1,2}|\d+/);
-  if (!m) return null;
-  const [w, d = ""] = m[0].replace(/\./g, "").split(",");
+  // Aceita só o formato brasileiro, inteiro e sem sinal; "-1,00", "12.34" e "1,234.56" viram null.
+  const t = String(text ?? "").replace(/&nbsp;|\u00a0/gi, " ").trim().replace(/^R\$\s*/i, "");
+  if (!/^(?:\d{1,3}(?:\.\d{3})*,\d{1,2}|\d+,\d{1,2}|\d+)$/.test(t)) return null;
+  const [w, d = ""] = t.replace(/\./g, "").split(",");
   const cents = Number(w) * 100 + Number(d.padEnd(2, "0"));
   return Number.isSafeInteger(cents) ? cents : null;
 }
@@ -141,6 +156,7 @@ export function parseNfceHtml(html, { uf = "SP" } = {}) {
     const unitRaw = spanText(row, "RUN").replace(/UN:?/i, "").trim().toUpperCase() || "UN";
     const unitPriceCents = centsFromBr(spanText(row, "RvlUnit").replace(/Vl\.?\s*Unit\.?:?/i, ""));
     const totalCents = centsFromBr(spanText(row, "valor"));
+    if (qty != null && qty > 99999) throw Error(`Item ${i + 1} da nota tem quantidade fora do limite.`);
     if (!rawName || !qty || !totalCents) throw Error(`Item ${i + 1} da nota veio incompleto.`);
     return {
       rawName,
@@ -188,6 +204,7 @@ export function parseNfceHtml(html, { uf = "SP" } = {}) {
 
 // Converte a nota lida na entrada de recordPurchase (shoppingPurchases). Não grava nada.
 export function nfceToPurchase(parsed, info = {}) {
+  if (parsed.chave && info.chave && parsed.chave !== info.chave) throw Error("A nota da prévia não é a da chave informada.");
   const chave = parsed.chave || info.chave || "";
   const meta = chave ? parseChave(chave) : null;
   const date = parsed.issuedDate || (meta ? `${meta.issuedMonth}-01` : "");

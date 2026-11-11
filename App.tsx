@@ -52,6 +52,8 @@ import {
 import { RulesScreen, ReconcileScreen } from "./src/screens/ToolScreens";
 import TrashScreen from "./src/screens/TrashScreen";
 import ShoppingScreen, { ShoppingAddBar } from "./src/screens/ShoppingScreen";
+import ShoppingTripScreen from "./src/screens/ShoppingTripScreen";
+import ScanProductScreen from "./src/screens/ScanProductScreen";
 import ScanNotaScreen from "./src/screens/ScanNotaScreen";
 import NfceConsultaScreen from "./src/screens/NfceConsultaScreen";
 import { PurchasesScreen, PurchaseDetailScreen, ProductDetailScreen } from "./src/screens/PurchasesScreens";
@@ -286,6 +288,8 @@ const TITLES: Record<string, string> = {
   reconcile: "Conferir fatura",
   trash: "Lixeira",
   shopping: "Lista de compras",
+  shoppingTrip: "Modo compra",
+  scanProduct: "Escanear produto",
   scanNota: "Ler nota fiscal",
   nfceConsulta: "Consultar nota",
   purchases: "Histórico de compras",
@@ -425,7 +429,7 @@ function Shell({
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         // A barra de adicionar da lista fica fora da rolagem: sem isso o teclado a cobre no Android.
-        behavior={Platform.OS === "ios" || top?.name === "shopping" || top?.name === "scanNota" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" || top?.name === "shopping" || top?.name === "shoppingTrip" || top?.name === "scanProduct" || top?.name === "scanNota" ? "padding" : undefined}
       >
         {top?.name !== "form" && (
           <View style={[s.header, { backgroundColor: pageBg }]}>
@@ -589,6 +593,10 @@ function renderRoute(r: Route) {
       return <TrashScreen />;
     case "shopping":
       return <ShoppingScreen />;
+    case "shoppingTrip":
+      return <ShoppingTripScreen />;
+    case "scanProduct":
+      return <ScanProductScreen />;
     case "scanNota":
       return <ScanNotaScreen />;
     case "nfceConsulta":

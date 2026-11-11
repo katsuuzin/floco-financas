@@ -58,6 +58,7 @@ export function Button({
   secondary = false,
   danger = false,
   disabled = false,
+  accessibilityLiveRegion,
 }: {
   title: string;
   onPress: () => void;
@@ -65,6 +66,7 @@ export function Button({
   secondary?: boolean;
   danger?: boolean;
   disabled?: boolean;
+  accessibilityLiveRegion?: "none" | "polite" | "assertive";
 }) {
   const { c } = useTheme();
   const fg = danger ? c.red : secondary ? c.primary : c.onPrimary;
@@ -73,6 +75,7 @@ export function Button({
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={title}
+      accessibilityLiveRegion={accessibilityLiveRegion}
       accessibilityState={{ disabled }}
       onPress={onPress}
       style={({ pressed }) => [

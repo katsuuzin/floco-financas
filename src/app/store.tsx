@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { emptyState, money } from "../finance.mjs";
+import { migrateProductKeys } from "../shoppingKeyMigration.mjs";
 import { loadState, saveState, replaceState, LEGACY_KEY } from "../sqliteStore";
 import { seedRules, upgradeBuiltInRules } from "../rules.mjs";
 
@@ -33,7 +34,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       try {
         const { state: loadedState, fresh, migrated } = await loadState();
         // Regras de categorização sugeridas entram uma única vez (o campo passa a existir).
-        const restored = upgradeBuiltInRules(loadedState.rules === undefined ? seedRules(loadedState) : loadedState);
+        // Chaves de produto do histórico de compras seguem a regra atual de nomes (uma vez; sem mudança = mesmo objeto).
+        const rulesApplied = upgradeBuiltInRules(loadedState.rules === undefined ? seedRules(loadedState) : loadedState);
+        const restored = migrateProductKeys(rulesApplied).state;
         if (restored !== loadedState) saveState(loadedState, restored);
         if (!fresh || restored !== loadedState) {
           ref.current = restored;

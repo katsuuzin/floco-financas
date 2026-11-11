@@ -24,7 +24,7 @@ export function chaveDv(first43) {
   return rest < 2 ? 0 : 11 - rest;
 }
 
-export const isChave = (s) => /^\d{44}$/.test(String(s)) && chaveDv(String(s).slice(0, 43)) === Number(String(s)[43]);
+export const isChave = (s) => typeof s === "string" && /^\d{44}$/.test(s) && chaveDv(s.slice(0, 43)) === Number(s[43]);
 
 export function formatCnpj(c) {
   const d = String(c).replace(/\D/g, "");
@@ -38,6 +38,7 @@ export function parseChave(chave) {
   const ufCode = Number(c.slice(0, 2));
   const yy = Number(c.slice(2, 4));
   const mm = Number(c.slice(4, 6));
+  if (mm < 1 || mm > 12) throw Error("O mês na chave de acesso não existe.");
   return {
     chave: c,
     ufCode,
@@ -76,6 +77,7 @@ export function parseNfceInput(input) {
     }
     if (!/\.gov\.br$/i.test(u.hostname)) throw Error("O QR aponta para um endereço fora do governo. Por segurança, não vou abrir.");
     source = "qr";
+    if (u.searchParams.getAll("p").length > 1) throw Error("O QR tem mais de uma chave. Por segurança, não vou abrir.");
     const p = u.searchParams.get("p");
     if (p) {
       const f = p.split("|");

@@ -1,0 +1,26 @@
+# Revisão da correção da WebView da NFC-e
+
+Comparação com `REVISAO-SEGURANCA-WEBVIEW.md`, usando o código atual do Floco e a dependência Android instalada. As medições dos testes foram feitas no Node com HTML fictício. O comportamento de rede e da ponte nativa ainda precisa ser validado no Android.
+
+| Achado anterior | Situação | Evidência e motivo |
+| --- | --- | --- |
+| QR pode escolher um host alheio à SEFAZ | **Fechado para a URL inicial** | `src/nfceParse.mjs:8–31` ignora a URL do QR e monta o endereço oficial a partir da UF, chave e ambiente. A política exige HTTPS, host exato da UF, porta padrão e ausência de credenciais. O primeiro carregamento usa o endereço reconstruído em `src/screens/NfceConsultaScreen.tsx:56–62, 294–298`. A delegação de navegações posteriores é tratada abaixo. |
+| Mensagem sem vínculo com o documento principal ou com a nota | **Fechado em parte** | `NfceConsultaScreen.tsx:84–95` valida a URL declarada na mensagem e recusa a chave da página se ela estiver presente e for divergente. O campo `msg.href` vem do conteúdo da mensagem. No Android instalado, `RNCWebView.java:250–269` registra o listener para qualquer origem e ignora `isMainFrame`. A alternativa legada repassa a URL da WebView em vez da origem do frame (`RNCWebView.java:446–449`). Duas lacunas foram confirmadas pelo espelho do código JS: HTML sem chave aceita e URL com a chave em outro parâmetro aceita. Os testes não exercitam a ponte nativa. |
+| Destinos fora da lista podem ser delegados ao Android | **Não fechado** | A lista em `NfceConsultaScreen.tsx:297–309` agora usa hosts exatos e mantém múltiplas janelas desativadas. O `WebViewShared.tsx:45–63` instalado ainda chama `Linking.openURL` para URLs fora de `originWhitelist` antes do callback da tela. `RNCWebViewClient.java:87–138` ainda libera a navegação em caso de timeout do callback. A ampliação ou redução do efeito depende do WebView e da navegação do dispositivo. |
+| Limite de HTML chega tarde | **Fechado em parte** | `NfceConsultaScreen.tsx:15–16, 87–94` valida tipo e tamanho do envelope antes de `JSON.parse` e limita o HTML a 1.500.000 unidades UTF-16. `nfceParse.mjs:85–87, 129–134` também limita a entrada, linhas e tamanho de cada linha. A página ainda serializa `outerHTML` e atravessa a ponte antes da checagem. `innerText` continua sendo lido a cada 400 ms durante a busca (`NfceConsultaScreen.tsx:19–35`). |
+| Possível ReDoS no parser síncrono | **Fechado em parte** | `nfceParse.mjs:85–136` substitui a regex global de linhas por varredura com limites de 500 itens e 20.000 unidades UTF-16 por linha, além de checagem estrutural. O recorte de metadados totaliza até 90.000 unidades (`nfceParse.mjs:158–166`). Os nove casos de volume e três de limites passaram em até 500 ms por leitura no Node. As expressões de campos, limpeza e metadados ainda rodam de forma síncrona. Os casos medidos não comprovam um limite de tempo no Hermes nem cobrem todas as entradas possíveis. |
+| Cookies, armazenamento e subrecursos sem isolamento comprovado | **Não fechado** | `NfceConsultaScreen.tsx:303–318` mantém armazenamento DOM ativo, modo incógnito e cache e cookies de terceiros desativados. No código instalado, `RNCWebViewManagerImpl.kt:469–484` limpa cookies e cache, mas isso não comprova isolamento de sessão nem bloqueio de subrecursos HTTPS externos. A frase de envio exclusivo à SEFAZ continua sem comprovação. |
+
+## Riscos introduzidos ou expostos pela correção
+
+- **Vínculo por substring.** A chave esperada pode estar em outro parâmetro ou no fragmento, enquanto o parâmetro fiscal aponta para outra nota. A validação aceita a ausência da chave no HTML. O espelho do handler reproduz essas duas condições com chaves fictícias.
+- **Mensagens de recusa perdem o erro específico.** O script envia somente `{ type: "rejected" }` em `NfceConsultaScreen.tsx:24–28`. O handler exige `href` e a chave antes de verificar esse tipo em `84–93`, então usa o erro genérico de origem. O teste do espelho mede entrada na prévia, não a mensagem exibida.
+- **Compatibilidade de redirecionamento.** Um host oficial legítimo fora da lista ou uma etapa intermediária sem a chave na URL pode interromper a consulta. Validar as rotas de produção e homologação no aparelho antes de cadastrar novos destinos.
+- **Limite do envelope e HTML são diferentes.** A serialização JSON pode expandir aspas, barras e caracteres de controle. Uma página dentro do teto de HTML pode exceder o teto bruto por causa do escape. O limite também não corresponde a bytes de rede.
+
+## Correções que ainda valem a pena, em ordem de risco
+
+1. Autenticar a origem e o frame principal na camada nativa. Associar o evento à tentativa ativa. Extrair e conferir a chave do parâmetro oficial e exigir igualdade com a chave da página antes de permitir salvar.
+2. Bloquear destinos externos sem delegação ao sistema e falhar em caso de timeout da decisão de navegação. Testar redirecionamentos, popups e esquemas no Android.
+3. Limitar o conteúdo antes de cruzar a ponte e medir tempo e memória do parser no Hermes. Fazer o evento de recusa passar pela mesma validação de origem.
+4. Verificar persistência de cookies, armazenamento DOM e subrecursos. Ajustar a promessa da tela ao comportamento confirmado.

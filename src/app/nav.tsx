@@ -39,6 +39,8 @@ export type Route =
   | { name: "updates" }
   | { name: "trash" }
   | { name: "shopping"; add?: boolean }
+  | { name: "shoppingTrip" }
+  | { name: "scanProduct" }
   | { name: "scanNota" }
   | { name: "nfceConsulta"; info: any }
   | { name: "purchases" }

@@ -108,7 +108,7 @@ export default function ScanNotaScreen() {
   return (
     <>
       {permission == null ? (
-        <Muted>Verificando a permissão da câmera…</Muted>
+        <Muted accessibilityLiveRegion="polite">Verificando a permissão da câmera…</Muted>
       ) : granted ? (
         <>
           <View
@@ -169,7 +169,7 @@ export default function ScanNotaScreen() {
       />
       <View style={{ marginTop: 8, gap: 8 }}>
         <Button title="Usar o que colei" disabled={!paste.trim()} onPress={() => accept(paste)} />
-        <Button title={busy ? "Lendo a foto…" : "Escolher foto da galeria"} icon="image" secondary disabled={busy} onPress={() => void pickPhoto()} />
+        <Button title={busy ? "Lendo a foto…" : "Escolher foto da galeria"} icon="image" secondary accessibilityLiveRegion="polite" disabled={busy} onPress={() => void pickPhoto()} />
       </View>
     </>
   );

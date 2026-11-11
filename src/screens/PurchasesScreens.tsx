@@ -10,6 +10,10 @@ import { restockCandidates } from "../shoppingRhythm.mjs";
 import { addShoppingItem } from "../shopping.mjs";
 import { priceSummary, productsOf, purchasesOf, removePurchase } from "../shoppingPurchases.mjs";
 import RestockList from "./RestockList";
+import { monthlyReport } from "../shoppingReport.mjs";
+import { basketInflation } from "../shoppingInflation.mjs";
+import { cheapestStore } from "../shoppingStores.mjs";
+import { itemsOf } from "../shopping.mjs";
 import { displayName, expenseDraftFromPurchase, monthSummary, priceTrend, pricePoints, purchasesByDate, searchProducts } from "../shoppingHistory.mjs";
 
 const MONTHS = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -86,6 +90,7 @@ export function PurchasesScreen() {
         )
       ) : (
         <>
+          <SummarySection />
           <RestockSection />
           <View style={{ marginTop: 12 }}>
             <Field label="Buscar produto" value={query} onChange={setQuery} placeholder="Ex.: leite" maxLength={60} />
@@ -267,6 +272,44 @@ export function ProductDetailScreen({ id }: { id: string }) {
         )}
         <Button title="Ver a lista" secondary onPress={() => nav.push({ name: "shopping" })} />
       </View>
+    </>
+  );
+}
+
+// Resumo do mês, variação de preços da cesta e loja mais barata para a lista atual (some sem dados).
+function SummarySection() {
+  const { state, show } = useStore();
+  const lines: string[] = [];
+  try {
+    const rep: any = monthlyReport(state, { month: today().slice(0, 7) });
+    if (rep.trips > 0 && rep.totalCents != null) {
+      lines.push(`Neste mês: ${show(rep.totalCents)} em ${rep.trips} ${rep.trips === 1 ? "ida" : "idas"}.`);
+      if (rep.comparison) lines.push(rep.comparison.message);
+      if (rep.topCategory) lines.push(`Mais pesou: ${rep.topCategory.category} (${show(rep.topCategory.totalCents)}).`);
+    }
+  } catch {}
+  try {
+    const inf: any = basketInflation(state, { months: 3, now: Date.now() });
+    if (inf) {
+      const p = String(Math.abs(inf.percent)).replace(".", ",");
+      lines.push(inf.direction === "same" ? "A cesta ficou estável em 3 meses." : `A cesta ${inf.direction === "up" ? "subiu" : "baixou"} ${p}% em 3 meses.`);
+      if (inf.topIncreases?.[0]) lines.push(inf.topIncreases[0].message);
+    }
+  } catch {}
+  try {
+    const pending = itemsOf(state).filter((i: any) => !i.inCart);
+    const best: any = pending.length ? cheapestStore(state, pending) : null;
+    if (best) lines.push(`Sua lista costuma sair mais barata em ${best.store}: cerca de ${show(best.totalCents)}.`);
+  } catch {}
+  if (!lines.length) return null;
+  return (
+    <>
+      <Section title="Resumo" />
+      <Box style={{ gap: 6 }}>
+        {lines.map((l) => (
+          <T key={l}>{l}</T>
+        ))}
+      </Box>
     </>
   );
 }

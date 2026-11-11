@@ -1,6 +1,9 @@
-// Constantes e validação da lista de compras. Sem imports, para o backup (finance.mjs)
+// Constantes e validação da lista de compras. Só importa nfce.mjs (sem dependências), para o backup (finance.mjs)
 // poder validar a lista sem dependência circular com shopping.mjs.
+import { isChave } from "./nfce.mjs";
 export const MAIN_LIST = "main";
+// Soma de centavos que nunca passa do maior inteiro seguro (evita total impreciso com dados absurdos).
+export const addCents = (a, b) => Math.min(Number.MAX_SAFE_INTEGER, a + b);
 export const MAX_ITEMS = 2000;
 export const MAX_NAME = 80;
 
@@ -54,8 +57,11 @@ export const PURCHASE_SOURCES = ["manual", "nfce"];
 const UNITS = ["", "g", "kg", "ml", "l"];
 
 const isCents = (n) => Number.isSafeInteger(n) && n > 0 && n <= 99999999999;
-export const isIsoDate = (s) =>
-  typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s + "T00:00:00Z"));
+export const isIsoDate = (s) => {
+  if (typeof s !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(s + "T00:00:00Z");
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+};
 const text = (v, max) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
 // Valida e normaliza `shoppingPurchases` do backup. `undefined` = o backup não traz compras.
@@ -70,7 +76,7 @@ export function sanitizePurchases(value) {
     if (!isIsoDate(p.date)) throw Error("Compra inválida: data.");
     if (!isCents(p.totalCents)) throw Error("Compra inválida: total.");
     const chave = p.chave === undefined || p.chave === "" ? "" : String(p.chave);
-    if (chave && !/^\d{44}$/.test(chave)) throw Error("Compra inválida: chave.");
+    if (chave && !isChave(chave)) throw Error("Compra inválida: chave.");
     if (chave && chaves.has(chave)) throw Error("Compra repetida: mesma nota fiscal.");
     if (chave) chaves.add(chave);
     const cnpj = p.cnpj === undefined || p.cnpj === "" ? "" : String(p.cnpj);
@@ -128,7 +134,8 @@ export function sanitizeProducts(value) {
     if (!Array.isArray(p.prices) || p.prices.length > MAX_PRICE_POINTS) throw Error("Produto inválido: histórico.");
     const prices = p.prices.map((x) => {
       if (!x || !isIsoDate(x.date) || !isCents(x.priceCents)) throw Error("Produto inválido: histórico.");
-      return { date: x.date, priceCents: x.priceCents, purchaseId: typeof x.purchaseId === "string" ? x.purchaseId : "" };
+      if (typeof x.purchaseId !== "string" || !x.purchaseId) throw Error("Produto inválido: ponto do histórico sem compra.");
+      return { date: x.date, priceCents: x.priceCents, purchaseId: x.purchaseId };
     });
     if (!Number.isInteger(p.buys) || p.buys < 0 || p.buys > 1000000) throw Error("Produto inválido: compras.");
     if (p.lastBoughtAt !== "" && p.lastBoughtAt !== undefined && !isIsoDate(p.lastBoughtAt))

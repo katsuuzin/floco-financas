@@ -34,7 +34,7 @@ export function tokenMatch(a, b) {
 
 // Pontua um item da lista contra uma linha da nota: fração das palavras da lista que aparecem na linha.
 export function scorePair(listName, notaName) {
-  const lt = tokens(listName);
+  const lt = [...new Set(tokens(listName))]; // palavra repetida conta uma vez
   const nt = tokens(notaName);
   if (!lt.length || !nt.length) return { score: 0, extras: nt.length, pos: 0 };
   const matched = lt.filter((t) => nt.some((n) => tokenMatch(t, n))).length;
@@ -93,12 +93,15 @@ export function matchListToNota(state, notaItems, { skip = new Set() } = {}) {
 // Aplica os pares escolhidos: põe os itens no carrinho e, se ainda não tinham preço, aprende o da nota.
 // Preço sem unidade = por unidade; com unidade (kg, g...) = o da porção inteira (a regra da lista).
 export function applyConferencia(state, picks, notaItems) {
-  const byId = new Map(picks.map((p) => [p.listItemId, notaItems[p.notaIndex]]));
+  const byId = new Map(picks.map((p) => [p.listItemId, { ni: notaItems[p.notaIndex], listName: p.listName }]));
   return {
     ...state,
     shoppingItems: itemsOf(state).map((i) => {
-      const ni = byId.get(i.id);
-      if (!ni) return i;
+      const hit = byId.get(i.id);
+      if (!hit?.ni) return i;
+      // Revalida: se o item foi renomeado depois de calcular os pares, a seleção antiga não vale.
+      if (hit.listName !== undefined && hit.listName !== i.name) return i;
+      const ni = hit.ni;
       const price = i.priceCents == null ? (i.unit ? ni.totalCents : ni.unitPriceCents) : i.priceCents;
       return { ...i, inCart: true, priceCents: price };
     }),

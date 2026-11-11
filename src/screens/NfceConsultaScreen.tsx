@@ -6,7 +6,7 @@ import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
 import { formatCnpj } from "../nfce.mjs";
-import { MAX_HTML_CHARS, allowedHosts, consultUrl, isAllowedUrl, nfceToPurchase, parseNfceHtml } from "../nfceParse.mjs";
+import { MAX_HTML_CHARS, allowedHosts, consultUrl, hrefMatchesKey, isAllowedUrl, nfceToPurchase, parseNfceHtml } from "../nfceParse.mjs";
 import { purchasesOf, recordPurchase } from "../shoppingPurchases.mjs";
 import { applyConferencia, matchListToNota } from "../shoppingMatch.mjs";
 import { itemsOf } from "../shopping.mjs";
@@ -88,11 +88,11 @@ export default function NfceConsultaScreen({ info }: { info: any }) {
       if (typeof raw !== "string" || raw.length > MAX_RAW) return fail("Resposta inesperada da SEFAZ.");
       const msg = JSON.parse(raw);
       // A mensagem tem de vir do site oficial e da consulta desta nota (não de outra página nem de outra chave).
-      if (!msg || !isAllowedUrl(msg.href, info.uf) || !String(msg.href).includes(info.chave)) return fail("A resposta não veio da consulta desta nota.");
+      if (!msg || !isAllowedUrl(msg.href, info.uf) || !hrefMatchesKey(msg.href, info.chave)) return fail("A resposta não veio da consulta desta nota.");
       if (msg.type === "rejected") return fail("A SEFAZ recusou a consulta agora. Tente de novo em alguns minutos.");
       if (msg.type !== "html" || typeof msg.html !== "string" || msg.html.length > MAX_HTML_CHARS) return fail("Resposta inesperada da SEFAZ.");
       const nota = parseNfceHtml(msg.html, { uf: info.uf });
-      if (nota.chave && nota.chave !== info.chave) return fail("A nota consultada não é a que você leu. Tente ler o QR de novo.");
+      if (nota.chave !== info.chave) return fail("A nota consultada não é a que você leu. Tente ler o QR de novo.");
       done.current = true;
       setParsed(nota);
       setPhase("preview");
@@ -232,7 +232,7 @@ export default function NfceConsultaScreen({ info }: { info: any }) {
           </View>
         </Box>
         {!parsed.totalMatchesItems && (
-          <Muted style={{ color: c.amber, marginBottom: 12 }}>
+          <Muted accessibilityLiveRegion="polite" style={{ color: c.amber, marginBottom: 12 }}>
             {`A soma dos itens (${show(parsed.itemsSumCents)}) não bate com o total da nota. Confira antes de salvar.`}
           </Muted>
         )}

@@ -23,6 +23,11 @@ import {
   shoppingSummary,
   toggleCart,
 } from "../shopping.mjs";
+import { applySuggestedPrices, suggestPrices } from "../shoppingSuggestPrice.mjs";
+import { listToCsv } from "../shoppingExport.mjs";
+import { searchItems } from "../shoppingSearch.mjs";
+import { suggestNames, completeQuantity } from "../shoppingAutocomplete.mjs";
+import { encodeShareCode } from "../shoppingShareCode.mjs";
 
 const priceText = (cents: number | null) => (cents == null ? "" : (cents / 100).toFixed(2).replace(".", ","));
 const qtyText = (i: any) => (i.unit ? `${String(i.qty).replace(".", ",")} ${i.unit}` : i.qty > 1 ? `${i.qty}x` : "");
@@ -40,8 +45,23 @@ export default function ShoppingScreen() {
 
   const items: any[] = itemsOf(state);
   const sum = shoppingSummary(state);
-  const groups = groupByCategory(state);
+  const [query, setQuery] = useState("");
+  const searching = query.trim().length > 0;
+  const found: any[] = useMemo(() => (searching ? searchItems(state, query) : []), [state.shoppingItems, query, searching]);
+  const groups = groupByCategory(searching ? { ...state, shoppingItems: found } : state);
   const draft = purchaseDraft(state);
+  // Preço sugerido do histórico: só para itens sem preço digitado; a pessoa confirma antes de aplicar.
+  const suggestions = useMemo(() => suggestPrices(state), [state.shoppingItems, state.shoppingProducts]);
+  const applySuggestions = () =>
+    void perform((s: any) => applySuggestedPrices(s), `${suggestions.length} ${suggestions.length === 1 ? "preço aplicado" : "preços aplicados"}`);
+  const shareCode = () => {
+    const r: any = encodeShareCode(state, { now: Date.now() });
+    if (!r.ok) return void Share.share({ message: r.reason || "Não foi possível gerar o código." }).catch(() => {});
+    void Share.share({
+      message: `Lista de compras do Floco Finanças. Cole este código em "Colar lista" no app (sem preços):\n${r.code}`,
+    }).catch(() => {});
+  };
+  const exportCsv = () => void Share.share({ message: listToCsv(state), title: "Lista de compras (CSV)" }).catch(() => {});
 
   const remove = async (id: string) => {
     const found = items.findIndex((i) => i.id === id);
@@ -80,6 +100,8 @@ export default function ShoppingScreen() {
             title="Nenhum item na lista"
             body="Digite o que precisa comprar. Use 2 leite para indicar a quantidade."
           />
+          <Button title="Escanear produto" icon="maximize" secondary onPress={() => nav.push({ name: "scanProduct" })} />
+          <View style={{ height: 8 }} />
           <Button title="Ler nota fiscal" icon="camera" secondary onPress={() => nav.push({ name: "scanNota" })} />
           <View style={{ height: 8 }} />
           <Button title="Histórico de compras" icon="clock" secondary onPress={() => nav.push({ name: "purchases" })} />
@@ -98,6 +120,35 @@ export default function ShoppingScreen() {
             </Muted>
           </Box>
           </View>
+
+          {suggestions.length > 0 && (
+            <View style={{ marginTop: 12 }}>
+              <Box style={{ gap: 8 }}>
+                <T style={{ fontFamily: "SoraSemi" }}>
+                  {suggestions.length === 1 ? "1 item com preço no histórico" : `${suggestions.length} itens com preço no histórico`}
+                </T>
+                <Muted>
+                  {suggestions
+                    .slice(0, 3)
+                    .map((s: any) => `${s.name} ${show(s.priceCents)}`)
+                    .join(" · ")}
+                  {suggestions.length > 3 ? ` e mais ${suggestions.length - 3}` : ""}
+                </Muted>
+                <Button title="Usar preços do histórico" icon="tag" secondary onPress={applySuggestions} />
+              </Box>
+            </View>
+          )}
+
+          {items.length > 8 && (
+            <View style={{ marginTop: 12 }}>
+              <Field label="Buscar na lista" value={query} onChange={setQuery} placeholder="Ex.: leite" maxLength={60} />
+              {searching && (
+                <Muted accessibilityLiveRegion="polite">
+                  {found.length === 0 ? "Nenhum item com esse nome." : `${found.length} ${found.length === 1 ? "item encontrado" : "itens encontrados"}.`}
+                </Muted>
+              )}
+            </View>
+          )}
 
           {groups.map((g) => (
             <View key={g.category}>
@@ -141,9 +192,13 @@ export default function ShoppingScreen() {
                 </Muted>
               </>
             )}
+            <Button title="Modo compra" icon="shopping-bag" onPress={() => nav.push({ name: "shoppingTrip" })} />
+            <Button title="Escanear produto" icon="maximize" secondary onPress={() => nav.push({ name: "scanProduct" })} />
             <Button title="Ler nota fiscal" icon="camera" secondary onPress={() => nav.push({ name: "scanNota" })} />
             <Button title="Histórico de compras" icon="clock" secondary onPress={() => nav.push({ name: "purchases" })} />
+            <Button title="Exportar em CSV" icon="download" secondary onPress={exportCsv} />
             <Button title="Compartilhar lista" icon="share-2" secondary onPress={share} />
+            <Button title="Compartilhar código (sem preços)" icon="link" secondary onPress={shareCode} />
             {sum.inCart > 0 && (
               <Button
                 title="Limpar itens no carrinho"
@@ -292,6 +347,15 @@ export function ShoppingAddBar({ autoFocus }: { autoFocus?: boolean }) {
   const [text, setText] = useState("");
   const [error, setError] = useState("");
   const ready = text.trim().length > 0;
+  const names: string[] = useMemo(
+    () => (text.trim().length >= 2 ? suggestNames(state, text, { limit: 4, now: Date.now() } as any) : []),
+    [state.shoppingProducts, state.shoppingItems, text],
+  );
+  const pick = (name: string) => {
+    const { qty } = completeQuantity(text);
+    setText(qty > 1 ? `${qty} ${name}` : name);
+    setError("");
+  };
 
   const add = async () => {
     if (!ready) return;
@@ -324,6 +388,21 @@ export function ShoppingAddBar({ autoFocus }: { autoFocus?: boolean }) {
         <Muted accessibilityLiveRegion="polite" style={{ color: c.red }}>
           {error}
         </Muted>
+      )}
+      {names.length > 0 && (
+        <View style={[k.row, { gap: 8, flexWrap: "wrap" }]}>
+          {names.map((n) => (
+            <Pressable
+              key={n}
+              accessibilityRole="button"
+              accessibilityLabel={`Usar ${n}`}
+              onPress={() => pick(n)}
+              style={{ minHeight: 44, paddingHorizontal: 14, borderRadius: 22, backgroundColor: c.soft, justifyContent: "center" }}
+            >
+              <T numberOfLines={1}>{n}</T>
+            </Pressable>
+          ))}
+        </View>
       )}
       <View style={[k.row, { gap: 8 }]}>
         <TextInput

@@ -22,7 +22,7 @@ export function purchasesByDate(state) {
 // Total gasto e número de compras num mês ("2026-11").
 export function monthSummary(state, ym) {
   const list = purchasesOf(state).filter((p) => p.date.slice(0, 7) === ym);
-  return { ym, count: list.length, totalCents: list.reduce((n, p) => n + p.totalCents, 0) };
+  return { ym, count: list.length, totalCents: list.reduce((n, p) => Math.min(Number.MAX_SAFE_INTEGER, n + p.totalCents), 0) };
 }
 
 // Produtos pela busca (nome normalizado contém todas as palavras digitadas). Vazio = todos.
@@ -43,7 +43,7 @@ export function priceTrend(prod) {
   if (pts.length < 2) return { dir: "none", pct: 0, from: null, to: pts.length ? pts[pts.length - 1].priceCents : null };
   const from = pts[pts.length - 2].priceCents;
   const to = pts[pts.length - 1].priceCents;
-  const pct = Math.round(((to - from) / from) * 1000) / 10;
+  const pct = from > 0 ? Math.round(((to - from) / from) * 1000) / 10 : 0;
   return { dir: to > from ? "up" : to < from ? "down" : "same", pct: Math.abs(pct), from, to };
 }
 
