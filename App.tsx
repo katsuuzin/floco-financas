@@ -27,7 +27,7 @@ import { T, I, Button, IconButton, Muted, styles as k } from "./src/ui/kit";
 import type { Icon } from "./src/ui/kit";
 import MotionPressable from "./src/ui/motion";
 import { StoreProvider, useStore, type NoticeAction } from "./src/app/store";
-import Animated, { Easing as Ease, FadeIn, SlideInDown, useReducedMotion, withTiming } from "react-native-reanimated";
+import Animated, { Easing as Ease, FadeIn, SlideInDown, useReducedMotion, withTiming, useSharedValue, useAnimatedStyle } from "react-native-reanimated";
 
 // Entrar numa lista: desliza 40 dp da direita esmaecendo, 300 ms com desaceleração (A7).
 const listEnter = () => {
@@ -677,16 +677,26 @@ function TabButton({
   const { c } = useTheme();
   const nav = useNav();
   const on = !onPress && nav.tab === item.key;
+  const reduce = useReducedMotion();
+  const grow = useSharedValue(on ? 1 : 0);
+  useEffect(() => {
+    grow.value = reduce ? (on ? 1 : 0) : withTiming(on ? 1 : 0, { duration: 160 });
+  }, [on, reduce, grow]);
+  const barStyle = useAnimatedStyle(() => ({ transform: [{ scaleX: grow.value }] }));
+  // Rótulo curto na barra ("Entre pessoas › Me devem" vira "Me devem"); o falado continua completo.
+  const shown = item.label.includes("›") ? item.label.split("›").pop()!.trim() : item.label === "Lista de compras" ? "Compras" : item.label;
   return (
-    <Pressable
-      accessibilityRole="tab"
+    <MotionPressable
+      kind="chip"
+      accessibilityRole={onPress ? "button" : "tab"}
       accessibilityLabel={item.label}
+      accessibilityHint={onPress ? "Abre a tela" : undefined}
       accessibilityState={{ selected: on }}
       onPress={onPress || (() => nav.setTab(item.key))}
       style={s.tab}
     >
-      <View
-        style={[s.bar, { backgroundColor: on ? c.primary : "transparent" }]}
+      <Animated.View
+        style={[s.bar, { backgroundColor: c.primary }, barStyle]}
       />
       <View style={s.indicator}>
         <I name={item.icon} color={on ? c.primary : c.muted} />
@@ -704,9 +714,9 @@ function TabButton({
           fontFamily: on ? "SoraSemi" : "Sora",
         }}
       >
-        {item.label}
+        {shown}
       </T>
-    </Pressable>
+    </MotionPressable>
   );
 }
 
@@ -769,12 +779,12 @@ function AddSheet({
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
         <View style={s.sheetGrid}>
           {options.filter((option) => !option.hidden).map((option) => (
-            <Pressable key={option.label} accessibilityRole="button" accessibilityLabel={option.label}
+            <MotionPressable key={option.label} kind="row" accessibilityRole="button" accessibilityLabel={option.label}
               onPress={() => go(option.initial)}
-              style={({ pressed }) => [s.sheetItem, { backgroundColor: c.soft, opacity: pressed ? 0.75 : 1 }]}>
+              style={[s.sheetItem, { backgroundColor: c.soft }]}>
               <I name={option.icon} size={26} color={option.color} />
               <T style={{ fontFamily: "SoraSemi", fontSize: 13, textAlign: "center" }}>{option.label}</T>
-            </Pressable>
+            </MotionPressable>
           ))}
         </View>
         {!hasAccount && <Muted>Cadastre uma conta para começar a lançar.</Muted>}
