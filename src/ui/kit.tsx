@@ -1,6 +1,6 @@
 // Componentes de interface em escopo de módulo: nunca são recriados a cada render,
 // então campos de texto não perdem o foco enquanto o usuário digita.
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   AccessibilityInfo,
   findNodeHandle,
@@ -19,6 +19,7 @@ import {
 import Feather from "@expo/vector-icons/Feather";
 import MotionPressable from "./motion";
 import { useTheme } from "./theme";
+import { formatMoneyInput, money, parseMoney } from "../finance.mjs";
 import { evaluateAmount, isExpression } from "../amountExpression.mjs";
 import { brDate, maskBrDate, parseBrDate } from "../dates.mjs";
 
@@ -48,6 +49,11 @@ export function T({ style, ...props }: TextProps & { style?: any }) {
     />
   );
 }
+
+export const touch = { min: 48 } as const;
+export const type = { caption: 12 } as const;
+
+export const fitAmount = { numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.7 } as const;
 
 export function Muted({ style, ...props }: TextProps & { style?: any }) {
   const { c } = useTheme();
@@ -113,6 +119,10 @@ export function Button({
       <T style={{ flexShrink: 1, textAlign: "center", color: fg, fontFamily: "SoraSemi", fontSize: 14 }}>{title}</T>
     </MotionPressable>
   );
+}
+
+export function CreateAction({ title, onPress }: { title: string; onPress: () => void }) {
+  return <Button title={title} icon="plus" onPress={onPress} />;
 }
 
 export function IconButton({
@@ -273,12 +283,14 @@ export function Field({
   maxLength,
   onSubmit,
   inputRef,
+  error,
 }: {
   label: string;
   inputRef?: React.Ref<TextControl>;
   value: string;
   onChange: (v: string) => void;
   onSubmit?: () => void;
+  error?: string;
   numeric?: boolean;
   placeholder?: string;
   autoFocus?: boolean;
@@ -293,10 +305,12 @@ export function Field({
       <T style={styles.label}>{label}</T>
       <TextInput
         ref={inputRef}
+        selectionColor={c.accent}
+        cursorColor={c.accent}
         secureTextEntry={secure}
         autoCorrect={!secure}
         accessibilityLabel={label}
-        accessibilityHint={hint}
+        accessibilityHint={error || hint}
         value={value}
         onChangeText={onChange}
         placeholder={placeholder}
@@ -313,13 +327,14 @@ export function Field({
           {
             backgroundColor: c.surface,
             color: c.text,
-            borderColor: c.muted,
+            borderColor: error ? c.red : c.muted,
             fontFamily: "Sora",
           },
           multiline && { minHeight: 96, textAlignVertical: "top" },
         ]}
       />
       {!!hint && <Muted>{hint}</Muted>}
+      {!!error && <T accessibilityRole="alert" accessibilityLiveRegion="polite" style={{ color: c.red }}>{error}</T>}
     </View>
   );
 }
@@ -419,12 +434,16 @@ export function Toggle({
   onChange,
   hint,
   icon,
+  leading,
+  disabled = false,
 }: {
   label: string;
   value: boolean;
   onChange: (v: boolean) => void;
   hint?: string;
   icon?: Icon;
+  leading?: React.ReactNode;
+  disabled?: boolean;
 }) {
   const { c, dark } = useTheme();
   return (
@@ -433,18 +452,20 @@ export function Toggle({
       <Pressable
         accessibilityRole="switch"
         accessibilityLabel={label}
-        accessibilityState={{ checked: value }}
+        accessibilityState={{ checked: value, disabled }}
         accessibilityHint={hint}
+        disabled={disabled}
         onPress={() => onChange(!value)}
         android_ripple={{ color: c.soft }}
-        style={styles.setting}
+        style={[styles.setting, disabled && { opacity: 0.65 }]}
       >
         <View style={[styles.row, { flex: 1 }]}>
-          {icon && <I name={icon} />}
+          {leading ?? (icon && <I name={icon} />)}
           <T style={{ flexShrink: 1 }}>{label}</T>
         </View>
         <Switch
           importantForAccessibility="no-hide-descendants"
+          disabled={disabled}
           value={value}
           onValueChange={onChange}
           thumbColor={value ? c.accent : c.muted}
@@ -556,11 +577,13 @@ export function Chips<K extends string>({
 // Seletor segmentado. Com fonte ampliada, as opções ganham largura para quebrar.
 export function Segmented<K extends string>({
   label,
+  accessibilityLabel,
   values,
   value,
   onChange,
 }: {
   label?: string;
+  accessibilityLabel?: string;
   values: [K, string][];
   value: K;
   onChange: (v: K) => void;
@@ -572,7 +595,7 @@ export function Segmented<K extends string>({
       {!!label && <T style={styles.label}>{label}</T>}
       <View
         accessibilityRole="radiogroup"
-        accessibilityLabel={label}
+        accessibilityLabel={accessibilityLabel ?? label}
         style={[styles.segmented, { backgroundColor: c.soft, flexDirection: fontScale >= 1.5 ? "column" : "row" }]}
       >
         {values.map(([key, name]) => {
@@ -611,17 +634,38 @@ export function AmountField({
   color,
   autoFocus,
   label = "Valor",
+  error,
+  inputRef,
 }: {
   value: string;
   onChange: (v: string) => void;
   color?: string;
   autoFocus?: boolean;
   label?: string;
+  error?: string;
+  inputRef?: React.Ref<TextControl>;
 }) {
   const { c } = useTheme();
   const [pad, setPad] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const valueOnFocus = useRef(value);
   const expression = isExpression(value);
   const preview = expression ? evaluateAmount(value) : null;
+  let plainCents: number | undefined;
+  if (!expression && value.trim()) {
+    try {
+      plainCents = parseMoney(value);
+    } catch {
+      // Enquanto o valor estiver incompleto, aguarde mais dígitos.
+    }
+  }
+  const formatOnBlur = () => {
+    setFocused(false);
+    if (plainCents !== undefined && valueOnFocus.current !== value) {
+      const formatted = formatMoneyInput(plainCents);
+      if (formatted !== value) onChange(formatted);
+    }
+  };
   const calculate = () => {
     if (preview?.ok && preview.display !== undefined) onChange(preview.display);
   };
@@ -632,7 +676,7 @@ export function AmountField({
     else if (value.length < 100) onChange(value + key);
   };
   return (
-    <View style={[styles.amountBox, { backgroundColor: c.surface }]}>
+    <View style={[styles.amountBox, { backgroundColor: c.surface }, error && { borderWidth: 1, borderColor: c.red }]}>
       <Muted>{label}</Muted>
       <View style={[styles.row, { gap: space.sm }]}>
         <T
@@ -645,9 +689,16 @@ export function AmountField({
           R$
         </T>
         <TextInput
+          ref={inputRef}
           accessibilityLabel={`${label} em reais`}
+          accessibilityHint={error}
+          maxFontSizeMultiplier={1.3}
+          selectionColor={c.accent}
+          cursorColor={c.accent}
           value={value}
           editable={!pad}
+          onFocus={() => { valueOnFocus.current = value; setFocused(true); }}
+          onBlur={formatOnBlur}
           onChangeText={onChange}
           placeholder="0,00"
           placeholderTextColor={c.muted}
@@ -671,9 +722,11 @@ export function AmountField({
       </View>
       <View accessibilityLiveRegion="polite">
         {preview && <Muted style={{ color: preview.ok ? c.muted : c.red }}>
-          {preview.ok ? "= R$ " + preview.display : preview.message}
+          {preview.ok ? "= " + money(preview.cents!) : preview.message}
         </Muted>}
+        {focused && plainCents !== undefined && <Muted {...fitAmount}>= {money(plainCents)}</Muted>}
       </View>
+      {!!error && <T accessibilityRole="alert" accessibilityLiveRegion="polite" style={{ color: c.red }}>{error}</T>}
       {!pad && expression && <Button title="Calcular" secondary disabled={!preview?.ok} onPress={calculate} />}
       {pad && (
         <>
@@ -823,7 +876,7 @@ export const styles = StyleSheet.create({
   text: { fontSize: 15, lineHeight: 22 },
   muted: { fontSize: 12.5, lineHeight: 18 },
   compactChip: {
-    minHeight: 40,
+    minHeight: touch.min,
     paddingHorizontal: 16,
     borderRadius: 20,
     borderWidth: 1,
@@ -832,7 +885,7 @@ export const styles = StyleSheet.create({
   segmented: { flexDirection: "row", borderRadius: 999, padding: 4, gap: 4 },
   segment: {
     flex: 1,
-    minHeight: 44,
+    minHeight: touch.min,
     borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
@@ -925,7 +978,7 @@ export const styles = StyleSheet.create({
   },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginVertical: 4 },
   chip: {
-    minHeight: 44,
+    minHeight: touch.min,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 22,

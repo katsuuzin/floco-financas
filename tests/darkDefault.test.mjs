@@ -29,6 +29,12 @@ test("backup preserva a escolha e a marca", () => {
   assert.equal(applyDarkDefault(back).settings.dark, false);
 });
 
+test("backup sem o campo dark abre escuro; só false explícito vira claro", () => {
+  const { dark, ...rest } = emptyState().settings;
+  assert.equal(validateBackup({ ...emptyState(), settings: rest }).settings.dark, true);
+  assert.equal(validateBackup({ ...emptyState(), settings: { ...rest, dark: false } }).settings.dark, false);
+});
+
 test("estado sem settings não quebra", () => {
   assert.equal(applyDarkDefault({}).settings.dark, true);
 });

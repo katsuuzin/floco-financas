@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { View, TextInput, Pressable, ScrollView, useWindowDimensions } from "react-native";
-import { Box, Button, Chips, Empty, I, Muted, T, focusAccessibility, type ViewControl, styles as k } from "../ui/kit";
+import React, { useMemo, useRef, useState } from "react";
+import { View, TextInput, Pressable, ScrollView, SectionList, useWindowDimensions } from "react-native";
+import { Box, Button, Chips, Empty, I, Muted, T, fitAmount, focusAccessibility, type ViewControl, styles as k } from "../ui/kit";
+import { SheetModal } from "../ui/Sheet";
 import { applyFilters, centsOf, emptyFilters, toggle } from "../tx-filters.mjs";
 import { activeFilterCount, applyStatementFilter, describeFilter, sanitizeFilter } from "../statementFilter.mjs";
 import { dayDetail, monthGrid } from "../statementCalendar.mjs";
@@ -8,7 +9,7 @@ import { toAmountText } from "../calc.mjs";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
-import { monthKey, money, includedAccounts, signedAmount } from "../finance.mjs";
+import { monthKey, money, today, includedAccounts, signedAmount } from "../finance.mjs";
 import { displayOf } from "./PersonalizeScreens";
 import TransactionRow from "./TransactionRow";
 import MonthBar from "./MonthBar";
@@ -34,48 +35,45 @@ export function matches(t: any, query: string, notes = true) {
   );
 }
 
-export default function TransactionsScreen() {
+export default function TransactionsScreen({ storageError }: { storageError: string }) {
   const { c } = useTheme();
   const { state, show, perform } = useStore();
   const { month } = useNav();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const saved = state.settings?.display?.statementFilter;
-  const core = useMemo(() => sanitizeFilter(saved), [saved]);
+  const core = useMemo(() => sanitizeFilter({ ...saved, types: [] }), [saved]);
   const extras = useMemo(() => ({
     cards: Array.isArray(saved?.cards) ? saved.cards.filter((id: unknown) => typeof id === "string" && id.startsWith("c:")) : [],
     categories: Array.isArray(saved?.categories) ? saved.categories.filter((name: unknown) => typeof name === "string") : [],
     sort: ["dateAsc", "amountAsc", "amountDesc"].includes(saved?.sort) ? saved.sort : "date",
   }), [saved]);
-  const [adv, setAdv] = useState<{ sources: string[]; categories: string[]; tags: string[]; types: string[]; min: string; max: string; sort: string }>({ ...emptyFilters(), types: [] });
+  const [adv, setAdv] = useState<{ sources: string[]; categories: string[]; tags: string[]; min: string; max: string; sort: string }>(emptyFilters());
   const [panel, setPanel] = useState(false);
   const filterButton = useRef<ViewControl>(null);
-  const filterHeading = useRef<ViewControl>(null);
-  const visitedFilters = useRef(false);
-  useEffect(() => {
-    if (!visitedFilters.current) return;
-    focusAccessibility(panel ? filterHeading.current : filterButton.current);
-  }, [panel]);
+  const closeFilters = () => {
+    setPanel(false);
+    focusAccessibility(filterButton.current);
+  };
   const [cal, setCal] = useState(false);
   const [day, setDay] = useState<string | null>(null);
   const advCount = activeFilterCount(core) + Number(extras.cards.length > 0 && core.accountIds.length === 0) +
     Number(extras.categories.length > 0) + Number(extras.sort !== "date");
   const summary = describeFilter(core, { accounts: state.accounts, tags: state.tags });
   const openFilters = () => {
-    visitedFilters.current = true;
-    if (!panel) setAdv({ ...extras, types: core.types,
+    setAdv({ ...extras,
       sources: [...core.accountIds.map((id: string) => "a:" + id), ...extras.cards], tags: core.tagIds,
       min: core.minCents === null ? "" : toAmountText(core.minCents),
       max: core.maxCents === null ? "" : toAmountText(core.maxCents) });
-    setPanel(!panel);
+    setPanel(true);
   };
   const saveFilters = (clear = false) => {
     const next = clear ? undefined : { ...sanitizeFilter({
       accountIds: adv.sources.filter((id: string) => id.startsWith("a:")).map((id: string) => id.slice(2)),
-      tagIds: adv.tags, types: adv.types, minCents: centsOf(adv.min), maxCents: centsOf(adv.max),
+      tagIds: adv.tags, minCents: centsOf(adv.min), maxCents: centsOf(adv.max),
     }), cards: adv.sources.filter((id: string) => id.startsWith("c:")), categories: adv.categories, sort: adv.sort };
     void perform((s: any) => ({ ...s, settings: { ...s.settings, display: { ...s.settings?.display, statementFilter: next } } }), "")
-      .then((ok) => { if (ok) setPanel(false); });
+      .then((ok) => { if (ok && panel) closeFilters(); });
   };
   const d = displayOf(state);
   const filtered = useMemo(() => {
@@ -107,7 +105,11 @@ export default function TransactionsScreen() {
   const days = useMemo(() => {
     const rows = found;
     const map = new Map<string, any[]>();
-    for (const t of rows) map.set(t.date, [...(map.get(t.date) || []), t]);
+    for (const t of rows) {
+      const group = map.get(t.date);
+      if (group) group.push(t);
+      else map.set(t.date, [t]);
+    }
     // Compras do cartão no fim de cada dia, quando pedido.
     if (d.cardSeparate) for (const [k2, v] of map) map.set(k2, [...v.filter((t) => !t.cardId), ...v.filter((t) => t.cardId)]);
     return [...map.entries()];
@@ -122,24 +124,30 @@ export default function TransactionsScreen() {
   const tagOpts: [string, string][] = (state.tags || []).map((g: any) => [g.id, "#" + g.name]);
   const total = found.reduce((n: number, t: any) => (t.type === "transfer" ? n : n + (t.type === "income" || t.refund ? t.amount : -t.amount)), 0);
   // Saldo das contas incluídas ao fim de cada dia (para a preferência "saldo acumulado").
+  const accounts = includedAccounts(state);
+  const included = new Set(accounts.map((a: any) => a.id));
+  const initialBalance = accounts.reduce((n: number, a: any) => n + a.initial, 0);
   const endOfDay = (date: string) =>
-    includedAccounts(state).reduce((n: number, a: any) => n + a.initial, 0) +
+    initialBalance +
     state.transactions
       .filter((t: any) => t.confirmed && !t.cardId && t.date <= date)
       .reduce((n: number, t: any) => {
-        const inc = includedAccounts(state).map((a: any) => a.id);
         return (
           n +
-          (inc.includes(t.accountId) ? signedAmount(t) : 0) +
-          (t.type === "transfer" && inc.includes(t.destinationId) ? t.amount : 0)
+          (included.has(t.accountId) ? signedAmount(t) : 0) +
+          (t.type === "transfer" && included.has(t.destinationId) ? t.amount : 0)
         );
       }, 0);
-  return (
+  const header = (
     <>
+      {!!storageError && <Box><T style={{ color: c.red }}>{storageError}</T></Box>}
       <MonthBar />
       <TextInput
         accessibilityLabel="Buscar por descrição, valor ou observação"
-        placeholder="Buscar por descrição ou valor"
+        placeholder="Descrição ou valor"
+        maxFontSizeMultiplier={1.3}
+        selectionColor={c.accent}
+        cursorColor={c.accent}
         placeholderTextColor={c.muted}
         value={search}
         onChangeText={setSearch}
@@ -156,7 +164,7 @@ export default function TransactionsScreen() {
         value={filter}
         onChange={setFilter}
       />
-      <View style={[k.row, { gap: 4, marginTop: 2 }]}>
+      <View style={[k.row, { gap: 8, marginTop: 2, flexWrap: "wrap" }]}>
         <Pressable
           accessibilityRole="button"
           ref={filterButton}
@@ -172,10 +180,10 @@ export default function TransactionsScreen() {
           </T>
         </Pressable>
         <Button secondary title={cal ? "Ver lista" : "Ver calendário"} onPress={() => { setCal(!cal); setDay(null); }} />
-        <View style={{ flex: 1 }} />
-        <Muted accessibilityLiveRegion="polite">
-          {found.length} {found.length === 1 ? "lançamento" : "lançamentos"} · {(total < 0 ? "−" : "") + show(Math.abs(total))}
-        </Muted>
+      </View>
+      <View style={[k.row, { flexWrap: "wrap", gap: 4 }]} accessibilityLiveRegion="polite">
+        <Muted>{found.length} {found.length === 1 ? "lançamento" : "lançamentos"} · Resultado</Muted>
+        <Muted {...fitAmount} style={{ maxWidth: "100%" }}>{(total < 0 ? "−" : "") + show(Math.abs(total))}</Muted>
       </View>
       {advCount > 0 && (
         <View style={{ gap: 8 }}>
@@ -193,15 +201,17 @@ export default function TransactionsScreen() {
         </View>
       )}
       {panel && (
-        <Box style={{ marginTop: 10, gap: 6 }}>
-          <View ref={filterHeading} accessible accessibilityRole="header"><T>Filtros do extrato</T></View>
+        <SheetModal title={advCount ? `Filtros do extrato (${advCount})` : "Filtros do extrato"} onClose={closeFilters}
+          footer={<View style={[k.row, { flexWrap: "wrap", gap: 8 }]}>
+            <Button title="Limpar" secondary onPress={() => saveFilters(true)} />
+            <Button title="Aplicar filtros" onPress={() => saveFilters()} />
+          </View>}>
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, gap: 6 }}>
           <Pick title="Conta ou cartão" opts={sourceOpts} on={adv.sources} set={(v) => setAdv({ ...adv, sources: toggle(adv.sources, v) })} />
           {catOpts.length > 0 && (
             <Pick title="Categoria" badge={(name) => categoryStyleOf(state, name)} opts={catOpts.map((x) => [x, x])} on={adv.categories} set={(v) => setAdv({ ...adv, categories: toggle(adv.categories, v) })} />
           )}
           {tagOpts.length > 0 && <Pick title="Tags" badge={(id) => tagStyleOf((state.tags || []).find((tag: any) => tag.id === id))} opts={tagOpts} on={adv.tags} set={(v) => setAdv({ ...adv, tags: toggle(adv.tags, v) })} />}
-          <Pick title="Tipos de lançamento" opts={[["income", "Receitas"], ["expense", "Despesas"], ["transfer", "Transferências"]]}
-            on={adv.types} set={(v) => setAdv({ ...adv, types: toggle(adv.types, v) })} />
           <Muted style={{ marginTop: 6 }}>Faixa de valor (R$)</Muted>
           <View style={[k.row, { gap: 10 }]}>
             {(["min", "max"] as const).map((key) => (
@@ -229,56 +239,62 @@ export default function TransactionsScreen() {
             on={[adv.sort]}
             set={(v) => setAdv({ ...adv, sort: v })}
           />
-          <Button title="Aplicar filtros" onPress={() => saveFilters()} />
-        </Box>
-      )}
-      {cal && !pickedDay ? null : byAmount && found.length ? (
-        <Box style={{ padding: 0, marginTop: 14, overflow: "hidden" }}>
-          {found.map((t: any, i: number) => (
-            <TransactionRow key={t.id} t={t} withDate last={i === found.length - 1} />
-          ))}
-        </Box>
-      ) : days.length ? (
-        days.map(([date, rows]) => {
-          const net = rows.reduce(
-            (n: number, t: any) =>
-              t.type === "transfer" ? n : n + (t.type === "income" || t.refund ? t.amount : -t.amount),
-            0,
-          );
-          return (
-            <View key={date}>
-              <View style={[k.row, { justifyContent: "space-between", marginTop: 14, marginBottom: 6 }]}>
-                <Muted>
-                  {(() => {
-                    const s = new Date(date + "T12:00:00").toLocaleDateString("pt-BR", {
-                      weekday: "long",
-                      day: "2-digit",
-                      month: "long",
-                    });
-                    return s.charAt(0).toUpperCase() + s.slice(1);
-                  })()}
-                </Muted>
-                <Muted>
-                  {d.dailyBalance
-                    ? "Saldo " + (endOfDay(date) < 0 ? "−" : "") + show(Math.abs(endOfDay(date)))
-                    : (net >= 0 ? "+" : "−") + show(Math.abs(net))}
-                </Muted>
-              </View>
-              <Box style={{ padding: 0, marginBottom: 4, overflow: "hidden" }}>
-                {rows.map((t: any, i: number) => (
-                  <TransactionRow key={t.id} t={t} last={i === rows.length - 1} />
-                ))}
-              </Box>
-            </View>
-          );
-        })
-      ) : (
-        <Empty
-          title="Nenhum lançamento encontrado"
-          body="Tente outra busca, escolha outro mês ou registre uma movimentação pelo botão +."
-        />
+          </ScrollView>
+        </SheetModal>
       )}
     </>
+  );
+
+  const calendarOnly = cal && !pickedDay;
+  const sections: { key: string; date?: string; data: any[] }[] = calendarOnly || !found.length ? []
+    : byAmount ? [{ key: "valor", data: found }]
+    : days.map(([date, data]) => ({ key: date, date, data }));
+
+  return (
+    <SectionList
+      style={{ flex: 1, backgroundColor: c.bg }}
+      contentContainerStyle={[k.content, { maxWidth: 900, width: "100%", alignSelf: "center" }]}
+      sections={sections}
+      keyExtractor={(t) => t.id}
+      ListHeaderComponent={header}
+      ListEmptyComponent={calendarOnly ? undefined : (
+        <Empty title="Nenhum lançamento encontrado" body="Tente outra busca, escolha outro mês ou registre uma movimentação pelo botão +." />
+      )}
+      initialNumToRender={16}
+      maxToRenderPerBatch={16}
+      windowSize={7}
+      stickySectionHeadersEnabled={false}
+      keyboardShouldPersistTaps="handled"
+      renderSectionHeader={({ section }) => {
+        if (!section.date) return <View style={{ height: 14 }} />;
+        const date = new Date(section.date + "T12:00:00").toLocaleDateString("pt-BR", {
+          weekday: "long", day: "2-digit", month: "long",
+        });
+        const value = d.dailyBalance ? endOfDay(section.date)
+          : section.data.reduce((n, t) => t.type === "transfer" ? n : n + (t.type === "income" || t.refund ? t.amount : -t.amount), 0);
+        const sign = value < 0 ? "−" : d.dailyBalance ? "" : "+";
+        return (
+          <View style={[k.row, { justifyContent: "space-between", flexWrap: "wrap", marginTop: 14, marginBottom: 6 }]}>
+            <Muted>{date.charAt(0).toUpperCase() + date.slice(1)}</Muted>
+            <Muted {...fitAmount} style={{ maxWidth: "100%" }}>{d.dailyBalance ? "Saldo " : ""}{sign}{show(Math.abs(value))}</Muted>
+          </View>
+        );
+      }}
+      renderItem={({ item, index, section }) => {
+        const first = index === 0;
+        const last = index === section.data.length - 1;
+        return (
+          <View style={{
+            backgroundColor: c.surface, overflow: "hidden",
+            borderTopLeftRadius: first ? 22 : 0, borderTopRightRadius: first ? 22 : 0,
+            borderBottomLeftRadius: last ? 22 : 0, borderBottomRightRadius: last ? 22 : 0,
+            marginBottom: last ? 4 : 0,
+          }}>
+            <TransactionRow t={item} withDate={byAmount} last={last} />
+          </View>
+        );
+      }}
+    />
   );
 }
 
@@ -331,13 +347,14 @@ function MonthCalendar({ weeks, day, onPick }: { weeks: any[][]; day: string | n
               {week.map((cell) => {
                 if (!cell.inMonth) return <View key={cell.date} style={cellStyle} />;
                 const selected = cell.date === day;
+                const current = cell.date === today();
                 const number = Number(cell.date.slice(-2));
                 return (
                   <Pressable key={cell.date} accessibilityRole="button" accessibilityState={{ selected }}
-                    accessibilityLabel={`Dia ${number}, ${cell.count} ${cell.count === 1 ? "lançamento" : "lançamentos"}, intensidade de gasto ${cell.level} de 4`}
+                    accessibilityLabel={`${current ? "Hoje, dia" : "Dia"} ${number}, ${cell.count} ${cell.count === 1 ? "lançamento" : "lançamentos"}, intensidade de gasto ${cell.level} de 4`}
                     onPress={() => onPick(cell.date)}
                     style={[cellStyle, { minHeight: 48, alignItems: "center", justifyContent: "center",
-                      borderRadius: 12, backgroundColor: selected ? c.primary : c.surface }]}>
+                      borderRadius: 12, borderWidth: current ? 2 : 0, borderColor: c.primary, backgroundColor: selected ? c.primary : c.surface }]}>
                     <T style={{ color: selected ? c.onPrimary : c.text }}>{number}</T>
                     {cell.level > 0 && <View importantForAccessibility="no" style={{ height: 4, borderRadius: 2,
                       width: 6 * cell.level, backgroundColor: selected ? c.onPrimary : c.primary, opacity: 0.35 + 0.15 * cell.level }} />}
@@ -348,6 +365,7 @@ function MonthCalendar({ weeks, day, onPick }: { weeks: any[][]; day: string | n
           ))}
         </View>
       </ScrollView>
+      <Muted style={{ marginTop: 8 }}>Contorno: hoje · Barras: intensidade de gastos</Muted>
     </Box>
   );
 }

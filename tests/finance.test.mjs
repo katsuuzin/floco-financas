@@ -5,6 +5,7 @@ import {
   addTransaction,
   balance,
   parseMoney,
+  formatMoneyInput,
   invoiceMonth,
   invoice,
   payInvoice,
@@ -17,6 +18,14 @@ import {
   isDate,
   addMonths,
 } from "../src/finance.mjs";
+test("valor brasileiro aceita milhar e um ou dois dígitos de centavos", () => {
+  for (const [input, cents] of [["1.234,56", 123456], ["1234", 123400], ["12,3", 1230], ["0,5", 50]]) {
+    assert.equal(parseMoney(input), cents);
+    assert.equal(parseMoney(formatMoneyInput(cents)), cents);
+  }
+  assert.equal(formatMoneyInput(5000000), "50.000,00");
+});
+
 const base = () => ({
   ...emptyState(),
   accounts: [

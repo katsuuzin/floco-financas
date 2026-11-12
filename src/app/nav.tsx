@@ -6,6 +6,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { BackHandler } from "react-native";
@@ -31,7 +32,7 @@ export type Route =
   | { name: "preferences" }
   | { name: "welcome" }
   | { name: "reconcile" }
-  | { name: "tool"; id: string }
+  | { name: "tool"; id: "categories" | "tags" | "reports" }
   | { name: "people"; tab?: "receivables" | "payables" }
   | { name: "debts"; tab?: "installments" | "financing" | "loan" }
   | { name: "usage" }
@@ -39,7 +40,7 @@ export type Route =
   | { name: "imports" }
   | { name: "receipt" }
   | { name: "notifications" }
-  | { name: "security" }
+  | { name: "security"; section?: "backup" }
   | { name: "updates" }
   | { name: "trash" }
   | { name: "shopping"; add?: boolean }
@@ -65,6 +66,8 @@ type Nav = {
   push: (r: Route) => void;
   replace: (r: Route) => void;
   back: () => boolean;
+  dismiss: () => boolean;
+  registerBackGuard: (guard: () => boolean) => () => void;
   reset: () => void;
   month: string;
   setMonth: (m: string) => void;
@@ -81,10 +84,15 @@ export function NavProvider({
   const [tab, setTabState] = useState<Tab>("home");
   const [stack, setStack] = useState<Route[]>([]);
   const [month, setMonth] = useState(initialMonth);
+  const backGuard = useRef<(() => boolean) | null>(null);
+  const registerBackGuard = useCallback((guard: () => boolean) => {
+    backGuard.current = guard;
+    return () => { if (backGuard.current === guard) backGuard.current = null; };
+  }, []);
 
   // Voltar: desempilha a tela aberta; sem pilha, volta para Início; em Início devolve false (sair).
   // Usa a pilha atual (não um flag dentro do setState, que o React pode executar depois).
-  const back = useCallback(() => {
+  const dismiss = useCallback(() => {
     if (stack.length) {
       setStack((s) => s.slice(0, -1));
       return true;
@@ -96,20 +104,11 @@ export function NavProvider({
     return false;
   }, [stack.length, tab]);
 
+  const back = useCallback(() => backGuard.current?.() || dismiss(), [dismiss]);
   useEffect(() => {
-    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (stack.length) {
-        setStack((s) => s.slice(0, -1));
-        return true;
-      }
-      if (tab !== "home") {
-        setTabState("home");
-        return true;
-      }
-      return false;
-    });
+    const sub = BackHandler.addEventListener("hardwareBackPress", back);
     return () => sub.remove();
-  }, [stack.length, tab]);
+  }, [back]);
 
   const value = useMemo<Nav>(
     () => ({
@@ -130,11 +129,13 @@ export function NavProvider({
         setStack((s) => [...s.slice(0, -1), r]);
       },
       back,
+      dismiss,
+      registerBackGuard,
       reset: () => setStack([]),
       month,
       setMonth,
     }),
-    [tab, stack, back, month],
+    [tab, stack, back, dismiss, registerBackGuard, month],
   );
   return <NavContext.Provider value={value}>{children}</NavContext.Provider>;
 }

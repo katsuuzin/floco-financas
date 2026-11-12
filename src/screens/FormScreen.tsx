@@ -1,6 +1,8 @@
-import React, { useRef, useState } from "react";
-import { View, Pressable } from "react-native";
-import { T, Muted, I, Field, DateField, Choice, Toggle, Button, Box, IconButton, Segmented, AmountField, styles as k } from "../ui/kit";
+import React, { useEffect, useRef, useState } from "react";
+import { View, Pressable, Keyboard } from "react-native";
+import { T, Muted, I, Field, DateField, Choice, Toggle, Button, Box, IconButton, Segmented, AmountField, type TextControl, styles as k } from "../ui/kit";
+import { DiscardDraftSheet } from "../ui/Sheet";
+import { CATALOG, parentOf } from "../categories.mjs";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
@@ -19,6 +21,12 @@ import { minimumPayment, chosenInvoiceMonth } from "../invoices.mjs";
 import { previewOf, contractStatus } from "../contracts.mjs";
 import { archiveAccount, visibleAccounts } from "../accountOrder.mjs";
 
+const budgetCategories = (state: any, budgetType: string) =>
+  categoryNames(state).filter((name: string) => {
+    const catalog = CATALOG.find((item) => item.name === (parentOf(state, name) || name));
+    return !catalog || catalog.types.includes(budgetType);
+  });
+
 const COLORS: [string, string][] = [
   ["#311E0D", "Marrom"],
   ["#820AD1", "Roxo"],
@@ -28,8 +36,8 @@ const COLORS: [string, string][] = [
   ["#B53846", "Vermelho"],
 ];
 
-export default function FormScreen({ kind, initial }: { kind: string; initial?: any }) {
-  return kind === "expenseBatch" ? <ExpenseBatchReview initial={initial} /> : <RegularFormScreen kind={kind} initial={initial} />;
+export default function FormScreen({ kind, initial, scrollTo }: { kind: string; initial?: any; scrollTo: (y: number) => void }) {
+  return kind === "expenseBatch" ? <ExpenseBatchReview initial={initial} /> : <RegularFormScreen kind={kind} initial={initial} scrollTo={scrollTo} />;
 }
 
 function ExpenseBatchReview({ initial }: { initial: any }) {
@@ -142,30 +150,59 @@ function ExpenseBatchReview({ initial }: { initial: any }) {
   );
 }
 
-function RegularFormScreen({ kind, initial }: { kind: string; initial?: any }) {
+function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?: any; scrollTo: (y: number) => void }) {
   const { c } = useTheme();
   const { state, commit, setNotice, perform, confirm, show } = useStore();
   const nav = useNav();
   const [form, setForm] = useState<any>(() => defaults(kind, state, initial));
+  const baseline = useRef(JSON.stringify(form));
+  const [discard, setDiscard] = useState(false);
+  const [amountError, setAmountError] = useState("");
+  const amountInput = useRef<TextControl>(null);
+  const amountTop = useRef(0);
+  const [moreCategories, setMoreCategories] = useState(false);
   const [details, setDetails] = useState(
     () => !!(initial?.notes || initial?.refund || initial?.ignored || initial?.tags?.length || initial?.repeat === "installments"),
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const set = (key: string, value: any) => setForm((f: any) => ({ ...f, [key]: value }));
+  const set = (key: string, value: any) => {
+    if (key === "amount") setAmountError("");
+    setForm((f: any) => ({ ...f, [key]: value }));
+  };
+  const dirty = JSON.stringify(form) !== baseline.current;
+  useEffect(() => nav.registerBackGuard(() => {
+    if (saving) return true;
+    if (!dirty) return false;
+    Keyboard.dismiss();
+    setDiscard(true);
+    return true;
+  }), [nav.registerBackGuard, dirty, saving]);
   const accounts = visibleAccounts(state);
   const cards = state.cards.filter((x: any) => !x.archived || x.id === form.cardId);
 
   const save = async (again = false) => {
     if (saving) return;
+    if (form.kind === "transaction" || form.kind === "budget") {
+      try {
+        parseMoney(form.amount);
+      } catch (error: any) {
+        setAmountError(error.message);
+        scrollTo(amountTop.current);
+        requestAnimationFrame(() => amountInput.current?.focus());
+        return;
+      }
+    }
     setSaving(true);
     setError("");
     try {
       await commit(buildChange(form, nav.month));
       setNotice("Salvo no aparelho");
-      if (again)
-        setForm((f: any) => ({ ...defaults(kind, state), type: f.type, cardId: f.cardId, accountId: f.accountId, date: f.date, category: f.category }));
-      else nav.back();
+      if (again) {
+        const next = { ...defaults(kind, state), type: form.type, cardId: form.cardId, accountId: form.accountId, date: form.date, category: form.category };
+        baseline.current = JSON.stringify(next);
+        setForm(next);
+      } else nav.dismiss();
     } catch (e: any) {
       setError(e?.message || "Não foi possível salvar.");
     } finally {
@@ -192,7 +229,7 @@ function RegularFormScreen({ kind, initial }: { kind: string; initial?: any }) {
               return next;
             },
             "Conta arquivada",
-          ).then((ok) => ok && nav.back()),
+          ).then((ok) => ok && nav.dismiss()),
         "Arquivar",
       );
     confirm(
@@ -200,13 +237,14 @@ function RegularFormScreen({ kind, initial }: { kind: string; initial?: any }) {
       form.name,
       () =>
         perform((s: any) => ({ ...s, accounts: s.accounts.filter((a: any) => a.id !== form.id) }), "Conta excluída").then(
-          (ok) => ok && nav.back(),
+          (ok) => ok && nav.dismiss(),
         ),
       "Excluir",
     );
   };
 
   const tx = form.kind === "transaction";
+  const availableCategories: string[] = form.kind === "budget" ? budgetCategories(state, form.budgetType || "expense") : [];
   return (
     <View style={{ gap: 18 }}>
       <View style={[k.row, { justifyContent: "space-between" }]}>
@@ -236,17 +274,21 @@ function RegularFormScreen({ kind, initial }: { kind: string; initial?: any }) {
               }
             />
           )}
-          <AmountField
-            value={form.amount}
-            onChange={(v) => set("amount", v)}
-            autoFocus={!form.editId}
-            color={form.type === "income" ? c.green : undefined}
-          />
+          <View onLayout={(event) => { amountTop.current = event.nativeEvent.layout.y; }}>
+            <AmountField
+              value={form.amount}
+              onChange={(v) => set("amount", v)}
+              autoFocus={!form.editId}
+              color={form.type === "income" ? c.green : undefined}
+              error={amountError}
+              inputRef={amountInput}
+            />
+          </View>
           {!form.editId && form.type !== "transfer" && (
             <Pressable
               accessibilityRole="button"
               onPress={() => nav.replace({ name: "receipt" })}
-              style={[k.row, { minHeight: 44, gap: 8, alignSelf: "flex-start" }]}
+              style={[k.row, { minHeight: 48, gap: 8, alignSelf: "flex-start" }]}
             >
               <I name="camera" size={16} color={c.primary} />
               <T style={{ color: c.primary, fontSize: 13, fontFamily: "SoraSemi" }}>Preencher a partir de um comprovante</T>
@@ -262,7 +304,7 @@ function RegularFormScreen({ kind, initial }: { kind: string; initial?: any }) {
           </View>
           <View style={[k.row, { marginTop: -8, gap: 4 }]}>
             <IconButton name="chevron-left" label="Dia anterior" onPress={() => set("date", shiftDay(form.date, -1))} />
-            <Pressable accessibilityRole="button" onPress={() => set("date", today())} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 8 }}>
+            <Pressable accessibilityRole="button" onPress={() => set("date", today())} style={{ minHeight: 48, justifyContent: "center", paddingHorizontal: 8 }}>
               <T style={{ fontSize: 13, color: c.primary }}>Hoje</T>
             </Pressable>
             <IconButton name="chevron-right" label="Próximo dia" onPress={() => set("date", shiftDay(form.date, 1))} />
@@ -284,7 +326,7 @@ function RegularFormScreen({ kind, initial }: { kind: string; initial?: any }) {
                 return { ...f, description: v, ...(rule ? { category: rule.category, subcategory: rule.subcategory || "" } : {}) };
               })
             }
-            hint="Sem descrição, o lançamento usa o nome da categoria. As regras de categorização sugerem a categoria."
+            hint={form.type === "transfer" ? "Use a descrição para identificar a transferência." : "As regras sugerem a categoria pela descrição. Se o campo ficar vazio, o nome da categoria será usado."}
           />
           {form.type !== "transfer" && (
             <CategoryRow
@@ -298,7 +340,7 @@ function RegularFormScreen({ kind, initial }: { kind: string; initial?: any }) {
           {form.type === "expense" && (
             <Choice
               label="Tipo de gasto"
-              values={[["", "Automático (pela categoria)"], ...spendTypeConfig(state).types.filter((t: any) => !t.saved).map((t: any) => [t.id, t.name])] as [string, string][]}
+              values={[["", "Automático (pela categoria)"], ...spendTypeConfig(state).types.filter((t: any) => !t.saved).map((t: any) => [t.id, t.id === "cuttable" && t.name === "Cortável" ? "Pode cortar" : t.name])] as [string, string][]}
               value={form.spendType || ""}
               onChange={(v) => set("spendType", v)}
             />
@@ -343,9 +385,12 @@ function RegularFormScreen({ kind, initial }: { kind: string; initial?: any }) {
             accessibilityRole="button"
             accessibilityState={{ expanded: details }}
             onPress={() => setDetails(!details)}
-            style={[k.row, { minHeight: 48 }]}
+            style={[k.row, { minHeight: 48, borderBottomWidth: 1, borderColor: c.line }]}
           >
-            <T style={{ fontFamily: "SoraSemi", color: c.primary, flex: 1 }}>{details ? "Ocultar detalhes" : "Mais detalhes"}</T>
+            <T style={{ fontFamily: "SoraSemi", color: c.primary, flex: 1 }}>Mais detalhes</T>
+            <View style={{ transform: [{ rotate: details ? "180deg" : "0deg" }] }} importantForAccessibility="no">
+              <I name="chevron-down" color={c.primary} />
+            </View>
           </Pressable>
           {details && (
             <View style={{ gap: 18 }}>
@@ -506,7 +551,19 @@ function RegularFormScreen({ kind, initial }: { kind: string; initial?: any }) {
               }
             />
           )}
-          <Choice label="Cor" values={COLORS} value={form.color || COLORS[0][0]} onChange={(v) => set("color", v)} />
+          <View style={{ gap: 8 }}>
+            <T style={k.label}>Cor</T>
+            <View accessibilityRole="radiogroup" accessibilityLabel="Cor da conta" style={[k.row, { flexWrap: "wrap" }]}>
+              {COLORS.map(([hex, label]) => {
+                const selected = (form.color || COLORS[0][0]) === hex;
+                return <Pressable key={hex} accessibilityRole="radio" accessibilityLabel={label} accessibilityState={{ checked: selected }}
+                  onPress={() => set("color", hex)} style={{ minWidth: 64, minHeight: 56, alignItems: "center", justifyContent: "center", gap: 4 }}>
+                  <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: hex, borderWidth: selected ? 3 : 1, borderColor: selected ? c.text : c.line }} />
+                  <Muted style={{ color: selected ? c.text : c.muted }}>{label}</Muted>
+                </Pressable>;
+              })}
+            </View>
+          </View>
           <Toggle label="Ocultar saldo desta conta" value={!!form.hideBalance} onChange={(v) => set("hideBalance", v)} />
           <Toggle
             label="Incluir no saldo total"
@@ -558,15 +615,22 @@ function RegularFormScreen({ kind, initial }: { kind: string; initial?: any }) {
               ["income", "Meta de receita"],
             ]}
             value={form.budgetType || "expense"}
-            onChange={(v) => set("budgetType", v)}
+            onChange={(v) => {
+              const available = budgetCategories(state, v);
+              setMoreCategories(false);
+              setForm((f: any) => ({ ...f, budgetType: v, categories: f.categories.filter((name: string) => available.includes(name)) }));
+            }}
           />
-          <Field label="Valor (R$)" value={form.amount} onChange={(v) => set("amount", v)} numeric autoFocus={!form.id} />
+          <View onLayout={(event) => { amountTop.current = event.nativeEvent.layout.y; }}>
+            <Field label="Valor (R$)" placeholder="0,00" value={form.amount} onChange={(v) => set("amount", v)}
+              numeric autoFocus={!form.id} error={amountError} inputRef={amountInput} />
+          </View>
           <Field label="Nome (opcional)" value={form.name} onChange={(v) => set("name", v)} placeholder="Ex.: Essenciais" />
           <View style={{ gap: 8 }}>
-            <T style={k.label}>Categorias</T>
+            <T style={k.label}>Categorias principais</T>
             <View style={k.chips}>
-              {categoryNames(state).map((name: string) => {
-                const list: string[] = form.categories?.length ? form.categories : form.category && form.id ? [form.category] : [];
+              {(moreCategories ? availableCategories : availableCategories.filter((name, index) => index < 6 || form.categories.includes(name))).map((name: string) => {
+                const list: string[] = form.categories;
                 const on = list.includes(name);
                 return (
                   <Pressable
@@ -581,10 +645,22 @@ function RegularFormScreen({ kind, initial }: { kind: string; initial?: any }) {
                 );
               })}
             </View>
+            {availableCategories.length > 6 && (
+              <Pressable accessibilityRole="button" accessibilityState={{ expanded: moreCategories }}
+                onPress={() => setMoreCategories(!moreCategories)} style={[k.row, { minHeight: 48 }]}>
+                <T style={{ color: c.primary }}>{moreCategories ? "Mostrar menos categorias" : "Mais categorias"}</T>
+                <I name={moreCategories ? "chevron-up" : "chevron-down"} color={c.primary} size={16} />
+              </Pressable>
+            )}
           </View>
           <View style={{ gap: 8 }}>
-            <T style={k.label}>Onde (vazio = todas as contas e cartões)</T>
+            <T style={k.label}>Onde</T>
             <View style={k.chips}>
+              <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: !form.where?.length }}
+                onPress={() => set("where", [])}
+                style={[k.chip, { backgroundColor: form.where?.length ? c.surface : c.primary }]}>
+                <T style={{ color: form.where?.length ? c.text : c.onPrimary }}>Todas as contas</T>
+              </Pressable>
               {[...accounts, ...cards].map((x: any) => {
                 const list: string[] = form.where || [];
                 const on = list.includes(x.id);
@@ -953,7 +1029,10 @@ function RegularFormScreen({ kind, initial }: { kind: string; initial?: any }) {
             value={form.type === "income" ? "income" : "expense"}
             onChange={(v) => set("type", v)}
           />
-          <Field label="Valor (R$)" value={form.amount} onChange={(v) => set("amount", v)} numeric autoFocus={!form.id} />
+          <View onLayout={(event) => { amountTop.current = event.nativeEvent.layout.y; }}>
+            <Field label="Valor (R$)" placeholder="0,00" value={form.amount} onChange={(v) => set("amount", v)}
+              numeric autoFocus={!form.id} error={amountError} inputRef={amountInput} />
+          </View>
           <Field label="Descrição" value={form.description} onChange={(v) => set("description", v)} placeholder="Ex.: Aluguel, Salário, Streaming" />
           <Choice
             label="Frequência"
@@ -1074,6 +1153,7 @@ function RegularFormScreen({ kind, initial }: { kind: string; initial?: any }) {
       />
       {tx && !form.editId && <Button title="Salvar e continuar" secondary disabled={saving} onPress={() => save(true)} />}
       <View style={{ height: 24 }} />
+      {discard && <DiscardDraftSheet onContinue={() => setDiscard(false)} onDiscard={nav.dismiss} />}
     </View>
   );
 }

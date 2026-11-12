@@ -1,7 +1,8 @@
 // S2–S5 — personalização da Início, atalhos, Análise e quarto botão da barra.
 export const HOME_BLOCKS = [
-  ["inbox", "Pendentes das notificações"],
+  ["inbox", "Leitura automática"],
   ["firstSteps", "Primeiros passos"],
+  ["overdue", "Atrasadas"],
   ["pending", "Pendências do mês"],
   ["insights", "Destaques do assistente"],
   ["shortcuts", "Atalhos"],
@@ -20,7 +21,6 @@ export const DEFAULT_HOME_HIDDEN = ["insights", "shortcuts", "goals", "receivabl
 
 export const ANALYSIS_BLOCKS = [
   ["balance", "Balanço do mês"],
-  ["categories", "Despesas por categoria"],
   ["flow", "Fluxo dos últimos 6 meses"],
   ["net", "Patrimônio em 12 meses"],
   ["pace", "Ritmo de gasto"],
@@ -42,8 +42,8 @@ export const DESTINATIONS = [
   ["installments", "Parcelamentos", "calendar"],
   ["financings", "Financiamentos", "home"],
   ["loans", "Empréstimos", "dollar-sign"],
-  ["receivables", "Quem me deve", "users"],
-  ["payables", "Quem eu devo", "user-minus"],
+  ["receivables", "Entre pessoas › Me devem", "users"],
+  ["payables", "Entre pessoas › Eu devo", "user-minus"],
   ["reports", "Relatórios", "file-text"],
   ["cashflow", "Fluxo de caixa", "activity"],
   ["accounts", "Contas", "briefcase"],
@@ -59,6 +59,10 @@ export function orderedBlocks(all, saved, hiddenDefault) {
   const ids = all.map(([id]) => id);
   const list = (saved || []).filter((b) => ids.includes(b.id));
   for (const id of ids) if (!list.some((b) => b.id === id)) list.push({ id, visible: !hiddenDefault.includes(id) });
+  if (ids.includes("overdue") && !saved?.some((b) => b.id === "overdue")) {
+    const overdue = list.splice(list.findIndex((b) => b.id === "overdue"), 1)[0];
+    list.splice(list.findIndex((b) => b.id === "pending"), 0, overdue);
+  }
   return list.map((b) => ({ ...b, label: all.find(([id]) => id === b.id)[1] }));
 }
 

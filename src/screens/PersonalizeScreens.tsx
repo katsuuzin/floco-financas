@@ -173,10 +173,10 @@ export function WelcomeScreen() {
       <View style={{ alignSelf: "stretch", gap: 10 }}>
         <Button title="Criar minha primeira conta" icon="plus" onPress={() => done(() => nav.push({ name: "form", kind: "account" }))} />
         <Button title="Explorar com dados fictícios" secondary onPress={() => perform(demoState(), "Demonstração carregada · valores fictícios").then(() => done())} />
-        <Button title="Restaurar um backup" secondary onPress={() => done(() => nav.push({ name: "settings" }))} />
+        <Button title="Restaurar um backup" secondary onPress={() => done(() => nav.push({ name: "dataTools" }))} />
       </View>
       <View style={[k.row, { gap: 8 }]}>
-        <Muted style={{ fontSize: 11, color: c.muted }}>Sem cadastro, sem anúncios, sem conexão com o banco.</Muted>
+        <Muted style={{ fontSize: 12, color: c.muted }}>Sem cadastro, sem anúncios, sem conexão com o banco.</Muted>
       </View>
     </View>
   );

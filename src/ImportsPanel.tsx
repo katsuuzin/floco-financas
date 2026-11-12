@@ -1,15 +1,15 @@
+import { Button, Choice, Toggle, styles as k } from "./ui/kit";
 import { brDate } from "./dates.mjs";
 import { visibleAccounts } from "./accountOrder.mjs";
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import {
+  FlatList,
   View,
   Text,
   TextInput,
   Pressable,
-  ScrollView,
   Alert,
   NativeModules,
-  Switch,
   ActivityIndicator,
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
@@ -22,10 +22,10 @@ import {
 } from "./imports.mjs";
 import { parsePDFStatement } from "./statement-pdf.mjs";
 import { money } from "./finance.mjs";
-export default function ImportsPanel({ state, c, onChange, onClose }: any) {
+export default function ImportsPanel({ state, c, onChange, storageError }: any) {
   const [rows, setRows] = useState<any[]>([]),
     [selected, setSelected] = useState<number[]>([]),
-    [account, setAccount] = useState(""),
+    [account, setAccount] = useState(() => visibleAccounts(state)[0]?.id || ""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [page, setPage] = useState(0),
@@ -47,8 +47,10 @@ export default function ImportsPanel({ state, c, onChange, onClose }: any) {
     label: string,
     fn: any,
     selectedState?: boolean,
-    role: any = "button",
-  ) => (
+    role: "button" | "checkbox" = "button",
+  ) => role === "button" ? (
+    <Button title={label} onPress={fn} disabled={busy} secondary={!["Escolher arquivo CSV, OFX, PDF ou XLSX", "Importar selecionadas"].includes(label)} />
+  ) : (
     <Pressable
       disabled={busy}
       accessibilityRole={role}
@@ -56,9 +58,7 @@ export default function ImportsPanel({ state, c, onChange, onClose }: any) {
         disabled: busy,
         ...(selectedState === undefined
           ? {}
-          : role === "radio"
-            ? { checked: selectedState }
-            : { checked: selectedState }),
+          : { checked: selectedState }),
       }}
       onPress={fn}
       style={({ pressed }) => ({
@@ -227,44 +227,18 @@ export default function ImportsPanel({ state, c, onChange, onClose }: any) {
       ],
     );
   };
-  return (
-    <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <View
-        style={{
-          paddingHorizontal: 16,
-          paddingVertical: 4,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 16,
-          borderBottomWidth: 1,
-          borderColor: c.line,
-        }}
-      >
-        {button("Voltar", onClose)}
-        {text("Importar extrato", true)}
-      </View>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ padding: 20, gap: 10, paddingBottom: 50 }}
-      >
+  const header = (
+    <View style={{ gap: 12, marginBottom: 12 }}>
+      {!!storageError && <Text accessibilityRole="alert" style={{ color: c.red }}>{storageError}</Text>}
         {text(
           "Importar soma lançamentos realizados a uma conta existente. Não substitui os dados. Confira conta, datas, valores e possíveis duplicatas antes de confirmar.",
         )}
         {button("Escolher arquivo CSV, OFX, PDF ou XLSX", pick)}
-        {text("Conta de destino", true)}
-        {!visibleAccounts(state).length &&
-          text("Cadastre uma conta em Mais → Contas antes de importar.")}
-        {visibleAccounts(state).map((a: any) =>
-          button(
-            (account === a.id ? "✓ " : "") + a.name,
-            () => {
-              setAccount(a.id);
-              setSelected([]);
-            },
-            account === a.id,
-            "radio",
-          ),
-        )}
+        {visibleAccounts(state).length ? (
+          <Choice label="Conta de destino" value={account}
+            values={visibleAccounts(state).map((a: any) => [a.id, a.name])}
+            onChange={(id) => { setAccount(id); setSelected([]); }} />
+        ) : text("Cadastre uma conta em Mais › Contas antes de importar.")}
         {text(
           "CSV: Data;Descrição;Valor (R$);Tipo;Categoria. Datas DD/MM/AAAA (também aceita AAAA-MM-DD), valores brasileiros. OFX: lançamentos bancários e FITID. Transferências CSV devem ser lançadas entre duas contas no Floco.",
         )}
@@ -294,16 +268,7 @@ export default function ImportsPanel({ state, c, onChange, onClose }: any) {
             "PDF conferido: as movimentações conciliam com os saldos e totais do extrato.",
             true,
           )}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <View style={{ flex: 1 }}>
-            {text("Evitar possíveis duplicatas", true)}
-          </View>
-          <Switch
-            accessibilityLabel="Evitar possíveis duplicatas"
-            value={skipDuplicates}
-            onValueChange={setSkipDuplicates}
-          />
-        </View>
+        <Toggle label="Evitar possíveis duplicatas" value={skipDuplicates} onChange={setSkipDuplicates} />
         {text(
           "Identificadores repetidos sempre são ignorados. Sem identificador, comparamos conta, data, tipo e valor, respeitando a quantidade de ocorrências. Confira compras legítimas de mesmo valor.",
         )}
@@ -364,7 +329,22 @@ export default function ImportsPanel({ state, c, onChange, onClose }: any) {
               setSelected(rows.flatMap((r, i) => (r.error ? [] : [i]))),
             )}
             {button("Limpar seleção", () => setSelected([]))}
-            {rows.slice(page * 50, page * 50 + 50).map((r, i) => {
+          </>
+        )}
+    </View>
+  );
+  return (
+    <FlatList
+      style={{ flex: 1 }}
+      contentContainerStyle={[k.content, { maxWidth: 900, width: "100%", alignSelf: "center" }]}
+      keyboardShouldPersistTaps="handled"
+      data={rows.slice(page * 50, page * 50 + 50)}
+      keyExtractor={(row, index) => `${page}:${row.sourceLine}:${index}`}
+      initialNumToRender={8}
+      maxToRenderPerBatch={8}
+      windowSize={7}
+      ListHeaderComponent={header}
+      renderItem={({ item: r, index: i }) => {
               const index = page * 50 + i;
               return (
                 <View
@@ -374,6 +354,7 @@ export default function ImportsPanel({ state, c, onChange, onClose }: any) {
                     backgroundColor: c.surface,
                     borderRadius: 14,
                     gap: 6,
+                    marginBottom: 10,
                   }}
                 >
                   {text("Linha " + r.sourceLine, true)}
@@ -405,12 +386,11 @@ export default function ImportsPanel({ state, c, onChange, onClose }: any) {
                   )}
                 </View>
               );
-            })}
+      }}
+      ListFooterComponent={<View style={{ gap: 12 }}>
             {page > 0 && button("Página anterior", () => setPage(page - 1))}
             {(page + 1) * 50 < rows.length &&
               button("Próxima página", () => setPage(page + 1))}
-          </>
-        )}
         {!!message && text(message, true)}
         {!!error && (
           <Text
@@ -420,7 +400,6 @@ export default function ImportsPanel({ state, c, onChange, onClose }: any) {
             {error}
           </Text>
         )}
-      </ScrollView>
       {!!rows.length && (
         <View
           style={{
@@ -439,6 +418,7 @@ export default function ImportsPanel({ state, c, onChange, onClose }: any) {
           {button("Importar selecionadas", confirmImport)}
         </View>
       )}
-    </View>
+      </View>}
+    />
   );
 }

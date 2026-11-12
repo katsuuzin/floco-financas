@@ -45,7 +45,7 @@ test("ranking ordena por contagem e o relatório em texto lista tudo", () => {
   const r = rankedUsage(u);
   assert.equal(r[0].label, "Início");
   assert.equal(usageLabel("contracts:loan"), "Empréstimos");
-  assert.equal(usageLabel("tool:receivables"), "Quem me deve");
+  assert.equal(usageLabel("tool:receivables"), "Entre pessoas › Me devem");
   const text = usageReport(u);
   assert.match(text, /desde 2026-11-12 \(4 aberturas\)/);
   assert.match(text, /2\tInício/);

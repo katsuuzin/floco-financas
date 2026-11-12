@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { Pressable, View } from "react-native";
-import { Box, I, IconButton, Muted, T, Toggle, space, styles as k } from "../ui/kit";
+import { Box, Button, I, Muted, T, Toggle, space, styles as k } from "../ui/kit";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { today } from "../finance.mjs";
@@ -48,7 +48,7 @@ export default function RestockList({ limit = 5, alerts = false }: { limit?: num
   };
   if (!items.length && !alerts) return null;
 
-  const add = (name: string) => void perform((s: any) => addShoppingItem(s, displayName(name)), "");
+  const add = (name: string) => void perform((s: any) => addShoppingItem(s, displayName(name)), "Item adicionado à lista", { undoable: true });
 
   return (
     <Box style={{ padding: 0, overflow: "hidden" }}>
@@ -67,14 +67,13 @@ export default function RestockList({ limit = 5, alerts = false }: { limit?: num
         {inflation && <Muted>Variação dos preços nas compras dos últimos 3 meses: {String(inflation.percent).replace(".", ",")}%.</Muted>}
       </View>}
       {(!alerts || expanded) && items.map((i, idx) => {
-        const late = i.daysLate > 0 ? `atrasado ${days(i.daysLate)}` : i.status === "due" ? "na hora de comprar" : `daqui a ${days(Math.max(1, -i.daysLate))}`;
         return (
-          <View key={i.productId} style={[k.row, idx < items.length - 1 && k.hairline, { borderBottomColor: c.line, paddingLeft: 16, paddingRight: 4, minHeight: 68, gap: 4 }]}>
+          <View key={i.productId} style={[k.row, { flexWrap: "wrap" }, idx < items.length - 1 && k.hairline, { borderBottomColor: c.line, paddingLeft: 16, paddingRight: 4, minHeight: 68, gap: 4 }]}>
             <View style={{ flex: 1, paddingVertical: 10, gap: 2 }}>
               <T>{displayName(i.name)}</T>
-              <Muted>{alerts ? i.reason : `${late} · compra a cada ${days(i.avgDays)}`}</Muted>
+              <Muted>{alerts ? i.reason : `Há ${days(i.daysSinceLast)} sem comprar`}</Muted>
             </View>
-            <IconButton name="plus" label={`Colocar ${displayName(i.name)} na lista de compras`} color={c.primary} onPress={() => add(i.name)} />
+            <Button icon="plus" title="Adicionar à lista" secondary onPress={() => add(i.name)} />
           </View>
         );
       })}

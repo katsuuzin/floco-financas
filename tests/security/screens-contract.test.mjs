@@ -45,6 +45,18 @@ test("Extrato compartilha filtro e calendário e nomeia os controles", () => {
   for (const node of nodes(statement, opening).filter((node) => ["Button", "Pressable", "TextInput"].includes(tag(node))))
     assert.ok(named(prop(node, tag(node) === "Button" ? "title" : "accessibilityLabel")), tag(node));
 });
+test("Notificações bancárias usa cabeçalho comum e bloqueia leitura sem acesso do Android", () => {
+  const screen = read("src/screens/NotificationsScreen.tsx");
+  assert.match(nav.text, /name: "notifications"/u);
+  assert.match(app.text, /notifications: "Notificações bancárias"/u);
+  assert.match(app.text, /case "notifications":\s*return <NotificationsScreen/u);
+  assert.ok(!screen.text.includes("<Switch"));
+  const toggle = nodes(screen, opening).find((node) => tag(node) === "Toggle" && copy(prop(node, "label")).includes("Ler notificações dos bancos"));
+  assert.ok(toggle);
+  assert.match(prop(toggle, "disabled").getText(), /!permission/u);
+  assert.match(screen.text, /Permita o acesso primeiro/u);
+});
+
 const amountField = nodes(read("src/ui/kit.tsx"), ts.isFunctionDeclaration).find((node) => node.name?.text === "AmountField");
 test("Campo de valor tem cálculo acessível e prévia anunciada", () => {
   assert.ok(amountField);
@@ -71,7 +83,7 @@ test("Contas expõe arquivamento, restauração e botões de ordem", () => {
 test("Metas e caixinhas usam abas, vínculo e operações próprias", () => {
   for (const name of ["linkGoalToPot", "archivePot", "potSummary"])
     assert.ok(nodes(accountsScreen, ts.isCallExpression).some((node) => node.expression.getText() === name), name);
-  assert.ok(nodes(accountsScreen, opening).some((node) => tag(node) === "Segmented" && copy(prop(node, "label")).includes("Planejamento")));
+  assert.ok(nodes(accountsScreen, opening).some((node) => tag(node) === "Segmented" && copy(prop(node, "accessibilityLabel")).includes("Metas e caixinhas")));
 });
 test("Editor de estilos tem prévia legível e seleção anunciada", () => {
   const editor = read("src/PlanningPanel.tsx");

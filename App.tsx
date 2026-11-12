@@ -17,7 +17,7 @@ import {
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { BlurTargetView } from "expo-blur";
-import { BlurTargetContext } from "./src/ui/Sheet";
+import { BlurTargetContext, SheetModal } from "./src/ui/Sheet";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
 import * as LocalAuthentication from "expo-local-authentication";
@@ -90,7 +90,7 @@ import { reschedule, updateWidgets } from "./src/app/notify";
 import PlanningPanel from "./src/PlanningPanel";
 import ImportsPanel from "./src/ImportsPanel";
 import ReceiptPanel from "./src/ReceiptPanel";
-import NotificationsPanel from "./src/NotificationsPanel";
+import NotificationsScreen from "./src/screens/NotificationsScreen";
 import SecurityPanel from "./src/SecurityPanel";
 import UpdatesPanel from "./src/UpdatesPanel";
 import usePublicUpdates from "./src/usePublicUpdates";
@@ -304,19 +304,24 @@ const TITLES: Record<string, string> = {
   goals: "Metas e caixinhas",
   settings: "Configurações",
   dataTools: "Importar e exportar",
+  imports: "Importar extrato",
+  receipt: "Foto ou comprovante",
+  security: "PIN do Floco",
+  updates: "Atualizações",
   recurrences: "Recorrências",
   installments: "Parcelamentos",
   reports: "Relatórios",
   projections: "Projeções",
   rules: "Categorização automática",
   reminders: "Lembretes",
+  notifications: "Notificações bancárias",
   assistant: "Assistente",
   layout: "Personalizar",
   preferences: "Preferências",
   welcome: "Boas-vindas",
   reconcile: "Conferir fatura",
   trash: "Lixeira",
-  shopping: "Listas",
+  shopping: "Listas de compras",
   people: "Entre pessoas",
   debts: "Dívidas e contratos",
   usage: "Uso dos botões",
@@ -345,7 +350,9 @@ const routeTitle = (r: Route) =>
       : "Financiamentos"
     : r.name === "report"
       ? REPORT_TITLES[r.id] || "Relatório"
-      : TITLES[r.name] || "";
+      : r.name === "tool" ? (r.id === "reports" ? "Relatório personalizado" : "Categorias e tags")
+        : r.name === "security" && r.section === "backup" ? "Backup criptografado"
+        : TITLES[r.name] || "";
 
 function Shell({
   onPinChange,
@@ -404,49 +411,18 @@ function Shell({
     return () => sub.remove();
   }, []);
   const top = nav.top;
-
-  // Painéis que já trazem cabeçalho e rolagem próprios.
-  if (
-    top &&
-    [
-      "tool",
-      "imports",
-      "receipt",
-      "notifications",
-      "security",
-      "updates",
-    ].includes(top.name)
-  ) {
-    const common = { state, c, onChange: perform, onClose: nav.back };
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
-        {top.name === "tool" && (
-          <PlanningPanel {...common} initial={(top as any).id} />
-        )}
-        {top.name === "imports" && <ImportsPanel {...common} />}
-        {top.name === "receipt" && <ReceiptPanel {...common} />}
-        {top.name === "notifications" && <NotificationsPanel {...common} />}
-        {top.name === "security" && (
-          <SecurityPanel {...common} onPinChange={onPinChange} />
-        )}
-        {top.name === "updates" && (
-          <UpdatesPanel c={c} updates={updates} onBack={nav.back} />
-        )}
-        <Snackbar notice={notice} action={noticeAction} onClose={() => setNotice("")} />
-      </SafeAreaView>
-    );
-  }
+  const pageScroll = React.useRef<React.ComponentRef<typeof ScrollView>>(null);
 
   const firstRun =
     !state.settings.onboarded &&
     !state.accounts.length &&
     !state.transactions.length;
   const content = top ? (
-    renderRoute(top)
+    renderRoute(top, { state, c, onChange: perform, onPinChange, updates, storageError, scrollTo: (y) => pageScroll.current?.scrollTo({ y: Math.max(0, y), animated: true }) })
   ) : firstRun && nav.tab === "home" ? (
     <WelcomeScreen />
   ) : (
-    renderTab(nav.tab)
+    nav.tab === "transactions" ? null : renderTab(nav.tab)
   );
   const tab4 = layoutOf(state).tab4;
   const slot4 =
@@ -462,7 +438,7 @@ function Shell({
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         // Telas com campo ou barra fora da rolagem: sem isso o teclado os cobre no Android.
-        behavior={Platform.OS === "ios" || top?.name === "shoppingTrip" || top?.name === "scanProduct" || top?.name === "scanNota" || (top?.name === "form" && top.kind === "expenseBatch") ? "padding" : undefined}
+        behavior={Platform.OS === "ios" || top?.name === "shoppingTrip" || top?.name === "scanProduct" || top?.name === "scanNota" || top?.name === "imports" || top?.name === "receipt" || top?.name === "security" || top?.name === "tool" || top?.name === "notifications" || (top?.name === "form" && top.kind === "expenseBatch") ? "padding" : undefined}
       >
         {top?.name !== "form" && (
           <View style={[s.header, { backgroundColor: pageBg }]}>
@@ -511,7 +487,11 @@ function Shell({
             </T>
           </Pressable>
         )}
+        {!top && nav.tab === "transactions" ? (
+          <TransactionsScreen storageError={storageError} />
+        ) : top?.name === "trash" || top?.name === "imports" ? content : (
         <ScrollView
+          ref={pageScroll}
           key={top ? `${top.name}-${nav.stack.length}` : nav.tab}
           contentContainerStyle={[
             k.content,
@@ -527,6 +507,7 @@ function Shell({
           )}
           {content}
         </ScrollView>
+        )}
         {!top && (
           <View
             accessibilityRole="tablist"
@@ -575,12 +556,19 @@ function Shell({
 }
 
 function renderTab(tab: Tab) {
-  if (tab === "transactions") return <TransactionsScreen />;
   if (tab === "analysis") return <AnalysisScreen />;
   if (tab === "more") return <MoreScreen />;
   return <HomeScreen />;
 }
-function renderRoute(r: Route) {
+function renderRoute(r: Route, { state, c, onChange, onPinChange, updates, storageError, scrollTo }: {
+  state: any;
+  c: ReturnType<typeof useTheme>["c"];
+  onChange: ReturnType<typeof useStore>["perform"];
+  onPinChange: () => void;
+  updates: ReturnType<typeof usePublicUpdates>;
+  storageError: string;
+  scrollTo: (y: number) => void;
+}) {
   switch (r.name) {
     case "accounts":
       return <AccountsScreen />;
@@ -592,6 +580,16 @@ function renderRoute(r: Route) {
       return <GoalsScreen />;
     case "dataTools":
       return <DataToolsScreen />;
+    case "updates":
+      return <UpdatesPanel c={c} updates={updates} />;
+    case "security":
+      return <SecurityPanel state={state} c={c} onChange={onChange} onPinChange={onPinChange} section={r.section} />;
+    case "imports":
+      return <ImportsPanel state={state} c={c} onChange={onChange} storageError={storageError} />;
+    case "receipt":
+      return <ReceiptPanel state={state} c={c} onChange={onChange} />;
+    case "tool":
+      return <PlanningPanel state={state} c={c} onChange={onChange} initial={r.id} />;
     case "settings":
       return <SettingsScreen />;
     case "contracts":
@@ -616,6 +614,8 @@ function renderRoute(r: Route) {
       return <RulesScreen />;
     case "reminders":
       return <RemindersScreen />;
+    case "notifications":
+      return <NotificationsScreen />;
     case "assistant":
       return <AssistantScreen />;
     case "layout":
@@ -627,7 +627,7 @@ function renderRoute(r: Route) {
     case "reconcile":
       return <ReconcileScreen />;
     case "trash":
-      return <TrashScreen />;
+      return <TrashScreen storageError={storageError} />;
     case "shopping":
       return <ShoppingListsScreen />;
     case "shoppingList":
@@ -647,7 +647,7 @@ function renderRoute(r: Route) {
     case "productDetail":
       return <ProductDetailScreen id={r.id} />;
     case "form":
-      return <FormScreen kind={r.kind} initial={r.initial} />;
+      return <FormScreen kind={r.kind} initial={r.initial} scrollTo={scrollTo} />;
   }
   return null;
 }
@@ -677,8 +677,14 @@ function TabButton({
         <I name={item.icon} color={on ? c.primary : c.muted} />
       </View>
       <T
+        maxFontSizeMultiplier={1.2}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}
         style={{
-          fontSize: 10,
+          width: "100%",
+          textAlign: "center",
+          fontSize: 12,
           color: on ? c.primary : c.muted,
           fontFamily: on ? "SoraSemi" : "Sora",
         }}
@@ -742,59 +748,26 @@ function AddSheet({
       initial: { type: "transfer" },
     },
   ];
+  if (!visible) return null;
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <Pressable
-        accessibilityLabel="Fechar"
-        onPress={onClose}
-        style={[s.backdrop, { backgroundColor: c.scrim }]}
-      >
-        <Pressable style={[s.sheet, { backgroundColor: c.surface }]}>
-          <T style={k.sectionTitle}>Adicionar</T>
-          <View style={s.sheetGrid}>
-            {options
-              .filter((o) => !o.hidden)
-              .map((o) => (
-                <Pressable
-                  key={o.label}
-                  accessibilityRole="button"
-                  accessibilityLabel={o.label}
-                  onPress={() => go(o.initial)}
-                  style={({ pressed }) => [
-                    s.sheetItem,
-                    { backgroundColor: c.soft, opacity: pressed ? 0.75 : 1 },
-                  ]}
-                >
-                  <I name={o.icon} size={26} color={o.color} />
-                  <T
-                    style={{
-                      fontFamily: "SoraSemi",
-                      fontSize: 13,
-                      textAlign: "center",
-                    }}
-                  >
-                    {o.label}
-                  </T>
-                </Pressable>
-              ))}
-          </View>
-          {!hasAccount && (
-            <Muted>
-              Cadastre uma conta primeiro: tocar em uma opção abre o cadastro.
-            </Muted>
-          )}
-        </Pressable>
-      </Pressable>
-    </Modal>
+    <SheetModal title="Adicionar" onClose={onClose}>
+      <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+        <View style={s.sheetGrid}>
+          {options.filter((option) => !option.hidden).map((option) => (
+            <Pressable key={option.label} accessibilityRole="button" accessibilityLabel={option.label}
+              onPress={() => go(option.initial)}
+              style={({ pressed }) => [s.sheetItem, { backgroundColor: c.soft, opacity: pressed ? 0.75 : 1 }]}>
+              <I name={option.icon} size={26} color={option.color} />
+              <T style={{ fontFamily: "SoraSemi", fontSize: 13, textAlign: "center" }}>{option.label}</T>
+            </Pressable>
+          ))}
+        </View>
+        {!hasAccount && <Muted>Cadastre uma conta para começar a lançar.</Muted>}
+      </ScrollView>
+    </SheetModal>
   );
 }
 
-// Aviso na base. Com ação (ex.: Desfazer), mostra o botão de 48 dp e fica mais tempo (store).
 function Snackbar({
   notice,
   action,
@@ -882,17 +855,6 @@ const s = StyleSheet.create({
     flexDirection: "row",
     gap: 14,
     alignItems: "center",
-  },
-  backdrop: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    padding: 20,
-    paddingBottom: 32,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    gap: 16,
   },
   sheetGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   sheetItem: {

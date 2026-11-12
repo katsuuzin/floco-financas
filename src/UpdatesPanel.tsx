@@ -1,14 +1,12 @@
+import { Button, Toggle } from "./ui/kit";
 import React from "react";
 import {
   View,
   Text,
-  Pressable,
-  ScrollView,
-  Switch,
   ActivityIndicator,
 } from "react-native";
 import * as Application from "expo-application";
-export default function UpdatesPanel({ c, onBack, updates: u }: any) {
+export default function UpdatesPanel({ c, updates: u }: any) {
   const text = (children: any, style: any = {}, rest: any = {}) => (
     <Text
       {...rest}
@@ -20,65 +18,10 @@ export default function UpdatesPanel({ c, onBack, updates: u }: any) {
       {children}
     </Text>
   );
-  const button = (
-    title: string,
-    action: any,
-    secondary = false,
-    disabled = false,
-  ) => (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled: !!u.busy || disabled }}
-      disabled={!!u.busy || disabled}
-      onPress={action}
-      style={({ pressed }) => ({
-        minHeight: 52,
-        padding: 16,
-        borderRadius: 16,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: secondary ? c.soft : c.primary,
-        opacity: u.busy || disabled ? 0.5 : pressed ? 0.75 : 1,
-      })}
-    >
-      {text(title, {
-        fontFamily: "SoraSemi",
-        color: secondary ? c.text : c.onPrimary,
-      })}
-    </Pressable>
-  );
+  const button = (title: string, action: () => void, secondary = false, disabled = false) =>
+    <Button title={title} onPress={action} secondary={secondary} disabled={!!u.busy || disabled} />;
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 16,
-          padding: 16,
-          borderBottomWidth: 1,
-          borderColor: c.line,
-        }}
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Voltar"
-          onPress={onBack}
-          style={{ minHeight: 48, justifyContent: "center", padding: 8 }}
-        >
-          {text("Voltar")}
-        </Pressable>
-        {text("Atualizações", { fontSize: 21, fontFamily: "SoraBold" })}
-      </View>
-      <ScrollView
-        contentContainerStyle={{
-          padding: 24,
-          paddingBottom: 48,
-          gap: 18,
-          maxWidth: 700,
-          width: "100%",
-          alignSelf: "center",
-        }}
-      >
+    <View style={{ gap: 12 }}>
         {text("Seu Floco sempre em dia.", {
           fontSize: 24,
           lineHeight: 32,
@@ -96,20 +39,8 @@ export default function UpdatesPanel({ c, onBack, updates: u }: any) {
             gap: 14,
           }}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            {text("Verificar automaticamente", {
-              flex: 1,
-              fontFamily: "SoraSemi",
-            })}
-            <Switch
-              accessibilityLabel="Verificar atualizações automaticamente"
-              value={u.autoCheck}
-              onValueChange={u.setAutomatic}
-              disabled={!u.ready}
-              trackColor={{ false: c.line, true: c.primary }}
-              thumbColor={u.autoCheck ? c.accent : c.muted}
-            />
-          </View>
+          <Toggle label="Verificar atualizações automaticamente" value={u.autoCheck}
+            onChange={u.setAutomatic} disabled={!u.ready} />
           {text(
             "Verifica ao abrir, ao voltar ao aplicativo e a cada 15 minutos enquanto ele estiver aberto. Uma nova versão aparece em um aviso no Floco.",
             { color: c.muted, fontSize: 13 },
@@ -173,7 +104,6 @@ export default function UpdatesPanel({ c, onBack, updates: u }: any) {
           "As consultas enviam ao GitHub apenas os pedidos de versão e download. Seus registros financeiros ficam no aparelho. A verificação não roda quando o app está fechado; não há instalação silenciosa nesta versão.",
           { color: c.muted, fontSize: 13 },
         )}
-      </ScrollView>
     </View>
   );
 }

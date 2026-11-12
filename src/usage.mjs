@@ -17,7 +17,7 @@ const ROUTE_LABELS = {
   settings: "Configurações",
   recurrences: "Recorrências",
   installments: "Parcelamentos",
-  reports: "Relatórios avançados",
+  reports: "Relatórios",
   projections: "Projeções",
   rules: "Regras",
   reminders: "Lembretes",
@@ -25,11 +25,13 @@ const ROUTE_LABELS = {
   layout: "Personalizar",
   preferences: "Preferências",
   reconcile: "Conciliação",
-  payables: "Quem eu devo",
+  payables: "Entre pessoas › Eu devo",
+  people: "Entre pessoas",
+  debts: "Dívidas e contratos",
   dataTools: "Importar e exportar",
   imports: "Importar arquivo",
-  receipt: "Importar comprovante",
-  notifications: "Notificações",
+  receipt: "Foto ou comprovante",
+  notifications: "Notificações bancárias",
   security: "Segurança",
   updates: "Atualizações",
   trash: "Lixeira",
@@ -64,7 +66,12 @@ export function usageLabel(key) {
   if (kind === "route") return ROUTE_LABELS[rest] || rest;
   if (kind === "form") return FORM_LABELS[rest] || `Formulário ${rest}`;
   if (kind === "contracts") return rest === "loan" ? "Empréstimos" : "Financiamentos";
-  if (kind === "tool") return rest === "receivables" ? "Quem me deve" : `Ferramenta ${rest}`;
+  if (kind === "tool") return ({
+    receivables: "Entre pessoas › Me devem",
+    categories: "Categorias e tags",
+    tags: "Categorias e tags",
+    reports: "Relatório personalizado",
+  })[rest] || "Ferramenta";
   if (kind === "report") return `Relatório ${rest}`;
   return key;
 }

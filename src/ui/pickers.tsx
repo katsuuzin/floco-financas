@@ -178,7 +178,7 @@ export function CategorySheet({
           onChangeText={setQ}
           placeholder="Buscar categoria ou subcategoria…"
           placeholderTextColor={c.muted}
-          style={{ minHeight: 46, paddingHorizontal: 14, borderRadius: 14, backgroundColor: c.soft, color: c.text, fontFamily: "Sora" }}
+          style={{ minHeight: 48, paddingHorizontal: 14, borderRadius: 14, backgroundColor: c.soft, color: c.text, fontFamily: "Sora" }}
         />
       </View>
       <ScrollView contentContainerStyle={{ paddingBottom: 16 }} keyboardShouldPersistTaps="handled">
@@ -278,5 +278,5 @@ const s = StyleSheet.create({
   row: { gap: 12, minHeight: 54, paddingHorizontal: 14, paddingVertical: 6 },
   rowIcon: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   dot: { width: 34, height: 34, borderRadius: 11, alignItems: "center", justifyContent: "center" },
-  subRow: { minHeight: 40, flexDirection: "row", alignItems: "center", paddingHorizontal: 8, borderRadius: 10 },
+  subRow: { minHeight: 48, flexDirection: "row", alignItems: "center", paddingHorizontal: 8, borderRadius: 10 },
 });

@@ -13,6 +13,7 @@ import { loadState, saveState, replaceState, LEGACY_KEY } from "../sqliteStore";
 import { seedRules, upgradeBuiltInRules } from "../rules.mjs";
 
 type Change = any | ((s: any) => any);
+type PerformOptions = { undoable?: boolean; undo?: (state: any) => any };
 export type NoticeAction = { label: string; onPress: () => void };
 export const NOTICE_MS = 5000;
 export const NOTICE_ACTION_MS = 10000;
@@ -24,8 +25,9 @@ type Store = {
   // Ação do aviso (ex.: Desfazer). Com ação, o aviso fica 10 s (ou o tempo recomendado pelo Android).
   noticeAction: NoticeAction | null;
   setNotice: (m: string, action?: NoticeAction | null) => void;
+  softFail: (message: string) => void;
   commit: (change: Change) => Promise<void>;
-  perform: (change: Change, message?: string, options?: { undoable?: boolean }) => Promise<boolean>;
+  perform: (change: Change, message?: string, options?: PerformOptions) => Promise<boolean>;
   confirm: (title: string, message: string, action: () => void, label?: string) => void;
   show: (cents: number, hidden?: boolean) => string;
   current: () => any;
@@ -91,7 +93,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       : Promise.resolve(NOTICE_MS);
     void wait.then((ms) => { if (alive) t = setTimeout(() => setNotice(""), Math.max(ms, noticeAction ? NOTICE_ACTION_MS : NOTICE_MS)); });
     return () => { alive = false; if (t) clearTimeout(t); };
-    return () => clearTimeout(t);
   }, [notice, noticeAction]);
 
   // Escritas serializadas: cada mudança parte do estado gravado mais recente.
@@ -126,10 +127,26 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   const perform = useCallback(
-    async (change: Change, message = "Salvo no aparelho", options: { undoable?: boolean } = {}) => {
+    async (change: Change, message = "Salvo no aparelho", options: PerformOptions = {}) => {
       try {
         await commit(change, message || "editar lista");
-        setNotice(message, options.undoable && message ? { label: "Desfazer", onPress: () => void undoRef.current?.("undo") } : null);
+        const undoChange = options.undo;
+        let undoing = false;
+        const onPress = () => {
+          if (!undoChange) {
+            void undoRef.current?.("undo");
+            return;
+          }
+          if (undoing) return;
+          undoing = true;
+          void commit(undoChange, false)
+            .then(() => setNotice("Alteração desfeita"))
+            .catch((error) => {
+              undoing = false;
+              Alert.alert("Não foi possível desfazer", error.message);
+            });
+        };
+        setNotice(message, options.undoable && message ? { label: "Desfazer", onPress } : null);
         return true;
       } catch (e: any) {
         Alert.alert("Não foi possível salvar", e?.message || String(e));
@@ -182,6 +199,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     notice,
     noticeAction,
     setNotice,
+    softFail: (message) => setNotice(message),
     commit,
     perform,
     confirm,

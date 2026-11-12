@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { emptyState, addTransaction } from "../src/finance.mjs";
-import { saveRecurrence } from "../src/planning.mjs";
-import { dueItems, planReminders } from "../src/reminders.mjs";
+import { emptyState, addTransaction, payInvoice } from "../src/finance.mjs";
+import { addPayable, addReceivable, payDebt, receiveDebt, saveRecurrence } from "../src/planning.mjs";
+import { dueItems, overdueItems, planReminders } from "../src/reminders.mjs";
 
 const base = () => ({
   ...emptyState(),
@@ -16,6 +16,24 @@ test("S7 vencimentos juntam pendências, faturas e recorrências", () => {
   s = saveRecurrence(s, { description: "Academia", amount: 9900, date: "2026-11-20", frequency: "monthly", accountId: "a", type: "expense" });
   const items = dueItems(s, "2026-11-07", "2026-11-30");
   assert.deepEqual(items.map((i) => i.label), ["Luz", "Fatura Roxo", "Academia"]);
+});
+
+test("atrasos usam a data civil, descontam pagamentos e incluem faturas antigas", () => {
+  const today = "2026-11-12";
+  let s = addTransaction(base(), { type: "expense", amount: 2000, date: "2026-11-11", description: "Aluguel", accountId: "a", confirmed: false });
+  s = addTransaction(s, { type: "income", amount: 1000, date: today, description: "Salário", accountId: "a", confirmed: false });
+  s = addTransaction(s, { type: "expense", amount: 5000, date: "2026-07-01", description: "Livro", cardId: "c" });
+  s = payInvoice(s, "c", "2026-07", "a", "2026-07-15", 2000);
+  s = addPayable(s, { person: "Ana", description: "Almoço", amount: 1400, date: "2026-11-08", dueDate: "2026-11-10" });
+  s = payDebt(s, s.payables[0].id, 1000, "a", "2026-11-11");
+  s = addReceivable(s, { person: "Bruno", description: "Ingresso", amount: 900, date: "2026-11-08", dueDate: "2026-11-10" });
+  s = receiveDebt(s, s.receivables[0].id, 900, "a", "2026-11-11");
+  assert.deepEqual(overdueItems(s, today).map(({ label, kind, amount, days }) => ({ label, kind, amount, days })), [
+    { label: "Fatura Roxo", kind: "pagar", amount: 3000, days: 120 },
+    { label: "Ana", kind: "pagar", amount: 400, days: 2 },
+    { label: "Aluguel", kind: "pagar", amount: 2000, days: 1 },
+  ]);
+  assert.equal(overdueItems({ ...s, cards: [{ ...s.cards[0], archived: true }] }, today).length, 2);
 });
 
 test("S7 desligado não agenda nada; ligado agenda manhã e noite e respeita antecedência", () => {

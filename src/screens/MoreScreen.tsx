@@ -1,5 +1,5 @@
 import React from "react";
-import { Group, Row, Muted, Box, T } from "../ui/kit";
+import { Group, Row } from "../ui/kit";
 import type { Icon } from "../ui/kit";
 import { useNav, Route } from "../app/nav";
 import { useStore } from "../app/store";
@@ -131,12 +131,6 @@ export default function MoreScreen() {
           ))}
         </Group>
       ))}
-      <Box style={{ marginTop: 24 }}>
-        <T style={{ fontFamily: "SoraSemi" }}>Sempre livre</T>
-        <Muted style={{ marginTop: 4 }}>
-          Todas as funções do Floco, sem plano pago e sem limite comercial.
-        </Muted>
-      </Box>
     </>
   );
 }

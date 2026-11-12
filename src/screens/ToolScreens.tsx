@@ -46,7 +46,11 @@ export function RulesScreen() {
         {!!probe.trim() && (
           <T style={{ color: hit ? c.green : c.muted }}>{hit ? `→ ${categoryLabel(hit.category, hit.subcategory)} (regra “${hit.pattern}”)` : "Nenhuma regra se aplica."}</T>
         )}
-        <Muted>Acentos e pontuação são ignorados. Use * como coringa e | para alternativas.</Muted>
+        <Muted>Acentos e pontuação são ignorados. Use * como coringa e | para alternativas. Regras com prioridade maior vencem.</Muted>
+        <View style={[k.row, { flexWrap: "wrap", gap: 8 }]}>
+          <Button title={type === "expense" ? "Testar Uber" : "Testar salário"} secondary onPress={() => setProbe(type === "expense" ? "UBER *TRIP" : "Pagamento de salário")} />
+          {type === "expense" && <Button title="Testar iFood" secondary onPress={() => setProbe("IFOOD")} />}
+        </View>
       </Box>
       <Section title={draft.id ? "Editar regra" : "Nova regra"} />
       <Box style={{ gap: 12 }}>
@@ -164,7 +168,7 @@ export function ReconcileScreen() {
       <Choice label="Cartão" values={cards.map((x: any) => [x.id, x.name])} value={cardId} onChange={setCardId} />
       <MonthBar />
       <Button title={file ? `Trocar arquivo (${file})` : "Escolher arquivo da fatura"} icon="upload" onPress={pick} />
-      <Muted>PDF com senha e prints: use “Importar comprovante” para ler pelo OCR. OFX e CSV são lidos sem erro de reconhecimento.</Muted>
+      <Muted>PDF com senha e prints: use Mais › Importar e exportar › Foto ou comprovante para ler pelo OCR. OFX e CSV são lidos sem erro de reconhecimento.</Muted>
       {result && (
         <>
           <Box>

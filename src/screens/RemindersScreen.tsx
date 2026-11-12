@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from "react";
-import { Linking } from "react-native";
+import { Linking, View } from "react-native";
 import { Box, Section, Toggle, Chips, Field, Muted, Button, T } from "../ui/kit";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
-import { reminderSettings, dueItems } from "../reminders.mjs";
+import { reminderSettings, dueItems, overdueItems, overdueLabel, addDays } from "../reminders.mjs";
 import { permission } from "../app/notify";
-import { today, money } from "../finance.mjs";
+import { today } from "../finance.mjs";
 
 export default function RemindersScreen() {
   const { c } = useTheme();
-  const { state, perform } = useStore();
+  const { state, perform, show, softFail } = useStore();
   const r = reminderSettings(state);
   const [granted, setGranted] = useState<boolean | null>(null);
   const [times, setTimes] = useState({ morning: r.morning, evening: r.evening });
@@ -27,18 +27,16 @@ export default function RemindersScreen() {
     save({ enabled: v });
   };
   const valid = (t: string) => !t || /^([01]\d|2[0-3]):[0-5]\d$/.test(t);
-  const next = dueItems(state, today(), (() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 7);
-    return d.toISOString().slice(0, 10);
-  })());
+  const currentDate = today();
+  const overdue = overdueItems(state, currentDate);
+  const next = dueItems(state, currentDate, addDays(currentDate, 7));
   return (
     <>
       {granted === false && (
         <Box>
           <T style={{ fontFamily: "SoraSemi" }}>Falta liberar as notificações</T>
           <Muted style={{ marginVertical: 8 }}>Sem a permissão do Android nenhum lembrete aparece. Suas escolhas aqui ficam guardadas.</Muted>
-          <Button title="Abrir configurações do Android" secondary onPress={() => Linking.openSettings()} />
+          <Button title="Abrir configurações do Android" secondary onPress={() => void Linking.openSettings().catch(() => softFail("Não foi possível abrir as configurações do Android."))} />
         </Box>
       )}
       <Box>
@@ -84,18 +82,35 @@ export default function RemindersScreen() {
           </Box>
         </>
       )}
-      <Section title="Próximos 7 dias" />
-      <Box>
-        {next.length ? (
-          next.map((i: any, n: number) => (
-            <Muted key={n}>
-              {i.date.split("-").reverse().join("/").slice(0, 5)} · {i.kind === "pagar" ? "Pagar" : "Receber"} {i.label} · {money(i.amount)}
-            </Muted>
-          ))
-        ) : (
-          <Muted>Nada vence nos próximos 7 dias.</Muted>
-        )}
-      </Box>
+      {!!overdue.length && (
+        <>
+          <Section title="Atrasadas" />
+          <Box style={{ gap: 8 }}>
+            {overdue.map((item: any) => (
+              <View key={item.key}>
+                <T>{item.kind === "pagar" ? "Pagar" : "Receber"} {item.label} · {show(item.amount)}</T>
+                <Muted style={{ color: c.red }}>{overdueLabel(item.days)}</Muted>
+              </View>
+            ))}
+          </Box>
+        </>
+      )}
+      {(next.length > 0 || !overdue.length) && (
+        <>
+          <Section title="Próximos 7 dias" />
+          <Box>
+            {next.length ? (
+              next.map((i: any, n: number) => (
+                <Muted key={n}>
+                  {i.date === currentDate ? "Vence hoje" : i.date.split("-").reverse().join("/").slice(0, 5)} · {i.kind === "pagar" ? "Pagar" : "Receber"} {i.label} · {show(i.amount)}
+                </Muted>
+              ))
+            ) : (
+              <Muted>Nada vence nos próximos 7 dias.</Muted>
+            )}
+          </Box>
+        </>
+      )}
     </>
   );
 }

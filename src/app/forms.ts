@@ -138,6 +138,7 @@ export function defaults(kind: string, state: any, initial: any = {}) {
     negative: false,
     sourceId: "",
     ...initial,
+    ...(kind === "budget" ? { categories: initial.categories ?? (initial.category ? [initial.category] : []) } : {}),
   };
 }
 
@@ -233,14 +234,14 @@ export function buildChange(f: any, month: string): (s: any) => any {
           name: f.name,
           type: f.budgetType || "expense",
           amount: parseMoney(f.amount),
-          categories: f.categories?.length ? f.categories : [f.category],
+          categories: f.categories,
           where: f.where || [],
           cycle: f.cycle || "monthly",
           startDay: Number(f.startDay ?? 1),
           affectsForecast: !!f.affectsForecast,
         });
       case "goal": {
-        if (f.deadline && !isDate(f.deadline)) throw Error("Informe o prazo como AAAA-MM-DD.");
+        if (f.deadline && !isDate(f.deadline)) throw Error("Informe o prazo como DD/MM/AAAA.");
         if (!f.name.trim()) throw Error("Dê um nome à sua meta.");
         const prev = s.goals.find((g: any) => g.id === f.id);
         const row = {

@@ -171,10 +171,12 @@ export function healthScore(s, ref = today()) {
   const month = monthKey(ref);
   let income = 0,
     expense = 0;
+  let activeMonths = 0;
   for (let i = 1; i <= 3; i++) {
     const t = totals(s, prev(month, i));
     income += t.income;
     expense += t.expense;
+    if (t.income || t.expense) activeMonths++;
   }
   const monthlyExpense = expense / 3;
   const factors = [];
@@ -267,7 +269,7 @@ export function healthScore(s, ref = today()) {
     overdue ? Math.max(0, 1 - overdue / 5) : 1,
     10,
     overdue
-      ? `${overdue} pendência(s) com data passada.`
+      ? `${overdue} ${overdue === 1 ? "pendência vencida" : "pendências vencidas"}.`
       : "Nenhuma pendência atrasada.",
   );
 
@@ -283,7 +285,7 @@ export function healthScore(s, ref = today()) {
   const weakest = [...factors]
     .sort((a, b) => a.score * a.weight - b.score * b.weight)
     .slice(0, 3);
-  return { score, level, factors, month, weakest };
+  return { score, level, factors, month, weakest, sufficientHistory: activeMonths === 3 && income > 0 && expense > 0 };
 }
 
 // Plano de ação local (3 a 5 itens) a partir dos fatores mais fracos e dos insights.
@@ -330,7 +332,7 @@ export function aiContext(s, ref = today()) {
     `Mês ${month}. Receitas ${money(t.income)}, despesas ${money(t.expense)}, a pagar ${money(t.pay)}, a receber ${money(t.receive)}.`,
     `Saldo total ${money(totalBalance(s))}.`,
     `Despesas por categoria: ${cats.map(([k, v]) => `${k} ${money(v)}`).join("; ") || "nenhuma"}.`,
-    `Saúde financeira ${h.score}/100 (${h.level}). ${h.factors.map((f) => `${f.label}: ${f.detail}`).join(" ")}`,
+    h.sufficientHistory ? `Saúde financeira ${h.score}/100 (${h.level}). ${h.factors.map((f) => `${f.label}: ${f.detail}`).join(" ")}` : "Dados insuficientes para avaliar a saúde financeira.",
     `Orçamentos: ${
       s.budgets
         .map(normalizeBudget)

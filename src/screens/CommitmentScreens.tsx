@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { View, Pressable } from "react-native";
-import { T, Muted, Box, Section, Button, Empty, IconButton, Progress, Chips, Field, styles as k } from "../ui/kit";
+import { CreateAction, T, Muted, Box, Section, Button, Empty, IconButton, Progress, Chips, Field, styles as k } from "../ui/kit";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
@@ -38,7 +38,7 @@ export function ContractsScreen({ type }: { type: "financing" | "loan" }) {
     );
   return (
     <>
-      <Button title={`Novo ${label}`} icon="plus" onPress={() => nav.push({ name: "form", kind: "contract", initial: { type } })} />
+      <CreateAction title={`Novo ${label}`} onPress={() => nav.push({ name: "form", kind: "contract", initial: { type } })} />
       {list.map((f: any) => {
         const st = contractStatus(state, f.id);
         const rows = contractRows(state, f.id);
@@ -204,7 +204,8 @@ export function RecurrencesScreen() {
   const list = [...(state.recurrences || [])].sort((a: any, b: any) => (a.type + a.description).localeCompare(b.type + b.description));
   return (
     <>
-      <View style={[k.row, { gap: 12 }]}>
+      <CreateAction title="Criar recorrência" onPress={() => nav.push({ name: "form", kind: "recurrence" })} />
+      {!!list.length && <View style={[k.row, { gap: 12 }]}>
         <Box style={{ flex: 1 }}>
           <Muted>Despesas</Muted>
           <T style={{ fontFamily: "SoraSemi" }}>{show(totals.expense.month)}/mês</T>
@@ -215,7 +216,7 @@ export function RecurrencesScreen() {
           <T style={{ fontFamily: "SoraSemi", color: c.green }}>{show(totals.income.month)}/mês</T>
           <Muted>{show(totals.income.year)} por ano</Muted>
         </Box>
-      </View>
+      </View>}
       <Chips
         values={[
           ["list", "Lista"],
@@ -224,7 +225,6 @@ export function RecurrencesScreen() {
         value={view}
         onChange={setView}
       />
-      <Button title="Criar recorrência" icon="plus" onPress={() => nav.push({ name: "form", kind: "recurrence" })} />
       {view === "calendar" ? (
         <>
           <MonthBar />

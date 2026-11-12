@@ -18,7 +18,7 @@ const ITEMS: { key: Tab; label: string; full?: string; icon: any }[] = [
   { key: "categories", label: "Categorias", icon: "pie-chart" },
   { key: "spend", label: "Tipos", full: "Tipo de gasto", icon: "layers" },
   { key: "flow", label: "Fluxo", icon: "repeat" },
-  { key: "more", label: "Mais", icon: "more-horizontal" },
+  { key: "more", label: "Resumo do mês", icon: "more-horizontal" },
 ];
 
 export default function AnalysisScreen() {
@@ -26,11 +26,11 @@ export default function AnalysisScreen() {
   return (
     <>
       <CTopTabs items={ITEMS} value={tab} onChange={setTab} />
+      <MonthNav />
       {tab === "more" ? (
         <LegacyBlocks />
       ) : (
         <>
-          {tab !== "summary" && <MonthNav />}
           <View style={{ paddingBottom: 8 }}>
             {tab === "summary" && <SummaryTab goTab={(t) => setTab(t)} />}
             {tab === "categories" && <CategoriesTab />}

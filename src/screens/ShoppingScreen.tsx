@@ -68,7 +68,7 @@ export default function ShoppingScreen({ add: autoAdd }: { add?: boolean } = {})
   const { c, dark } = useTheme();
   const { fontScale } = useWindowDimensions();
   const big = fontScale > 1.5;
-  const { state, perform, confirm, show, undoLabel, redoLabel, rewindShopping } = useStore();
+  const { state, perform, confirm, show, softFail, undoLabel, redoLabel, rewindShopping } = useStore();
   const nav = useNav();
   const [showPaste, setShowPaste] = useState(false);
   const [showVoice, setShowVoice] = useState(false);
@@ -143,12 +143,12 @@ export default function ShoppingScreen({ add: autoAdd }: { add?: boolean } = {})
     void perform((s: any) => editActiveShoppingItems(s, (scope: any) => applySuggestedPrices(scope)), `${suggestions.length} ${suggestions.length === 1 ? "preço aplicado" : "preços aplicados"}`);
   const shareCode = () => {
     const r: any = encodeShareCode(selectedState, { now: Date.now() });
-    if (!r.ok) return void Share.share({ message: r.reason || "Não foi possível gerar o código." }).catch(() => {});
+    if (!r.ok) return void Share.share({ message: r.reason || "Não foi possível gerar o código." }).catch(() => softFail("Não foi possível compartilhar a lista."));
     void Share.share({
       message: `Lista de compras do Floco Finanças. Cole este código em "Colar lista" no app (sem preços):\n${r.code}`,
-    }).catch(() => {});
+    }).catch(() => softFail("Não foi possível compartilhar a lista."));
   };
-  const exportCsv = () => void Share.share({ message: listToCsv(selectedState), title: "Lista de compras (CSV)" }).catch(() => {});
+  const exportCsv = () => void Share.share({ message: listToCsv(selectedState), title: "Lista de compras (CSV)" }).catch(() => softFail("Não foi possível compartilhar a lista."));
 
   useEffect(() => {
     if (!cartFocus) return;
@@ -184,7 +184,7 @@ export default function ShoppingScreen({ add: autoAdd }: { add?: boolean } = {})
       setCartStatus(`${item.name} ${label}.`);
   };
 
-  const share = () => void Share.share({ message: shareText(selectedState) }).catch(() => {});
+  const share = () => void Share.share({ message: shareText(selectedState) }).catch(() => softFail("Não foi possível compartilhar a lista."));
 
   const tone = listTone(selected?.color, dark);
   const name = selected?.name || "Minha lista";
@@ -624,7 +624,7 @@ function EditPanel({ item, onDone, onRemove, onAnnounce }: {
   onAnnounce: (text: string) => void;
 }) {
   const { c } = useTheme();
-  const { state, perform, show } = useStore();
+  const { state, perform, show, softFail } = useStore();
   const { fontScale } = useWindowDimensions();
   const big = fontScale > 1.5;
   const [name, setName] = useState(item.name);
@@ -691,9 +691,9 @@ function EditPanel({ item, onDone, onRemove, onAnnounce }: {
     <MotionPressable key={key} kind="button" accessibilityRole="button" accessibilityLabel={label}
       accessibilityState={{ selected: on }} onPress={() => void save(key)}
       style={{ flex: big ? undefined : 1, minHeight: 72, borderRadius: radius.md, alignItems: "center", justifyContent: "center", gap: space.xs,
-        padding: space.sm, backgroundColor: key === "cart" ? c.primary : c.soft, borderWidth: on ? 2 : 0, borderColor: c.primary }}>
-      <I name={icon} color={key === "cart" ? c.onPrimary : c.text} />
-      <T style={{ fontFamily: "SoraSemi", fontSize: 14, textAlign: "center", color: key === "cart" ? c.onPrimary : c.text }}>{label}</T>
+        padding: space.sm, backgroundColor: on ? c.primary : c.surface, borderWidth: 1, borderColor: on ? c.primary : c.line }}>
+      <I name={icon} color={on ? c.onPrimary : c.text} />
+      <T style={{ fontFamily: "SoraSemi", fontSize: 14, textAlign: "center", color: on ? c.onPrimary : c.text }}>{label}</T>
     </MotionPressable>
   );
 
@@ -744,10 +744,10 @@ function EditPanel({ item, onDone, onRemove, onAnnounce }: {
           <Field label="Peso ou volume" value={amount} onChange={setAmount} placeholder="Ex.: 500 g, 1,5 kg ou 2 l" maxLength={12} />
         )}
         <PhotoField itemId={item.id} itemName={item.name} photo={itemsOf(state).find((entry: any) => entry.id === item.id)?.photo}
-          onChange={(name, old) => { void perform((s: any) => setItemPhoto(s, item.id, name), name ? "foto salva" : "foto removida").then((ok: boolean) => { if (ok && old) void removePhoto(old); }); }} />
+          onChange={(name, old) => { void perform((s: any) => setItemPhoto(s, item.id, name), name ? "foto salva" : "foto removida").then((ok: boolean) => { if (ok && old) void removePhoto(old).catch(() => softFail("Não foi possível apagar o arquivo da foto anterior.")); }); }} />
         <Field label="Detalhes" value={details} onChange={setDetails} placeholder="Marca, sabor, tamanho…" maxLength={120} />
         <View style={{ flexDirection: big ? "column" : "row", gap: space.sm }}>
-          {stateButton("cart", item.inCart ? "Tirar do carrinho" : "No carrinho", "shopping-cart", !!item.inCart)}
+          {stateButton("cart", "No carrinho", "shopping-cart", !!item.inCart)}
           {stateButton("missing", "Faltou", "x-circle", item.status === "missing")}
           {stateButton("later", "Depois", "clock", item.status === "later")}
         </View>

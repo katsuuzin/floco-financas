@@ -8,6 +8,7 @@ export const today = () => {
 };
 export const money = (cents) =>
   (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+export const formatMoneyInput = (cents) => money(cents).replace(/^R\$\s*/u, "");
 export function parseMoney(text) {
   const raw = String(text)
     .trim()
@@ -253,7 +254,7 @@ export function deleteTransaction(state, id) {
     );
   if (target.payableId)
     throw Error(
-      "Desfaça este pagamento em Quem eu devo para manter o histórico da dívida correto.",
+      "Desfaça este pagamento em Entre pessoas › Eu devo para manter o histórico da dívida correto.",
     );
   const removed = state.transactions.filter((t) =>
     target.groupId ? t.groupId === target.groupId : t.id === id,
@@ -912,14 +913,23 @@ export function validateBackup(value) {
   } else {
     value.goals = value.goals.map(({ potId, ...goal }) => goal);
   }
+  const settings = value.settings && typeof value.settings === "object" && !Array.isArray(value.settings)
+    ? { ...value.settings }
+    : {};
+  if (Number.isSafeInteger(settings.bankSetupHiddenUntil) && settings.bankSetupHiddenUntil > 0) {
+    settings.bankSetupHiddenUntil = Math.min(settings.bankSetupHiddenUntil, Date.now() + 7 * 86_400_000);
+  } else {
+    delete settings.bankSetupHiddenUntil;
+  }
   return migrateSubcategories({
     ...value,
     // Preferências (layout, extrato, lembretes, cor...) seguem junto. O bloqueio biométrico
     // nunca vem de um backup; quem lê o armazenamento local o devolve (sqliteStore).
     settings: {
-      ...(value.settings && typeof value.settings === "object" && !Array.isArray(value.settings) ? value.settings : {}),
-      dark: !!value.settings?.dark,
-      hide: !!value.settings?.hide,
+      ...settings,
+      // O escuro é o padrão: backup antigo sem o campo abre escuro; só "false" explícito vira claro.
+      dark: settings.dark !== false,
+      hide: !!settings.hide,
       biometric: false,
     },
   });

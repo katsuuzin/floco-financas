@@ -1,7 +1,8 @@
 import React from "react";
 import { visibleAccounts } from "../accountOrder.mjs";
 import { View, Pressable } from "react-native";
-import { T, Muted, I, Box, Section, Button, Empty, IconButton, Progress, styles as k } from "../ui/kit";
+import { T, Muted, I, Box, Group, Row, Section, Button, Empty, IconButton, Progress, fitAmount, styles as k } from "../ui/kit";
+import { RowActions, SheetModal } from "../ui/Sheet";
 import { entityColors, useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav, destination } from "../app/nav";
@@ -11,6 +12,7 @@ import BankBadge from "../ui/BankBadge";
 import { bankLook } from "../bankCatalog.mjs";
 import { suggestNotification } from "../notification-import.mjs";
 import { layoutOf, firstSteps, DESTINATIONS } from "../layout.mjs";
+import { overdueItems, overdueLabel } from "../reminders.mjs";
 import { monthInsights } from "../insights.mjs";
 import { normalizeBudget, budgetUsage } from "../analysis.mjs";
 import { receivableBalance } from "../planning.mjs";
@@ -40,33 +42,41 @@ export function AccountList({ limit, onArchive }: { limit?: number; onArchive?: 
   const { state, perform, show } = useStore();
   const nav = useNav();
   const accounts = visibleAccounts(state);
+  const [detailId, setDetailId] = React.useState("");
+  const detail = accounts.find((account: any) => account.id === detailId);
+  const edit = (account: any) => nav.push({
+    name: "form", kind: "account",
+    initial: { ...account, initial: (account.initial / 100).toFixed(2).replace(".", ",") },
+  });
   if (!accounts.length)
     return (
       <Empty
         icon="briefcase"
         title="Seu dinheiro, no seu controle"
         body="Cadastre uma conta ou carteira para começar. Nenhuma conexão com o banco é necessária."
-        action="Adicionar conta"
+        action={onArchive ? undefined : "Adicionar conta"}
         onPress={() => nav.push({ name: "form", kind: "account" })}
       />
     );
   return (
+    <>
     <Box style={{ paddingVertical: 0 }}>
       {accounts.slice(0, limit).map((a: any) => {
         const hidden = accountBalanceHidden(state, a.id);
         const entity = entityColors(a.color, c);
+        const toggleBalance = () => void perform((s: any) => ({
+          ...s,
+          accounts: s.accounts.map((x: any) => x.id === a.id ? { ...x, hideBalance: !a.hideBalance } : x),
+        }), a.hideBalance ? "Saldo visível" : "Saldo oculto", {
+          undoable: true,
+          undo: (s) => ({ ...s, accounts: s.accounts.map((x: any) => x.id === a.id ? { ...x, hideBalance: !!a.hideBalance } : x) }),
+        });
         return (
           <View key={a.id} style={[k.row, k.hairline, { borderBottomColor: c.line, minHeight: 80, paddingVertical: 12 }]}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Editar ${a.name}`}
-              onPress={() =>
-                nav.push({
-                  name: "form",
-                  kind: "account",
-                  initial: { ...a, initial: (a.initial / 100).toFixed(2).replace(".", ",") },
-                })
-              }
+              accessibilityLabel={onArchive ? a.name : `Editar ${a.name}`}
+              onPress={() => onArchive ? setDetailId(a.id) : edit(a)}
               style={({ pressed }) => [k.row, { flex: 1, opacity: pressed ? 0.75 : 1 }]}
             >
               {bankLook(a.institution, a.name).known ? (
@@ -91,9 +101,9 @@ export function AccountList({ limit, onArchive }: { limit?: number; onArchive?: 
                 const stacked = !!onArchive;
                 const balanceBlock = (
                   <View style={{ alignItems: stacked ? "flex-start" : "flex-end", gap: 2, marginTop: stacked ? 4 : 0 }}>
-                    <T style={{ fontFamily: "SoraSemi", fontSize: 14 }}>{show(balance(state, a.id), hidden)}</T>
+                    <T style={{ fontFamily: "SoraSemi", fontSize: 14 }}>Saldo {show(balance(state, a.id), hidden)}</T>
                     {reserved(state, a.id) > 0 && (
-                      <Muted style={{ fontSize: 10 }}>
+                      <Muted style={{ fontSize: 12 }}>
                         Disponível {show(balance(state, a.id) - reserved(state, a.id), hidden)}
                       </Muted>
                     )}
@@ -103,7 +113,7 @@ export function AccountList({ limit, onArchive }: { limit?: number; onArchive?: 
                   <>
                     <View style={{ flex: 1, gap: 2 }}>
                       <T style={{ fontFamily: "SoraSemi", fontSize: 13 }}>{a.name}</T>
-                      <Muted style={{ fontSize: 11 }}>
+                      <Muted style={{ fontSize: 12 }}>
                         {a.institution || "Carteira"}
                         {a.includeInTotal === false ? " · fora do saldo geral" : ""}
                       </Muted>
@@ -114,24 +124,29 @@ export function AccountList({ limit, onArchive }: { limit?: number; onArchive?: 
                 );
               })()}
             </Pressable>
-            <IconButton
-              name={a.hideBalance ? "eye-off" : "eye"}
-              label={`${a.hideBalance ? "Mostrar" : "Ocultar"} saldo de ${a.name}`}
-              onPress={() =>
-                perform(
-                  (s: any) => ({
-                    ...s,
-                    accounts: s.accounts.map((x: any) => (x.id === a.id ? { ...x, hideBalance: !x.hideBalance } : x)),
-                  }),
-                  "Visibilidade da conta alterada",
-                )
-              }
-            />
-            {onArchive && <IconButton name="archive" label={`Arquivar ${a.name}`} onPress={() => onArchive(a.id)} />}
+            {onArchive ? (
+              <RowActions title={a.name} actions={[
+                { icon: a.hideBalance ? "eye" : "eye-off", label: a.hideBalance ? "Mostrar saldo" : "Ocultar saldo", onPress: toggleBalance },
+                { icon: "archive", label: "Arquivar conta", onPress: () => onArchive(a.id) },
+              ]} />
+            ) : (
+              <IconButton name={a.hideBalance ? "eye-off" : "eye"} label={`${a.hideBalance ? "Mostrar" : "Ocultar"} saldo de ${a.name}`} onPress={toggleBalance} />
+            )}
           </View>
         );
       })}
     </Box>
+    {detail && <SheetModal title={detail.name} onClose={() => setDetailId("")}>
+      <View style={{ padding: 16, gap: 12 }}>
+        <Muted>{detail.institution || "Carteira"}</Muted>
+        <T {...fitAmount}>Saldo {show(balance(state, detail.id), accountBalanceHidden(state, detail.id))}</T>
+        {reserved(state, detail.id) > 0 && <T {...fitAmount}>
+          Disponível {show(balance(state, detail.id) - reserved(state, detail.id), accountBalanceHidden(state, detail.id))}
+        </T>}
+        <Button title="Editar conta" icon="edit-2" onPress={() => { setDetailId(""); edit(detail); }} />
+      </View>
+    </SheetModal>}
+    </>
   );
 }
 
@@ -168,7 +183,7 @@ function Shortcuts() {
             })}
           >
             <I name={d[2] as any} color={c.primary} />
-            <T style={{ fontSize: 11, textAlign: "center" }}>{d[1]}</T>
+            <T style={{ fontSize: 12, textAlign: "center" }}>{d[1]}</T>
           </Pressable>
         );
       })}
@@ -198,7 +213,7 @@ function FirstSteps() {
         <View style={{ marginVertical: 10 }}>
           <Progress value={f.done} max={f.steps.length} />
         </View>
-        {f.steps.map((step: any) => (
+        {f.steps.filter((step: any) => !step.done).map((step: any) => (
           <Pressable
             key={step.id}
             accessibilityRole="button"
@@ -238,11 +253,14 @@ const INBOX_ICON: Record<string, any> = {
 // "SMS · NUBANK" → "Nubank" (o rótulo curto deixa mais espaço ao nome da compra).
 const bankName = (b: string) => String(b).replace(/^SMS · /, "").toLowerCase().replace(/(^|\s)\S/g, (m) => m.toUpperCase());
 
+const bankSetupLink = { minHeight: 48, justifyContent: "center", paddingHorizontal: 8 } as const;
+
 function PendingInbox() {
   const { c } = useTheme();
-  const { state } = useStore();
+  const { state, perform, softFail } = useStore();
   const nav = useNav();
   const inbox = useBankInbox(state);
+  const [help, setHelp] = React.useState(false);
   const [open, setOpen] = React.useState<any>(null);
   const [showDuplicates, setShowDuplicates] = React.useState(false);
   const viewingDuplicates = showDuplicates && inbox.hiddenRows.length > 0;
@@ -250,30 +268,52 @@ function PendingInbox() {
   const st = inbox.status;
   const working = st?.available && st.permission && st.enabled;
   if (!st) return null;
-  if (!working)
+  if (!working) {
+    if (state.settings.bankSetupHiddenUntil > Date.now()) return null;
+    const openSettings = () => {
+      void inbox.native.openSettings().catch(() => softFail("Não foi possível abrir o acesso às notificações."));
+    };
+    const enable = () => {
+      void inbox.native.setEnabled(true).then(inbox.refresh).catch(() => softFail("Não foi possível ligar a leitura das notificações."));
+    };
     return (
-      <>
-        <Section title="Leitura automática" />
-        <Box style={{ gap: 10 }}>
-          <T style={{ fontFamily: "SoraSemi" }}>{!st.available ? "Atualize o Floco para ler notificações" : "Ligue a leitura das notificações do banco"}</T>
-          <Muted>
-            O Floco lê as notificações de compra e Pix do seu banco e deixa cada uma aqui para você confirmar. Nada é lançado sem a sua confirmação.
-          </Muted>
-          {st.available && (
-            <>
-              <Muted>
-                1. Toque em “Permitir acesso” e ative o Floco Finanças.{"\n"}2. Se a opção estiver bloqueada (“configuração restrita”), abra as informações do app, toque em ⋮ e em “Permitir configurações restritas”, e repita o passo 1.
-              </Muted>
-              <Button title="Permitir acesso" icon="bell" onPress={() => inbox.native.openSettings().catch(() => {})} />
-              <Pressable accessibilityRole="link" accessibilityLabel="Abrir informações do app" onPress={() => inbox.native.openAppInfo?.().catch(() => {})} style={{ minHeight: 48, justifyContent: "center" }}>
-                <T style={{ fontFamily: "SoraSemi", textDecorationLine: "underline" }}>Abrir informações do app</T>
-              </Pressable>
-              {!st.enabled && <Button title="Ligar captura" secondary onPress={() => inbox.native.setEnabled(true).then(inbox.refresh)} />}
-            </>
+      <Box style={{ gap: 6 }}>
+        <T accessibilityRole="header" style={{ fontFamily: "SoraSemi" }}>Leitura automática</T>
+        <Muted>{st.available ? "Revise as compras e Pix detectados pelo Floco." : "Atualize o Floco para ler notificações."}</Muted>
+        {st.available && (
+          <Button title="Ligar leitura das notificações" onPress={st.permission ? enable : openSettings} />
+        )}
+        <View style={[k.row, { flexWrap: "wrap", justifyContent: "space-between" }]}>
+          {st.available && !st.permission && (
+            <Pressable accessibilityRole="button" onPress={() => setHelp(true)} style={bankSetupLink}>
+              <T style={{ color: c.primary }}>Como ligar</T>
+            </Pressable>
           )}
-        </Box>
-      </>
+          <Pressable accessibilityRole="button" onPress={() => {
+            void perform((s: any) => ({
+              ...s,
+              settings: { ...s.settings, bankSetupHiddenUntil: Date.now() + 7 * 86_400_000 },
+            }), "Aviso oculto por 7 dias");
+          }} style={bankSetupLink}>
+            <T style={{ color: c.muted }}>Agora não</T>
+          </Pressable>
+        </View>
+        {help && (
+          <SheetModal title="Como ligar" onClose={() => setHelp(false)}>
+            <View style={{ gap: 12, padding: 16 }}>
+              <T>1. Toque em “Ligar leitura das notificações” e ative o Floco Finanças.</T>
+              <T>2. Se o Android bloquear a opção, abra as informações do app, toque em Mais opções e escolha “Permitir configurações restritas”. Depois, repita o primeiro passo.</T>
+              {!!inbox.native.openAppInfo && (
+                <Button title="Abrir informações do app" secondary onPress={() => {
+                  void inbox.native.openAppInfo().catch(() => softFail("Não foi possível abrir as informações do app."));
+                }} />
+              )}
+            </View>
+          </SheetModal>
+        )}
+      </Box>
     );
+  }
   return (
     <>
       <Section title={`Pendentes (${inbox.rows.length})`} action="Ajustes" onPress={() => nav.push({ name: "notifications" })} />
@@ -313,7 +353,7 @@ function PendingInbox() {
                   </View>
                   <T style={{ fontFamily: "SoraSemi", color: tone, fontVariant: ["tabular-nums"] }}>{sug.amount ? amountLabel : "—"}</T>
                 </Pressable>
-                <IconButton name="x" label={`Descartar ${sug.description}`} onPress={() => inbox.dismiss(row.id)} />
+                <IconButton name="x" label={`Descartar ${sug.description}`} onPress={() => void inbox.dismiss(row.id).catch(() => softFail("Não foi possível descartar a notificação."))} />
               </View>
             );
           })}
@@ -333,7 +373,7 @@ function PendingInbox() {
         onClose={() => setOpen(null)}
         onDone={(id) => {
           setOpen(null);
-          void inbox.dismiss(id);
+          void inbox.dismiss(id).catch(() => softFail("Não foi possível retirar a notificação da fila."));
         }}
       />
     </>
@@ -359,7 +399,7 @@ function AccountsSummary() {
   const money2 = (n: number, hidden = false) => (n < 0 ? "−" : "") + show(Math.abs(n), hidden);
   return (
     <>
-      <Section title="Contas" action="Ver" onPress={() => nav.push({ name: "accounts" })} />
+      <Section title="Contas" action="Ver tudo" onPress={() => nav.push({ name: "accounts" })} />
       <Box style={{ padding: 0, overflow: "hidden" }}>
         {accounts.map((a: any) => {
           const hidden = accountBalanceHidden(state, a.id);
@@ -379,11 +419,11 @@ function AccountsSummary() {
               </View>
               <View style={{ flex: 1 }}>
                 <T style={{ fontFamily: "SoraSemi" }}>{a.name}</T>
-                <Muted>Previsto{a.includeInTotal === false ? " · fora do total" : ""}</Muted>
+                {a.includeInTotal === false && <Muted>Fora do total</Muted>}
               </View>
               <View style={{ alignItems: "flex-end" }}>
-                <T style={{ fontFamily: "SoraSemi", color: b < 0 ? c.red : c.text }}>{money2(b, hidden)}</T>
-                <Muted style={{ color: f < 0 ? c.red : c.muted }}>{money2(f, hidden)}</Muted>
+                <T style={{ fontFamily: "SoraSemi", color: b < 0 ? c.red : c.text }}>Saldo {money2(b, hidden)}</T>
+                <Muted style={{ color: f < 0 ? c.red : c.muted }}>Previsto {money2(f, hidden)}</Muted>
               </View>
             </Pressable>
           );
@@ -391,11 +431,10 @@ function AccountsSummary() {
         <View style={[k.row, { paddingHorizontal: 14, paddingVertical: 12 }]}>
           <View style={{ flex: 1 }}>
             <T style={{ fontFamily: "SoraSemi" }}>Total</T>
-            <Muted>Previsto</Muted>
           </View>
           <View style={{ alignItems: "flex-end" }}>
-            <T style={{ fontFamily: "SoraBold", color: total < 0 ? c.red : c.text }}>{money2(total)}</T>
-            <Muted style={{ color: totalF < 0 ? c.red : c.muted }}>{money2(totalF)}</Muted>
+            <T style={{ fontFamily: "SoraBold", color: total < 0 ? c.red : c.text }}>Saldo {money2(total)}</T>
+            <Muted style={{ color: totalF < 0 ? c.red : c.muted }}>Previsto {money2(totalF)}</Muted>
           </View>
         </View>
       </Box>
@@ -416,7 +455,7 @@ function CardsSummary() {
   const totalNext = cards.reduce((n: number, x: any) => n + invoice(state, x.id, next).due, 0);
   return (
     <>
-      <Section title="Cartões" action="Ver" onPress={() => nav.push({ name: "cards" })} />
+      <Section title="Cartões" action="Ver tudo" onPress={() => nav.push({ name: "cards" })} />
       <Box style={{ padding: 0, overflow: "hidden" }}>
         {cards.map((x: any) => {
           const bill = invoice(state, x.id, month);
@@ -473,6 +512,33 @@ export default function HomeScreen() {
     inbox: () => <PendingInbox />,
     firstSteps: () => <FirstSteps />,
     shortcuts: () => <Shortcuts />,
+    overdue: () => {
+      const items = overdueItems(state, today());
+      if (!items.length) return null;
+      return (
+        <>
+          <Section title="Atrasadas" />
+          <Group>
+            {items.map((item: any) => (
+              <Row key={item.key} icon="alert-circle" danger label={item.label}
+                detail={`${overdueLabel(item.days)} · ${show(item.amount)}`}
+                onPress={() => {
+                  if (item.source === "invoice") {
+                    nav.setMonth(item.month);
+                    nav.push({ name: "cards", cardId: item.cardId });
+                  } else if (item.source === "transaction") {
+                    nav.setMonth(monthKey(item.date));
+                    nav.setTab("transactions");
+                  } else {
+                    nav.push({ name: "people", tab: item.source });
+                  }
+                }}
+              />
+            ))}
+          </Group>
+        </>
+      );
+    },
     pending: () =>
       (summary.pay > 0 || summary.receive > 0 || bills > 0) && (
         <>
@@ -481,15 +547,15 @@ export default function HomeScreen() {
             <View style={k.row}>
               <View style={k.flex}>
                 <Muted>A pagar</Muted>
-                <T style={{ color: c.red, fontFamily: "SoraSemi", marginTop: 6 }}>{show(summary.pay)}</T>
+                <T {...fitAmount} style={{ color: c.red, fontFamily: "SoraSemi", marginTop: 6 }}>{show(summary.pay)}</T>
               </View>
               <View style={k.flex}>
                 <Muted>A receber</Muted>
-                <T style={{ color: c.green, fontFamily: "SoraSemi", marginTop: 6 }}>{show(summary.receive)}</T>
+                <T {...fitAmount} style={{ color: c.green, fontFamily: "SoraSemi", marginTop: 6 }}>{show(summary.receive)}</T>
               </View>
               <View style={k.flex}>
                 <Muted>Faturas</Muted>
-                <T style={{ fontFamily: "SoraSemi", marginTop: 6 }}>{show(bills)}</T>
+                <T {...fitAmount} style={{ fontFamily: "SoraSemi", marginTop: 6 }}>{show(bills)}</T>
               </View>
             </View>
           </Box>
@@ -509,7 +575,7 @@ export default function HomeScreen() {
     budgets: () =>
       state.budgets.length > 0 && (
         <>
-          <Section title="Orçamentos" action="Ver" onPress={() => nav.push({ name: "budgets" })} />
+          <Section title="Orçamentos" action="Ver tudo" onPress={() => nav.push({ name: "budgets" })} />
           <Box>
             {state.budgets.slice(0, 4).map((raw: any) => {
               const b = normalizeBudget(raw);
@@ -532,7 +598,7 @@ export default function HomeScreen() {
     goals: () =>
       state.goals.length > 0 && (
         <>
-          <Section title="Metas" action="Ver" onPress={() => nav.push({ name: "goals" })} />
+          <Section title="Metas" action="Ver tudo" onPress={() => nav.push({ name: "goals" })} />
           <Box>
             {state.goals.slice(0, 4).map((g: any) => (
               <View key={g.id} style={{ marginBottom: 10, gap: 4 }}>
@@ -553,7 +619,7 @@ export default function HomeScreen() {
       return (
         open.length > 0 && (
           <>
-            <Section title="Quem me deve" action="Ver" onPress={() => nav.push({ name: "people", tab: "receivables" })} />
+            <Section title="Quem me deve" action="Ver tudo" onPress={() => nav.push({ name: "people", tab: "receivables" })} />
             <Box>
               {open.slice(0, 4).map((r: any) => (
                 <View key={r.id} style={[k.row, { justifyContent: "space-between", marginBottom: 6 }]}>
@@ -571,7 +637,7 @@ export default function HomeScreen() {
       return (
         plan.remaining > 0 && (
           <>
-            <Section title="Parcelamentos" action="Ver" onPress={() => nav.push({ name: "debts", tab: "installments" })} />
+            <Section title="Parcelamentos" action="Ver tudo" onPress={() => nav.push({ name: "debts", tab: "installments" })} />
             <Box>
               <Muted>Falta pagar {show(plan.remaining)} em parcelas.</Muted>
               {plan.rows.map((r: any) => (
@@ -589,7 +655,7 @@ export default function HomeScreen() {
       return (
         (state.recurrences || []).length > 0 && (
           <>
-            <Section title="Recorrências" action="Ver" onPress={() => nav.push({ name: "recurrences" })} />
+            <Section title="Recorrências" action="Ver tudo" onPress={() => nav.push({ name: "recurrences" })} />
             <Box>
               <Muted>
                 Despesas fixas {show(t.expense.month)}/mês · receitas {show(t.income.month)}/mês
@@ -634,7 +700,7 @@ export default function HomeScreen() {
       const more = sum.pending - sum.preview.length;
       return (
         <>
-          <Section title="Lista de compras" action="Ver" onPress={open} />
+          <Section title="Lista de compras" action="Ver tudo" onPress={open} />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Lista de compras. ${title}.${hasEstimate ? ` Estimado ${show(sum.estimatedCents)}.` : ""}${detail ? ` ${detail}` : ""}`}
@@ -677,7 +743,7 @@ export default function HomeScreen() {
     },
     recent: () => (
       <>
-        <Section title="Despesas recentes" action="Ver todas" onPress={() => nav.setTab("transactions")} />
+        <Section title="Despesas recentes" action="Ver tudo" onPress={() => nav.setTab("transactions")} />
         {recent.length ? (
           <Box style={{ padding: 0, overflow: "hidden" }}>
             {recent.slice(0, 5).map((t: any, i: number, all: any[]) => (
@@ -705,28 +771,28 @@ export default function HomeScreen() {
             onPress={() =>
               perform(
                 (s: any) => ({ ...s, settings: { ...s.settings, hide: !s.settings.hide } }),
-                "Visibilidade alterada",
+                state.settings.hide ? "Valores visíveis" : "Valores ocultos",
               )
             }
           />
         </View>
-        <T style={[k.balanceValue, { color: c.heroText, marginTop: 0 }]}>{show(totalBalance(state))}</T>
+        <T {...fitAmount} style={[k.balanceValue, { color: c.heroText, marginTop: 0 }]}>{show(totalBalance(state))}</T>
         <T style={{ color: c.heroText, fontSize: 12, marginTop: 4 }}>Saldo atual das contas incluídas</T>
       </View>
       <View style={{ flexDirection: "row", gap: 12, marginTop: 12 }}>
         <Box style={{ flex: 1, marginBottom: 0 }}>
-          <View style={k.row}>
+          <View style={[k.row, { flexWrap: "wrap", gap: 4 }]}>
             <I name="arrow-down-left" color={c.green} />
             <Muted>Receitas</Muted>
           </View>
-          <T style={{ fontFamily: "SoraSemi", fontSize: 17, color: c.green, marginTop: 8 }}>{show(summary.income)}</T>
+          <T {...fitAmount} style={{ fontFamily: "SoraSemi", fontSize: 17, color: c.green, marginTop: 8 }}>{show(summary.income)}</T>
         </Box>
         <Box style={{ flex: 1, marginBottom: 0 }}>
-          <View style={k.row}>
+          <View style={[k.row, { flexWrap: "wrap", gap: 4 }]}>
             <I name="arrow-up-right" color={c.red} />
             <Muted>Despesas</Muted>
           </View>
-          <T style={{ fontFamily: "SoraSemi", fontSize: 17, marginTop: 8 }}>{show(summary.expense)}</T>
+          <T {...fitAmount} style={{ fontFamily: "SoraSemi", fontSize: 17, marginTop: 8 }}>{show(summary.expense)}</T>
         </Box>
       </View>
       <View style={{ height: 4 }} />
@@ -754,7 +820,7 @@ export default function HomeScreen() {
       )}
       <View style={[k.row, { justifyContent: "center", marginVertical: 26, gap: 8 }]}>
         <I name="shield" size={15} />
-        <Muted style={{ fontSize: 11 }}>Sem cadastro. Seus registros ficam neste aparelho.</Muted>
+        <Muted style={{ fontSize: 12 }}>Sem cadastro. Seus registros ficam neste aparelho.</Muted>
       </View>
     </>
   );

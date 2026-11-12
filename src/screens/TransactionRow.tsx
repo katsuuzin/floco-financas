@@ -1,12 +1,13 @@
-import React from "react";
-import { View, Pressable, Alert, StyleSheet } from "react-native";
-import { T, Muted, I, styles as k } from "../ui/kit";
+import React, { useRef, useState } from "react";
+import { View, Pressable, ScrollView, StyleSheet, useWindowDimensions } from "react-native";
+import { T, Muted, I, Button, Group, Row, fitAmount, focusAccessibility, type ViewControl, styles as k } from "../ui/kit";
+import { ConfirmSheet, SheetModal } from "../ui/Sheet";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
-import { money } from "../finance.mjs";
+import { today } from "../finance.mjs";
 import { invoiceShiftOf } from "../invoices.mjs";
-import { trashTransaction } from "../trash.mjs";
+import { restoreTrash, trashTransaction } from "../trash.mjs";
 import { categoryStyleOf, tagStyleOf } from "../ui/CategoryIcon";
 import CategoryIcon from "../ui/CategoryIcon";
 import { categoryLabel } from "../categories.mjs";
@@ -39,7 +40,10 @@ export function editInitial(state: any, t: any) {
 
 export default function TransactionRow({ t, withDate = false, last = false }: { t: any; withDate?: boolean; last?: boolean }) {
   const { c } = useTheme();
-  const { state, perform, confirm, show } = useStore();
+  const { state, perform, show } = useStore();
+  const [sheet, setSheet] = useState<"actions" | "installments" | "financing" | null>(null);
+  const trigger = useRef<ViewControl>(null);
+  const largeText = useWindowDimensions().fontScale > 1.3;
   const nav = useNav();
   const account = state.accounts.find((a: any) => a.id === t.accountId);
   const card = state.cards.find((a: any) => a.id === t.cardId);
@@ -53,57 +57,31 @@ export default function TransactionRow({ t, withDate = false, last = false }: { 
         transactions: s.transactions.map((x: any) => (x.id === t.id ? { ...x, confirmed: !x.confirmed } : x)),
       }),
       t.confirmed ? "Marcado como pendente" : "Confirmado",
+      { undoable: true, undo: (s) => ({ ...s, transactions: s.transactions.map((x: any) => x.id === t.id ? { ...x, confirmed: t.confirmed } : x) }) },
     );
-  // O alerta do Android mostra no máximo 3 botões. Com 3 ações, "Fechar" sai e o
-  // alerta fecha ao tocar fora ou pelo voltar.
-  const options = () => {
-    const actions: any[] = [
-        ...(t.loanSettlement
-          ? [{ text: "Ver dívida e recebimentos", onPress: () => nav.push({ name: "people", tab: "receivables" }) }]
-          : []),
-        ...(t.payableId
-          ? [{ text: "Ver dívida e pagamentos", onPress: () => nav.push({ name: "people", tab: "payables" }) }]
-          : []),
-        ...(!t.cardId && !t.loanSettlement && !t.payableId && !t.invoicePayment
-          ? [
-              {
-                text: t.confirmed ? "Marcar como pendente" : "Confirmar",
-                onPress: () =>
-                  t.financingId
-                    ? confirm("Alterar pagamento?", "O saldo da conta será recalculado.", toggleConfirmed)
-                    : toggleConfirmed(),
-              },
-            ]
-          : []),
-        ...(!t.invoicePayment && !t.loanSettlement && !t.payableId && !t.financingId && !t.adjustment && !t.boxYield
-          ? [{ text: "Editar", onPress: () => nav.push({ name: "form", kind: "transaction", initial: editInitial(state, t) }) }]
-          : []),
-        ...(!t.loanSettlement && !t.payableId && !t.financingId && !t.boxYield
-          ? [
-              {
-                text: "Excluir",
-                style: "destructive" as const,
-                onPress: () =>
-                  confirm(
-                    "Excluir lançamento?",
-                    t.installments > 1
-                      ? "Todas as parcelas desta compra vão para a lixeira. Dá para restaurar por 30 dias."
-                      : "O lançamento vai para a lixeira e o saldo é recalculado. Dá para restaurar por 30 dias.",
-                    () => perform((s: any) => trashTransaction(s, t.id), "Lançamento movido para a lixeira"),
-                    "Excluir",
-                  ),
-              },
-            ]
-          : []),
-    ];
-    Alert.alert(
-      t.description,
-      `${money(t.amount)} · ${br(t.date)}${t.time ? " " + t.time : ""}\n${categoryLabel(t.category, t.subcategory)}${
-        t.installments > 1 ? ` · ${t.installment}/${t.installments}` : ""
-      }${t.notes ? "\n\n" + t.notes : ""}`,
-      actions.length >= 3 ? actions : [{ text: "Fechar", style: "cancel" }, ...actions],
-      { cancelable: true },
-    );
+  const canConfirm = !t.cardId && !t.loanSettlement && !t.payableId && !t.invoicePayment;
+  const canEdit = !t.invoicePayment && !t.loanSettlement && !t.payableId && !t.financingId && !t.adjustment && !t.boxYield;
+  const canDelete = !t.loanSettlement && !t.payableId && !t.financingId && !t.boxYield;
+  const confirmLabel = t.confirmed ? "Marcar como pendente" : "Confirmar";
+  const dismiss = () => {
+    setSheet(null);
+    requestAnimationFrame(() => focusAccessibility(trigger.current));
+  };
+  const runAction = (action: () => void) => {
+    setSheet(null);
+    action();
+  };
+  const remove = () => {
+    setSheet(null);
+    let trashId = "";
+    void perform((s: any) => {
+      const next = trashTransaction(s, t.id);
+      trashId = next.trash[0].id;
+      return next;
+    }, "Lançamento movido para a lixeira", {
+      undoable: true,
+      undo: (s) => restoreTrash(s, trashId),
+    });
   };
   const income = t.type === "income" || t.refund;
   const d = displayOf(state);
@@ -116,16 +94,19 @@ export default function TransactionRow({ t, withDate = false, last = false }: { 
     t.installments > 1 ? `${t.installment}/${t.installments}` : "",
 
   ].filter(Boolean);
-  const badges = [!t.confirmed ? "Pendente" : "", t.refund ? "Estorno" : "", t.adjustment ? "Ajuste" : "", t.boxYield ? "Rendimento" : "", t.ignored ? "Fora da análise" : ""].filter(Boolean);
+  const overdue = !t.confirmed && t.date < today();
+  const badges = [!t.confirmed ? "Pendente" : "", overdue ? "Atrasado" : "", t.refund ? "Estorno" : "", t.adjustment ? "Ajuste" : "", t.boxYield ? "Rendimento" : "", t.ignored ? "Fora da análise" : ""].filter(Boolean);
   return (
+    <>
     <Pressable
+      ref={trigger}
       accessibilityRole="button"
-      accessibilityLabel={`${t.description}, ${income ? "entrada" : "saída"} de ${money(t.amount)}${
-        t.confirmed ? "" : ", pendente"
+      accessibilityLabel={`${t.description}, ${income ? "entrada" : "saída"} de ${show(t.amount)}${
+        t.confirmed ? "" : overdue ? ", pendente e atrasado" : ", pendente"
       }. Abrir opções`}
-      onPress={options}
+      onPress={() => setSheet("actions")}
       android_ripple={{ color: c.soft }}
-      style={({ pressed }) => [row.tx, !last && k.hairline, { borderBottomColor: c.line, backgroundColor: pressed ? c.soft : "transparent" }]}
+      style={({ pressed }) => [row.tx, largeText && row.txLarge, !last && k.hairline, { borderBottomColor: c.line, backgroundColor: pressed ? c.soft : "transparent" }]}
     >
       {t.type === "transfer" ? (
         <View style={[row.icon, { backgroundColor: c.bg }]} importantForAccessibility="no">
@@ -135,10 +116,10 @@ export default function TransactionRow({ t, withDate = false, last = false }: { 
         <CategoryIcon look={categoryStyleOf(state, t.category || "Outros")} size={38} />
       )}
       <View style={{ flex: 1, gap: 2 }}>
-        <T numberOfLines={1} style={{ fontFamily: "SoraSemi", fontSize: 14 }}>
+        <T numberOfLines={largeText ? 2 : 1} style={{ fontFamily: "SoraSemi", fontSize: 14 }}>
           {t.description}
         </T>
-        <Muted numberOfLines={1}>{meta.join(" · ")}</Muted>
+        <Muted numberOfLines={largeText ? undefined : 1}>{meta.join(" · ")}</Muted>
         {d.showTags && !!tags.length && <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
           {state.tags.filter((tag: any) => (t.tags || []).includes(tag.id)).map((tag: any) =>
             <View key={tag.id} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
@@ -151,8 +132,8 @@ export default function TransactionRow({ t, withDate = false, last = false }: { 
           </Muted>
         )}
       </View>
-      <View style={{ alignItems: "flex-end", gap: 4 }}>
-        <T
+      <View style={[row.amount, largeText && row.amountLarge]}>
+        <T {...fitAmount}
           style={{
             fontFamily: "SoraSemi",
             fontSize: 14,
@@ -165,16 +146,60 @@ export default function TransactionRow({ t, withDate = false, last = false }: { 
         </T>
         {badges.map((b) => (
           <View key={b} style={[row.badge, { backgroundColor: b === "Pendente" && d.highlightPending ? c.accent : c.soft }]}>
-            <T style={{ fontSize: 10.5, color: b === "Pendente" && d.highlightPending ? c.heroText : c.text, fontFamily: "SoraSemi" }}>{b}</T>
+            <T style={{ fontSize: 12, color: b === "Atrasado" ? c.red : b === "Pendente" && d.highlightPending ? c.heroText : c.text, fontFamily: "SoraSemi" }}>{b}</T>
           </View>
         ))}
       </View>
     </Pressable>
+    {sheet === "actions" && (
+      <SheetModal title="Ações do lançamento" onClose={dismiss}>
+        <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+          <View style={{ gap: 4 }}>
+            <T style={{ fontFamily: "SoraSemi" }}>{t.description}</T>
+            <Muted>{show(t.amount)} · {br(t.date)}{t.time ? " " + t.time : ""} · {categoryLabel(t.category, t.subcategory)}
+              {t.installments > 1 ? ` · ${t.installment}/${t.installments}` : ""}
+            </Muted>
+            {!!t.notes && <Muted>{t.notes}</Muted>}
+          </View>
+          {canEdit && <Button title="Editar" icon="edit-2" onPress={() =>
+            runAction(() => nav.push({ name: "form", kind: "transaction", initial: editInitial(state, t) }))
+          } />}
+          {(canConfirm || t.loanSettlement || t.payableId) && (
+            <Group>
+              {canConfirm && <Row icon="check-circle" label={confirmLabel} onPress={() =>
+                t.financingId ? setSheet("financing") : runAction(toggleConfirmed)
+              } />}
+              {t.loanSettlement && <Row icon="users" label="Ver dívida e recebimentos" onPress={() =>
+                runAction(() => nav.push({ name: "people", tab: "receivables" }))
+              } />}
+              {t.payableId && <Row icon="users" label="Ver dívida e pagamentos" onPress={() =>
+                runAction(() => nav.push({ name: "people", tab: "payables" }))
+              } />}
+            </Group>
+          )}
+          {canDelete && <Button title="Excluir" icon="trash-2" danger onPress={() =>
+            t.installments > 1 ? setSheet("installments") : remove()
+          } />}
+        </ScrollView>
+      </SheetModal>
+    )}
+    {sheet === "installments" && (
+      <ConfirmSheet title="Excluir todas as parcelas?" changes={["Todas as parcelas desta compra vão para a lixeira."]}
+        keeps={["Você pode restaurá-las por 30 dias."]} action="Excluir parcelas" onConfirm={remove} onClose={dismiss} />
+    )}
+    {sheet === "financing" && (
+      <ConfirmSheet title="Alterar pagamento?" changes={["O saldo da conta será recalculado."]}
+        keeps={[]} action={confirmLabel} destructive={false} onConfirm={() => runAction(toggleConfirmed)} onClose={dismiss} />
+    )}
+    </>
   );
 }
 
 const row = StyleSheet.create({
   tx: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, paddingHorizontal: 14, minHeight: 64 },
+  txLarge: { flexWrap: "wrap", alignItems: "flex-start" },
+  amount: { alignItems: "flex-end", gap: 4, maxWidth: "50%" },
+  amountLarge: { width: "100%", maxWidth: "100%" },
   icon: { width: 38, height: 38, borderRadius: 12, justifyContent: "center", alignItems: "center" },
   badge: { borderRadius: 8, paddingHorizontal: 7, paddingVertical: 1 },
 });

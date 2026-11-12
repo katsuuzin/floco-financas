@@ -1,10 +1,9 @@
+import { Button } from "./ui/kit";
 import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
   TextInput,
-  Pressable,
-  ScrollView,
   Alert,
   NativeModules,
 } from "react-native";
@@ -18,9 +17,9 @@ const folder = FileSystem.documentDirectory + "encrypted-backups/";
 export default function SecurityPanel({
   state,
   c,
-  onClose,
   onChange,
   onPinChange,
+  section,
 }: any) {
   const [old, setOld] = useState(""),
     [pin, setPin] = useState(""),
@@ -61,23 +60,8 @@ export default function SecurityPanel({
       {v}
     </Text>
   );
-  const button = (label: string, fn: any) => (
-    <Pressable
-      accessibilityRole="button"
-      disabled={busy}
-      onPress={fn}
-      style={({ pressed }) => ({
-        minHeight: 48,
-        padding: 14,
-        marginVertical: 5,
-        borderRadius: 14,
-        backgroundColor: c.soft,
-        opacity: busy || pressed ? 0.6 : 1,
-      })}
-    >
-      {text(label, true)}
-    </Pressable>
-  );
+  const button = (label: string, fn: () => void) =>
+    <Button title={label} onPress={fn} disabled={busy} secondary={label !== "Salvar PIN"} />;
   const field = (label: string, value: string, set: any, numeric = false) => (
     <View style={{ gap: 5, marginVertical: 8 }}>
       {text(label, true)}
@@ -159,15 +143,8 @@ export default function SecurityPanel({
     }
   };
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <View style={{ padding: 16, borderBottomWidth: 1, borderColor: c.line }}>
-        {button("Voltar", onClose)}
-        {text("Segurança e backups", true)}
-      </View>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ padding: 20, paddingBottom: 50, gap: 10 }}
-      >
+    <View style={{ gap: 12 }}>
+        {section !== "backup" && <>
         {text("PIN do Floco", true)}
         {text(
           enabled
@@ -201,6 +178,8 @@ export default function SecurityPanel({
               setMessage("PIN desativado.");
             }),
           )}
+        </>}
+        {section === "backup" && <>
         {text("Backup criptografado local", true)}
         {text(
           "AES-256-GCM com senha. Use pelo menos 12 caracteres e guarde essa senha: sem ela não é possível recuperar o arquivo. PIN, acesso biométrico e credenciais não entram no backup. O histórico fica neste aparelho; exporte uma cópia para se proteger de perda ou desinstalação.",
@@ -258,6 +237,7 @@ export default function SecurityPanel({
             )}
           </View>
         ))}
+        </>}
         {!!message && text(message)}
         {!!error && (
           <Text
@@ -267,7 +247,6 @@ export default function SecurityPanel({
             {error}
           </Text>
         )}
-      </ScrollView>
     </View>
   );
 }

@@ -23,7 +23,7 @@ export async function deleteAttachmentFiles(attachments: any[] | undefined) {
 
 export default function AttachmentsField({ list, rowId, attachments = [] }: { list: "receivables" | "payables"; rowId: string; attachments?: any[] }) {
   const { c } = useTheme();
-  const { perform } = useStore();
+  const { perform, softFail } = useStore();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -41,11 +41,11 @@ export default function AttachmentsField({ list, rowId, attachments = [] }: { li
       const id = uid();
       const safe = (asset.name || "anexo").replace(/[^A-Za-z0-9._-]/gu, "_").replace(/^[._-]+/u, "").slice(-60) || "anexo";
       const file = `${id.replace(/[^A-Za-z0-9_-]/gu, "")}-${safe}`;
-      await FileSystem.makeDirectoryAsync(DIR(), { intermediates: true }).catch(() => {});
+      await FileSystem.makeDirectoryAsync(DIR(), { intermediates: true });
       await FileSystem.copyAsync({ from: asset.uri, to: attachmentUri(file) });
       const record = { id, name: (asset.name || "Anexo").slice(0, 120), file, mime: (asset.mimeType || "application/octet-stream").slice(0, 80), size };
       const ok = await perform((s: any) => addAttachment(s, list, rowId, record), "anexo salvo");
-      if (!ok) await FileSystem.deleteAsync(attachmentUri(file), { idempotent: true }).catch(() => {});
+      if (!ok) await FileSystem.deleteAsync(attachmentUri(file), { idempotent: true });
       else setMessage("Anexo salvo neste aparelho.");
     } catch (e: any) {
       setMessage(e?.message || "Não consegui salvar o anexo.");
@@ -68,7 +68,7 @@ export default function AttachmentsField({ list, rowId, attachments = [] }: { li
       { text: "Cancelar", style: "cancel" },
       { text: "Remover", style: "destructive", onPress: () => {
         void perform((s: any) => removeAttachment(s, list, rowId, a.id), "anexo removido").then((ok: boolean) => {
-          if (ok) void FileSystem.deleteAsync(attachmentUri(a.file), { idempotent: true }).catch(() => {});
+          if (ok) void FileSystem.deleteAsync(attachmentUri(a.file), { idempotent: true }).catch(() => softFail("O anexo saiu do registro, mas o arquivo não pôde ser apagado."));
         });
       } },
     ]);

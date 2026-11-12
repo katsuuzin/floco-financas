@@ -1,5 +1,6 @@
 // Foto do item da lista de compras (1.12, passo 11). Fica só no aparelho, em documentDirectory/shopping-photos/,
 // e não entra no backup. A miniatura aparece só na folha do item. Arquivos sem item são apagados ao abrir as Listas.
+import { useStore } from "../app/store";
 import React, { useRef, useState } from "react";
 import { Image, Linking, Modal, Pressable, View } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
@@ -11,14 +12,14 @@ const DIR = () => `${FileSystem.documentDirectory}shopping-photos/`;
 export const photoUri = (name: string) => `${DIR()}${name}`;
 
 export async function savePhoto(tempUri: string, itemId: string): Promise<string> {
-  await FileSystem.makeDirectoryAsync(DIR(), { intermediates: true }).catch(() => {});
+  await FileSystem.makeDirectoryAsync(DIR(), { intermediates: true });
   const name = `${itemId.replace(/[^A-Za-z0-9_-]/gu, "").slice(0, 60) || "item"}-${Date.now().toString(36)}.jpg`;
   await FileSystem.copyAsync({ from: tempUri, to: photoUri(name) });
   return name;
 }
 
 export async function removePhoto(name?: string | null) {
-  if (name) await FileSystem.deleteAsync(photoUri(name), { idempotent: true }).catch(() => {});
+  if (name) await FileSystem.deleteAsync(photoUri(name), { idempotent: true });
 }
 
 // Apaga fotos que nenhum item usa mais.
@@ -28,13 +29,14 @@ export async function cleanupPhotos(used: Set<string>) {
   cleaned = true;
   try {
     const names = await FileSystem.readDirectoryAsync(DIR());
-    await Promise.all(names.filter((name) => !used.has(name)).map((name) => removePhoto(name)));
+    await Promise.all(names.filter((name) => !used.has(name)).map((name) => removePhoto(name).catch(() => {})));
   } catch {}
 }
 
 // Miniatura de 88 dp com "Pôr foto" ou "Trocar" e "Tirar foto".
 export function PhotoField({ itemId, itemName, photo, onChange }: { itemId: string; itemName: string; photo?: string; onChange: (name: string | null, old?: string) => void; }) {
   const { c } = useTheme();
+  const { softFail } = useStore();
   const [shooting, setShooting] = useState(false);
   return (
     <View style={[k.row, { gap: space.md }]}>
@@ -55,13 +57,14 @@ export function PhotoField({ itemId, itemName, photo, onChange }: { itemId: stri
           </Pressable>
         )}
       </View>
-      {shooting && <CaptureModal onClose={() => setShooting(false)} onTaken={(uri) => { setShooting(false); void savePhoto(uri, itemId).then((name) => onChange(name, photo)).catch(() => {}); }} itemName={itemName} />}
+      {shooting && <CaptureModal onClose={() => setShooting(false)} onTaken={(uri) => { setShooting(false); void savePhoto(uri, itemId).then((name) => onChange(name, photo)).catch(() => softFail("Não foi possível salvar a foto.")); }} itemName={itemName} />}
     </View>
   );
 }
 
 function CaptureModal({ itemName, onClose, onTaken }: { itemName: string; onClose: () => void; onTaken: (tempUri: string) => void; }) {
   const { c } = useTheme();
+  const { softFail } = useStore();
   const [permission, ask] = useCameraPermissions();
   const camera = useRef<CameraView>(null);
   const [busy, setBusy] = useState(false);
@@ -90,8 +93,8 @@ function CaptureModal({ itemName, onClose, onTaken }: { itemName: string; onClos
           <View style={{ gap: space.sm }}>
             <Muted>Permita a câmera para fotografar o item.</Muted>
             {permission?.canAskAgain === false
-              ? <Button title="Abrir configurações" icon="settings" onPress={() => void Linking.openSettings()} />
-              : <Button title="Permitir câmera" icon="camera" onPress={() => void ask()} />}
+              ? <Button title="Abrir configurações" icon="settings" onPress={() => void Linking.openSettings().catch(() => softFail("Não foi possível abrir as configurações do Android."))} />
+              : <Button title="Permitir câmera" icon="camera" onPress={() => void ask().catch(() => softFail("Não foi possível pedir acesso à câmera."))} />}
           </View>
         )}
         {!!error && <Muted accessibilityLiveRegion="polite" style={{ color: c.red }}>{error}</Muted>}

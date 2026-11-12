@@ -1,8 +1,9 @@
 // Confirmação de uma notificação bancária: revisar e registrar em um toque.
 // Linhas compactas com seta que abrem listas (tipo, conta ou cartão, categoria, tags).
-import React, { useEffect, useState } from "react";
-import { View, Modal, Pressable, ScrollView, TextInput, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
-import { T, Muted, I, Button, IconButton, styles as k } from "../ui/kit";
+import React, { useEffect, useRef, useState } from "react";
+import { View, Modal, Keyboard, Pressable, ScrollView, TextInput, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
+import { T, Muted, I, Button, DateField, IconButton, styles as k } from "../ui/kit";
+import { DiscardDraftSheet } from "../ui/Sheet";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { draftFromNotification, importNotification, KIND_LABEL, KIND_DETAIL } from "../notification-import.mjs";
@@ -28,18 +29,27 @@ const KIND_ICON: Record<string, any> = {
 
 const INCOME_KINDS = ["pixIn", "transferIn", "yield", "income"];
 
-export default function InboxSheet({ row, onClose, onDone }: { row: any | null; onClose: () => void; onDone: (id: string) => void }) {
+export default function InboxSheet({ row, editDate = false, onClose, onDone }: { row: any | null; editDate?: boolean; onClose: () => void; onDone: (id: string) => void }) {
   const { c } = useTheme();
   const { state, perform } = useStore();
   const [f, setF] = useState<any>(null);
+  const baseline = useRef("");
+  const [discard, setDiscard] = useState(false);
   const [error, setError] = useState("");
   const [picker, setPicker] = useState<"" | "kind" | "target" | "category" | "tags">("");
   useEffect(() => {
     setError("");
     setPicker("");
-    setF(row ? draftFromNotification(state, row) : null);
+    const draft = row ? draftFromNotification(state, row) : null;
+    baseline.current = JSON.stringify(draft);
+    setF(draft);
+    setDiscard(false);
   }, [row?.id]);
   if (!row || !f) return null;
+  const requestClose = () => {
+    if (JSON.stringify(f) === baseline.current) onClose();
+    else { Keyboard.dismiss(); setDiscard(true); }
+  };
   const set = (key: string, value: any) => setF((x: any) => ({ ...x, [key]: value }));
   const income = f.type === "income";
   const color = income ? c.green : c.red;
@@ -57,9 +67,10 @@ export default function InboxSheet({ row, onClose, onDone }: { row: any | null; 
   const look = lookOf(state, f.category || "Outros");
   const tagNames = (f.tags || []).map((id: string) => state.tags?.find((t: any) => t.id === id)?.name).filter(Boolean);
   const line = { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.line };
+  if (discard) return <DiscardDraftSheet onDiscard={onClose} onContinue={() => setDiscard(false)} />;
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={[s.backdrop, { backgroundColor: c.scrim }]} onPress={onClose} accessibilityLabel="Fechar" />
+    <Modal visible transparent animationType="slide" onRequestClose={requestClose}>
+      <Pressable style={[s.backdrop, { backgroundColor: c.scrim }]} onPress={requestClose} accessibilityLabel="Fechar" />
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[s.sheet, { backgroundColor: c.bg }]}>
         <View style={[s.handle, { backgroundColor: c.line }]} />
         <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }} keyboardShouldPersistTaps="handled">
@@ -99,7 +110,7 @@ export default function InboxSheet({ row, onClose, onDone }: { row: any | null; 
                 onChangeText={(v) => set("description", v)}
                 placeholder="Descrição"
                 placeholderTextColor={c.muted}
-                style={{ flex: 1, minHeight: 44, color: c.text, fontFamily: "SoraSemi", fontSize: 15 }}
+                style={{ flex: 1, minHeight: 48, color: c.text, fontFamily: "SoraSemi", fontSize: 15 }}
               />
             </View>
             <PickerRow
@@ -134,10 +145,10 @@ export default function InboxSheet({ row, onClose, onDone }: { row: any | null; 
               onPress={() => setPicker("category")}
             />
             {!!f.suggested && (
-              <View style={[k.row, { paddingHorizontal: 14, minHeight: 44, gap: 8, backgroundColor: c.soft }]}>
+              <View style={[k.row, { paddingHorizontal: 14, minHeight: 48, gap: 8, backgroundColor: c.soft }]}>
                 <I name="zap" size={15} color={c.primary} />
                 <T style={{ flex: 1, color: c.primary, fontSize: 13 }}>Sugestão do app para esta loja</T>
-                <Pressable accessibilityRole="button" accessibilityLabel="Trocar a categoria sugerida" onPress={() => setPicker("category")} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 6 }}>
+                <Pressable accessibilityRole="button" accessibilityLabel="Trocar a categoria sugerida" onPress={() => setPicker("category")} style={{ minHeight: 48, justifyContent: "center", paddingHorizontal: 6 }}>
                   <T style={{ color: c.primary, fontFamily: "SoraSemi", fontSize: 13 }}>Trocar</T>
                 </Pressable>
               </View>
@@ -154,11 +165,12 @@ export default function InboxSheet({ row, onClose, onDone }: { row: any | null; 
                 multiline
                 placeholder="Observações"
                 placeholderTextColor={c.muted}
-                style={{ flex: 1, minHeight: 44, color: c.text, fontFamily: "Sora", fontSize: 15, lineHeight: 22, paddingVertical: 10 }}
+                style={{ flex: 1, minHeight: 48, color: c.text, fontFamily: "Sora", fontSize: 15, lineHeight: 22, paddingVertical: 10 }}
               />
               {!!f.notes && <IconButton name="x" label="Limpar observações" onPress={() => set("notes", "")} />}
             </View>
           </View>
+          {editDate && <DateField label="Data" value={f.date} onChange={(value) => set("date", value)} />}
           {!!error && <T style={{ color: c.red }}>{error}</T>}
         </ScrollView>
         <View style={[k.row, s.footer, { borderTopColor: c.line }]}>

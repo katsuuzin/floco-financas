@@ -1,18 +1,17 @@
 // Quem me deve: valores a receber de uma pessoa ou empresa, com recebimentos parciais, vencimento e anexos
 // (print, comprovante ou documento). É o espelho de "Quem eu devo". Receber cria uma receita na conta escolhida.
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Alert, ScrollView, View } from "react-native";
-import { AmountField, Box, Button, Choice, DateField, Empty, Field, Muted, T, space } from "../ui/kit";
-import { SheetModal } from "../ui/pickers";
+import { AmountField, Box, Button, CreateAction, Choice, DateField, Empty, Field, Muted, T, space } from "../ui/kit";
+import { DiscardDraftSheet, SheetModal } from "../ui/Sheet";
 import AttachmentsField, { deleteAttachmentFiles } from "../ui/Attachments";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { visibleAccounts } from "../accountOrder.mjs";
 import { brDate } from "../dates.mjs";
-import { parseMoney, today } from "../finance.mjs";
+import { formatMoneyInput, parseMoney, today } from "../finance.mjs";
 import { addReceivable, receiveDebt, receivableBalance, undoDebtPayment } from "../planning.mjs";
 
-const decimal = (cents: number) => (cents / 100).toFixed(2).replace(".", ",");
 
 export default function ReceivablesScreen() {
   const { c } = useTheme();
@@ -78,7 +77,7 @@ export default function ReceivablesScreen() {
         <Muted>Total a receber</Muted>
         <T accessibilityLabel={`Total a receber ${show(total)}`} style={{ fontFamily: "SoraBold", fontSize: 28 }}>{show(total)}</T>
       </Box>
-      <Button title="Novo valor a receber" icon="plus" onPress={() => setCreating(true)} />
+      <CreateAction title="Novo valor a receber" onPress={() => setCreating(true)} />
       {debts.length === 0 && (
         <Empty icon="users" title="Ninguém te deve por aqui" body="Acompanhe empréstimos, vendas ou divisões de conta, com o print da conversa." />
       )}
@@ -105,6 +104,9 @@ function NewSheet({ onClose, onCreated }: { onClose: () => void; onCreated: (id:
   const { c } = useTheme();
   const { perform } = useStore();
   const [form, setForm] = useState({ person: "", description: "", amount: "", date: today(), dueDate: "" });
+  const baseline = useRef(JSON.stringify(form));
+  const [discard, setDiscard] = useState(false);
+  const closeDraft = () => JSON.stringify(form) === baseline.current ? onClose() : setDiscard(true);
   const [error, setError] = useState("");
   const set = (key: string, value: string) => { setForm({ ...form, [key]: value }); setError(""); };
   const save = async () => {
@@ -122,8 +124,9 @@ function NewSheet({ onClose, onCreated }: { onClose: () => void; onCreated: (id:
       setError(e.message);
     }
   };
+  if (discard) return <DiscardDraftSheet title="Descartar alterações?" onContinue={() => setDiscard(false)} onDiscard={onClose} />;
   return (
-    <SheetModal title="Novo valor a receber" onClose={onClose} footer={<Button title="Salvar" onPress={() => void save()} />}>
+    <SheetModal title="Novo valor a receber" onClose={closeDraft} footer={<Button title="Salvar" onPress={() => void save()} />}>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: space.lg, paddingTop: space.xs, gap: space.md }}>
         <Field label="Quem te deve" value={form.person} onChange={(v) => set("person", v)} maxLength={80} />
         <Field label="Motivo / descrição" value={form.description} onChange={(v) => set("description", v)} maxLength={120} />
@@ -141,7 +144,10 @@ function ReceiveSheet({ debt, onClose }: { debt: any; onClose: () => void }) {
   const { c } = useTheme();
   const { state, perform } = useStore();
   const accounts = visibleAccounts(state);
-  const [form, setForm] = useState({ amount: decimal(receivableBalance(debt)), date: today(), accountId: accounts[0]?.id || "" });
+  const [form, setForm] = useState({ amount: formatMoneyInput(receivableBalance(debt)), date: today(), accountId: accounts[0]?.id || "" });
+  const baseline = useRef(JSON.stringify(form));
+  const [discard, setDiscard] = useState(false);
+  const closeDraft = () => JSON.stringify(form) === baseline.current ? onClose() : setDiscard(true);
   const [error, setError] = useState("");
   const set = (key: string, value: string) => { setForm({ ...form, [key]: value }); setError(""); };
   const save = async () => {
@@ -153,8 +159,9 @@ function ReceiveSheet({ debt, onClose }: { debt: any; onClose: () => void }) {
       setError(e.message);
     }
   };
+  if (discard) return <DiscardDraftSheet title="Descartar alterações?" onContinue={() => setDiscard(false)} onDiscard={onClose} />;
   return (
-    <SheetModal title="Registrar recebimento" onClose={onClose} footer={<Button title="Registrar" onPress={() => void save()} />}>
+    <SheetModal title="Registrar recebimento" onClose={closeDraft} footer={<Button title="Registrar" onPress={() => void save()} />}>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: space.lg, paddingTop: space.xs, gap: space.md }}>
         <AmountField label="Valor recebido" value={form.amount} onChange={(v) => set("amount", v)} />
         <DateField label="Data do recebimento" value={form.date} onChange={(v) => set("date", v)} />

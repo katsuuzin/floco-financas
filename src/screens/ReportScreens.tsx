@@ -182,7 +182,7 @@ function CategoryNet() {
               <T style={{ flex: 1 }}>{r.category}</T>
               <View style={{ alignItems: "flex-end" }}>
                 <T style={{ fontFamily: "SoraSemi", color: r.net < 0 ? c.red : c.green }}>{signed(show, r.net)}</T>
-                <Muted style={{ fontSize: 11 }}>
+                <Muted style={{ fontSize: 12 }}>
                   +{show(r.income)} · −{show(r.expense)}
                 </Muted>
               </View>
@@ -471,7 +471,7 @@ export function ProjectionsScreen() {
         values={[
           ["short", "Curto prazo"],
           ["medium", "Médio prazo"],
-          ["whatif", "E se…"],
+          ["whatif", "Cenário"],
         ]}
         value={view}
         onChange={setView}
@@ -490,11 +490,11 @@ export function ProjectionsScreen() {
           <Box>
             <Muted>Saldo previsto em {days} dias</Muted>
             <T style={[k.balanceValue, { fontSize: 28, color: short.final < 0 ? c.red : c.text }]}>{signed(show, short.final)}</T>
-            <Muted>
+            {short.min !== short.final && <Muted>
               Menor folga: {signed(show, short.min)}
               {minRow ? ` em ${br(minRow.date)}` : ""}
               {short.min < 0 ? " · o saldo fica negativo no período" : ""}
-            </Muted>
+            </Muted>}
           </Box>
           <Section title="O que acontece no período" />
           <Box>
@@ -542,7 +542,7 @@ export function ProjectionsScreen() {
                   <T style={{ fontFamily: "SoraSemi", color: r.estimated < 0 ? c.red : c.text }}>{signed(show, r.estimated)}</T>
                 </View>
                 <Progress value={Math.abs(r.estimated)} max={peak} color={r.estimated < 0 ? c.red : undefined} />
-                <Muted style={{ fontSize: 11 }}>Contratado {signed(show, r.contracted)}</Muted>
+                <Muted style={{ fontSize: 12 }}>Contratado {signed(show, r.contracted)}</Muted>
               </View>
             ))}
           </Box>

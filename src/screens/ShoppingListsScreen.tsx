@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Vibration, View, useWindowDimensions } from "react-native";
 import Animated, { Easing, useReducedMotion, withDelay, withTiming } from "react-native-reanimated";
-import { Button, Choice, Field, I, IconButton, Muted, T, radius, space, styles as k } from "../ui/kit";
+import { Button, CreateAction, Choice, Field, I, IconButton, Muted, T, radius, space, styles as k } from "../ui/kit";
 import MotionPressable from "../ui/motion";
 import { useTheme } from "../ui/theme";
 import { SheetModal } from "../ui/pickers";
@@ -70,13 +70,7 @@ export default function ShoppingListsScreen() {
       <View style={[k.row, { justifyContent: "flex-end" }]}>
         <IconButton name="move" label="Organizar listas" onPress={organize} />
       </View>
-      <MotionPressable kind="row" accessibilityRole="button" accessibilityLabel="Nova lista" onPress={() => setEditor(true)}
-        style={[k.row, { minHeight: 56, paddingLeft: space.lg, paddingRight: space.xs, borderRadius: radius.lg, backgroundColor: c.surface }]}>
-        <T style={{ flex: 1, fontFamily: "SoraSemi" }}>Nova lista</T>
-        <View style={{ width: 48, height: 48, borderRadius: radius.md, backgroundColor: c.primary, alignItems: "center", justifyContent: "center" }}>
-          <I name="plus" color={c.onPrimary} />
-        </View>
-      </MotionPressable>
+      <CreateAction title="Nova lista" onPress={() => setEditor(true)} />
 
       {rows.map((row, index) => (
         <Animated.View key={row.id} entering={reduce ? undefined : cascade(index)}>

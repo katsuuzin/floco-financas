@@ -7,7 +7,6 @@ import { useNav } from "../../app/nav";
 import { totals, monthKey, addMonths, analysisAmount, totalBalance, signedAmount, includedAccounts, today } from "../../finance.mjs";
 import { report } from "../../planning.mjs";
 import { layoutOf } from "../../layout.mjs";
-import MonthBar from "../MonthBar";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const lastDay = (m: string) => new Date(Number(m.slice(0, 4)), Number(m.slice(5)), 0).getDate();
@@ -95,30 +94,6 @@ export default function LegacyBlocks() {
         </Box>
       </>
     ),
-    categories: () => {
-      const { rows, total } = categoryBreakdown(state, month);
-      return (
-        <>
-          <Section title="Despesas por categoria" />
-          <Box>
-            {rows.length ? (
-              rows.map(([name, value]) => (
-                <View key={name} style={{ marginBottom: 14, gap: 6 }}>
-                  <View style={[k.row, { justifyContent: "space-between" }]}>
-                    <T style={{ flex: 1 }}>{name}</T>
-                    <Muted>{((value / total) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</Muted>
-                    <T style={{ fontFamily: "SoraSemi" }}>{show(value)}</T>
-                  </View>
-                  <Progress value={value} max={total} />
-                </View>
-              ))
-            ) : (
-              <Muted>Sem despesas confirmadas neste mês.</Muted>
-            )}
-          </Box>
-        </>
-      );
-    },
     flow: () => {
       const months = Array.from({ length: 6 }, (_, i) => monthKey(addMonths(month + "-01", i - 5)));
       const flow = months.map((m) => ({ m, ...totals(state, m) }));
@@ -137,7 +112,7 @@ export default function LegacyBlocks() {
                     <View style={{ width: 9, borderRadius: 3, height: (f.income / peak) * 110, backgroundColor: c.green }} />
                     <View style={{ width: 9, borderRadius: 3, height: (f.expense / peak) * 110, backgroundColor: c.red }} />
                   </View>
-                  <Muted style={{ fontSize: 10 }}>{short(f.m)}</Muted>
+                  <Muted style={{ fontSize: 12 }}>{short(f.m)}</Muted>
                 </View>
               ))}
             </View>
@@ -239,7 +214,7 @@ export default function LegacyBlocks() {
     links: () => (
       <>
         <Section title="Relatórios" />
-        <ListItem icon="bar-chart-2" label="Relatórios avançados" detail="Fluxo de caixa, comparações, faturas, PDF" onPress={() => nav.push({ name: "reports" })} />
+        <ListItem icon="bar-chart-2" label="Relatórios" detail="Fluxo de caixa, comparações, faturas, PDF" onPress={() => nav.push({ name: "reports" })} />
         <ListItem icon="trending-up" label="Projeções" detail="Curto, médio prazo e simulador" onPress={() => nav.push({ name: "projections" })} />
         <ListItem icon="message-circle" label="Assistente" detail="Saúde financeira e plano de ação" onPress={() => nav.push({ name: "assistant" })} />
       </>
@@ -247,7 +222,6 @@ export default function LegacyBlocks() {
   };
   return (
     <>
-      <MonthBar />
       {layoutOf(state)
         .analysis.filter((b: any) => b.visible && blocks[b.id])
         .map((b: any) => (

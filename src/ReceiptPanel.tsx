@@ -1,12 +1,11 @@
 import { visibleAccounts } from "./accountOrder.mjs";
-import { DateField } from "./ui/kit";
+import { Button, DateField } from "./ui/kit";
 import React, { useState } from "react";
 import {
   View,
   Text,
   TextInput,
   Pressable,
-  ScrollView,
   NativeModules,
   ActivityIndicator,
 } from "react-native";
@@ -15,7 +14,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { receiptAmounts, receiptDates } from "./receipt-suggestions.mjs";
 import { today, parseMoney, addTransaction } from "./finance.mjs";
 import { categoryNames } from "./planning.mjs";
-export default function ReceiptPanel({ state, c, onChange, onClose }: any) {
+export default function ReceiptPanel({ state, c, onChange }: any) {
   const [raw, setRaw] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
@@ -42,23 +41,8 @@ export default function ReceiptPanel({ state, c, onChange, onClose }: any) {
       {v}
     </Text>
   );
-  const button = (label: string, fn: any) => (
-    <Pressable
-      accessibilityRole="button"
-      disabled={busy}
-      onPress={fn}
-      style={({ pressed }) => ({
-        minHeight: 48,
-        marginVertical: 5,
-        padding: 14,
-        borderRadius: 14,
-        backgroundColor: c.soft,
-        opacity: busy || pressed ? 0.6 : 1,
-      })}
-    >
-      {text(label, true)}
-    </Pressable>
-  );
+  const button = (label: string, fn: () => void) =>
+    <Button title={label} onPress={fn} disabled={busy} secondary={label === "Fotografar comprovante"} />;
   const read = async (camera = false) => {
     if (busy) return;
     setBusy(true);
@@ -108,7 +92,7 @@ export default function ReceiptPanel({ state, c, onChange, onClose }: any) {
   };
   const field = (key: "amount" | "description" | "date", label: string) =>
     key === "date" ? (
-      <DateField label={label.replace(/\s*\(AAAA-MM-DD\)/, "")} value={form.date} onChange={(v) => setForm({ ...form, date: v })} />
+      <DateField label={label} value={form.date} onChange={(v) => setForm({ ...form, date: v })} />
     ) : (
     <View style={{ gap: 6, marginVertical: 8 }}>
       {text(label, true)}
@@ -161,25 +145,7 @@ export default function ReceiptPanel({ state, c, onChange, onClose }: any) {
     </View>
   );
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <View
-        style={{
-          paddingHorizontal: 16,
-          paddingVertical: 4,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 16,
-          borderBottomWidth: 1,
-          borderColor: c.line,
-        }}
-      >
-        {button("Voltar", onClose)}
-        {text("Ler comprovante / PDF", true)}
-      </View>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ padding: 20, gap: 10, paddingBottom: 50 }}
-      >
+    <View style={{ gap: 12 }}>
         {text(
           "Reconhecimento no aparelho, sem Google Cloud. PDFs com até 15 páginas e arquivos de até 20 MB. OCR pode errar: confira o valor, a data e a origem antes de registrar. Não identifica sozinho PF/PJ, débito/crédito ou parcelas.",
         )}
@@ -223,7 +189,7 @@ export default function ReceiptPanel({ state, c, onChange, onClose }: any) {
             </View>
             {field("description", "Descrição")}
             {field("amount", "Valor confirmado (R$)")}
-            {field("date", "Data confirmada (AAAA-MM-DD)")}
+            {field("date", "Data confirmada")}
             {choices("type", "Tipo", [
               ["expense", "Despesa"],
               ["income", "Receita"],
@@ -272,7 +238,6 @@ export default function ReceiptPanel({ state, c, onChange, onClose }: any) {
             {error}
           </Text>
         )}
-      </ScrollView>
     </View>
   );
 }

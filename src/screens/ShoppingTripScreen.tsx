@@ -16,7 +16,7 @@ const BUDGET_KEY = "floco.tripBudgetCents";
 // Modo compra: tela para usar no mercado. Total do carrinho, progresso, tempo e o que falta pegar.
 export default function ShoppingTripScreen({ lists }: { lists?: string[] }) {
   const { c } = useTheme();
-  const { state, perform } = useStore();
+  const { state, perform, softFail } = useStore();
   const nav = useNav();
   // O horário de início fica guardado: sair e voltar (até 3 h) não zera o tempo.
   const [session, setSession] = useState<{ startedAt: number; lastSeenAt: number } | null>(null);
@@ -76,12 +76,12 @@ export default function ShoppingTripScreen({ lists }: { lists?: string[] }) {
     setLimitCents(value);
     setEditLimit(false);
     requestAnimationFrame(() => focusAccessibility(limitButton.current));
-    (value > 0 ? AsyncStorage.setItem(BUDGET_KEY, String(value)) : AsyncStorage.removeItem(BUDGET_KEY)).catch(() => {});
+    (value > 0 ? AsyncStorage.setItem(BUDGET_KEY, String(value)) : AsyncStorage.removeItem(BUDGET_KEY)).catch(() => softFail("Não foi possível guardar o limite da compra."));
   };
   const finish = () => {
     sessionRef.current = endSession();
     setSession(sessionRef.current);
-    AsyncStorage.removeItem(SESSION_KEY).catch(() => {});
+    AsyncStorage.removeItem(SESSION_KEY).catch(() => softFail("Não foi possível encerrar a sessão salva da compra."));
   };
 
   const selectedState = tripScopeState(state, lists);

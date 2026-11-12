@@ -3,15 +3,13 @@ import React, { useEffect, useState } from "react";
 import { Alert, Linking, View, Pressable, NativeModules, Image } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
-import * as DocumentPicker from "expo-document-picker";
 import * as LocalAuthentication from "expo-local-authentication";
 import * as Application from "expo-application";
 import { Section, Box, Toggle, Button, ListItem, Muted, T, I } from "../ui/kit";
 import { ACCENTS, accentOf, useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
-import { today, validateBackup, emptyState, demoState } from "../finance.mjs";
-import { keepShoppingOnRestore } from "../shopping.mjs";
+import { emptyState, demoState } from "../finance.mjs";
 
 export async function exportCSV(state: any) {
   const esc = (v: any) => '"' + String(v ?? "").replace(/"/g, '""') + '"';
@@ -39,7 +37,7 @@ export async function exportCSV(state: any) {
 }
 
 export default function SettingsScreen() {
-  const { state, perform, confirm, current } = useStore();
+  const { state, perform, confirm, softFail } = useStore();
   const nav = useNav();
   const { c } = useTheme();
   // S10: ícone do app (troca o atalho na tela inicial; o launcher pode levar alguns segundos).
@@ -56,36 +54,6 @@ export default function SettingsScreen() {
       "Trocar",
     );
 
-  const backup = async () => {
-    try {
-      const path = FileSystem.cacheDirectory + "floco-backup-" + today() + ".json";
-      await FileSystem.writeAsStringAsync(path, JSON.stringify(current(), null, 2));
-      await Sharing.shareAsync(path, { mimeType: "application/json", dialogTitle: "Guardar backup das finanças" });
-      await perform((s: any) => ({ ...s, settings: { ...s.settings, lastBackup: today() } }), "Backup gerado");
-    } catch (e: any) {
-      Alert.alert("Falha ao exportar", e.message);
-    }
-  };
-  const restore = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ["application/json", "text/plain"],
-        copyToCacheDirectory: true,
-      });
-      if (result.canceled) return;
-      const asset = result.assets[0];
-      if ((asset.size || 0) > 20 * 1024 * 1024) throw Error("O backup deve ter no máximo 20 MB.");
-      const data = validateBackup(JSON.parse(await FileSystem.readAsStringAsync(asset.uri)));
-      confirm(
-        "Restaurar backup?",
-        `Substituir os dados deste aparelho por ${data.accounts.length} contas e ${data.transactions.length} lançamentos? Faça um backup dos dados atuais antes.`,
-        () => perform((s: any) => keepShoppingOnRestore(data, s), "Backup restaurado"),
-        "Restaurar",
-      );
-    } catch (e: any) {
-      Alert.alert("Backup inválido", e.message);
-    }
-  };
   const toggleBiometric = async (value: boolean) => {
     if (value) {
       try {
@@ -106,7 +74,7 @@ export default function SettingsScreen() {
     <>
       <Section title="Personalização" />
       <Box>
-        <Toggle icon="moon" label="Tema escuro" value={!!state.settings.dark} onChange={setting("dark")} />
+        <Toggle icon="sun" label="Tema claro" value={state.settings.dark === false} onChange={(v: boolean) => setting("dark")(!v)} />
         <Toggle icon="eye-off" label="Ocultar valores" value={!!state.settings.hide} onChange={setting("hide")} />
         <Muted style={{ marginTop: 12 }}>Cor de destaque</Muted>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 8 }}>
@@ -119,12 +87,12 @@ export default function SettingsScreen() {
                 accessibilityState={{ selected: on }}
                 accessibilityLabel={`Destaque ${name}`}
                 onPress={() => setting("accent")(hex)}
-                style={{ alignItems: "center", gap: 4, width: 56 }}
+                style={{ alignItems: "center", gap: 4, width: "28%", flexGrow: 1 }}
               >
                 <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: hex, alignItems: "center", justifyContent: "center", borderWidth: on ? 3 : 0, borderColor: c.text }}>
                   {on && <I name="check" size={18} color={c.heroText} />}
                 </View>
-                <Muted style={{ fontSize: 11 }}>{name}</Muted>
+                <Muted style={{ fontSize: 12 }}>{name}</Muted>
               </Pressable>
             );
           })}
@@ -155,7 +123,7 @@ export default function SettingsScreen() {
                     <View style={{ width: 56, height: 56, borderRadius: 18, alignItems: "center", justifyContent: "center", borderWidth: on ? 3 : 0, borderColor: c.primary }}>
                       <Image source={img} style={{ width: 64, height: 64 }} />
                     </View>
-                    <Muted style={{ fontSize: 11 }}>{label}</Muted>
+                    <Muted style={{ fontSize: 12 }}>{label}</Muted>
                   </Pressable>
                 );
               })}
@@ -168,24 +136,12 @@ export default function SettingsScreen() {
       <Section title="Notificações" />
       <ListItem icon="bell" label="Lembretes" detail={state.settings.reminders?.enabled ? "Ligados" : "Desligados"} onPress={() => nav.push({ name: "reminders" })} />
       <ListItem icon="radio" label="Notificações bancárias" detail="Bancos monitorados e SMS" onPress={() => nav.push({ name: "notifications" })} />
-      <ListItem icon="zap" label="Categorização automática" onPress={() => nav.push({ name: "rules" })} />
       <Section title="Segurança" />
       <Box>
         <Toggle icon="lock" label="Bloqueio biométrico" value={!!state.settings.biometric} onChange={toggleBiometric} />
       </Box>
-      <ListItem icon="shield" label="PIN e backup criptografado" onPress={() => nav.push({ name: "security" })} />
-      <Section title="Seus dados" />
-      <ListItem icon="file-text" label="Importar extrato" detail="CSV ou OFX; a importação soma" onPress={() => nav.push({ name: "imports" })} />
-      <Box>
-        <Button title="Salvar backup (JSON)" secondary icon="upload" onPress={backup} />
-        <Muted> </Muted>
-        <Button title="Restaurar backup (JSON)" secondary icon="download" onPress={restore} />
-        <Muted> </Muted>
-        <Button title="Exportar lançamentos (CSV)" secondary icon="file-text" onPress={() => exportCSV(current()).catch((e) => Alert.alert("Falha na exportação", e.message))} />
-        <Muted style={{ marginTop: 14 }}>
-          O backup JSON não é criptografado; para um arquivo protegido por senha use "PIN e backup criptografado". Restaurar substitui todos os dados.
-        </Muted>
-      </Box>
+      <ListItem icon="shield" label="PIN do Floco" onPress={() => nav.push({ name: "security" })} />
+      <ListItem icon="archive" label="Importar, exportar e backup" onPress={() => nav.push({ name: "dataTools" })} />
       <Section title="Atualizações" />
       <ListItem
         icon="download-cloud"
@@ -204,6 +160,9 @@ export default function SettingsScreen() {
         {!state.accounts.length && (
           <Button title="Carregar dados fictícios" secondary onPress={() => perform(demoState(), "Demonstração carregada")} />
         )}
+      </Box>
+      <Section title="Zona de perigo" />
+      <Box>
         <Button
           title="Apagar todos os dados do Floco"
           danger
@@ -218,21 +177,22 @@ export default function SettingsScreen() {
           }
         />
       </Box>
-      <Section title="Ajuda" />
+      <Section title="Avançado" />
       <ListItem
         icon="bar-chart-2"
         label="Uso dos botões"
         detail="Contagem local de telas abertas, só neste aparelho"
         onPress={() => nav.push({ name: "usage" })}
       />
+      <Section title="Ajuda" />
       <ListItem
         icon="github"
         label="Enviar sugestão ou relatar problema"
         detail="Abre o GitHub do projeto"
         onPress={() =>
-          Linking.openURL(
+          void Linking.openURL(
             `https://github.com/katsuuzin/floco-financas/issues/new?title=${encodeURIComponent("[" + (Application.nativeApplicationVersion || "") + "] ")}`,
-          )
+          ).catch(() => softFail("Não foi possível abrir o GitHub."))
         }
       />
       <Section title="Sobre" />

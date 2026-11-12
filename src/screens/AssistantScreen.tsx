@@ -137,8 +137,9 @@ export default function AssistantScreen() {
       />
       {view === "overview" && (
         <>
-          <Box>
+          <Box style={{ gap: 10 }}>
             <Muted>Saúde financeira</Muted>
+            {h.sufficientHistory ? <>
             <View style={[k.row, { alignItems: "flex-end" }]}>
               <T style={[k.balanceValue, { color }]}>{h.score}</T>
               <T style={{ marginBottom: 10 }}>/100 · {h.level}</T>
@@ -155,7 +156,7 @@ export default function AssistantScreen() {
                       {Math.round(f.score * f.weight)}/{f.weight}
                     </Muted>
                   </View>
-                  <Muted style={{ fontSize: 11 }}>{f.detail}</Muted>
+                  <Muted style={{ fontSize: 12 }}>{f.detail}</Muted>
                 </View>
               ))}
             </View>
@@ -165,6 +166,7 @@ export default function AssistantScreen() {
               icon="bookmark"
               onPress={recordScore}
             />
+            </> : <T>Dados insuficientes</T>}
             {!!history.length && (
               <Muted style={{ marginTop: 8 }}>
                 Histórico:{" "}
@@ -196,12 +198,12 @@ export default function AssistantScreen() {
                 <T style={{ fontSize: 13 }}>
                   {n + 1}. {p.title}
                 </T>
-                <Muted style={{ fontSize: 11 }}>{p.why}</Muted>
+                <Muted style={{ fontSize: 12 }}>{p.why}</Muted>
               </View>
             ))}
           </Box>
           <Section title="Resumo do mês" />
-          <Box>
+          <Box style={{ gap: 12 }}>
             {narrative ? (
               <T style={{ fontSize: 13 }}>{narrative}</T>
             ) : (
@@ -250,7 +252,7 @@ export default function AssistantScreen() {
                   backgroundColor: m.role === "user" ? c.soft : c.surface,
                 }}
               >
-                <Muted style={{ fontSize: 11 }}>
+                <Muted style={{ fontSize: 12 }}>
                   {m.role === "user" ? "Você" : "Assistente"}
                 </Muted>
                 <T style={{ fontSize: 13 }}>{m.text}</T>

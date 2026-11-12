@@ -1,18 +1,17 @@
 // Quem eu devo (1.12): dívidas a pagar a uma pessoa ou empresa, com pagamentos parciais, vencimento e anexos
 // (print, comprovante ou documento). É o espelho de "Quem me deve". Pagar cria uma despesa na conta escolhida.
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Alert, ScrollView, View } from "react-native";
-import { AmountField, Box, Button, Choice, DateField, Empty, Field, Muted, T, space } from "../ui/kit";
-import { SheetModal } from "../ui/pickers";
+import { AmountField, Box, Button, CreateAction, Choice, DateField, Empty, Field, Muted, T, space } from "../ui/kit";
+import { DiscardDraftSheet, SheetModal } from "../ui/Sheet";
 import AttachmentsField, { deleteAttachmentFiles } from "../ui/Attachments";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { visibleAccounts } from "../accountOrder.mjs";
 import { brDate } from "../dates.mjs";
-import { parseMoney, today } from "../finance.mjs";
+import { formatMoneyInput, parseMoney, today } from "../finance.mjs";
 import { addPayable, payDebt, payableBalance, undoPayablePayment } from "../planning.mjs";
 
-const decimal = (cents: number) => (cents / 100).toFixed(2).replace(".", ",");
 
 export default function PayablesScreen() {
   const { c } = useTheme();
@@ -78,7 +77,7 @@ export default function PayablesScreen() {
         <Muted>Total que você deve</Muted>
         <T accessibilityLabel={`Total que você deve ${show(total)}`} style={{ fontFamily: "SoraBold", fontSize: 28 }}>{show(total)}</T>
       </Box>
-      <Button title="Nova dívida" icon="plus" onPress={() => setCreating(true)} />
+      <CreateAction title="Nova dívida" onPress={() => setCreating(true)} />
       {debts.length === 0 && (
         <Empty icon="users" title="Você não deve a ninguém por aqui" body="Anote empréstimos, compras combinadas e contas que você precisa pagar a alguém, com o print da conversa." />
       )}
@@ -105,6 +104,9 @@ function NewSheet({ onClose, onCreated }: { onClose: () => void; onCreated: (id:
   const { c } = useTheme();
   const { perform } = useStore();
   const [form, setForm] = useState({ person: "", description: "", amount: "", date: today(), dueDate: "" });
+  const baseline = useRef(JSON.stringify(form));
+  const [discard, setDiscard] = useState(false);
+  const closeDraft = () => JSON.stringify(form) === baseline.current ? onClose() : setDiscard(true);
   const [error, setError] = useState("");
   const set = (key: string, value: string) => { setForm({ ...form, [key]: value }); setError(""); };
   const save = async () => {
@@ -122,8 +124,9 @@ function NewSheet({ onClose, onCreated }: { onClose: () => void; onCreated: (id:
       setError(e.message);
     }
   };
+  if (discard) return <DiscardDraftSheet title="Descartar alterações?" onContinue={() => setDiscard(false)} onDiscard={onClose} />;
   return (
-    <SheetModal title="Nova dívida" onClose={onClose} footer={<Button title="Salvar" onPress={() => void save()} />}>
+    <SheetModal title="Nova dívida" onClose={closeDraft} footer={<Button title="Salvar" onPress={() => void save()} />}>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: space.lg, paddingTop: space.xs, gap: space.md }}>
         <Field label="A quem você deve" value={form.person} onChange={(v) => set("person", v)} maxLength={80} />
         <Field label="Motivo / descrição" value={form.description} onChange={(v) => set("description", v)} maxLength={120} />
@@ -141,7 +144,10 @@ function PaySheet({ debt, onClose }: { debt: any; onClose: () => void }) {
   const { c } = useTheme();
   const { state, perform } = useStore();
   const accounts = visibleAccounts(state);
-  const [form, setForm] = useState({ amount: decimal(payableBalance(debt)), date: today(), accountId: accounts[0]?.id || "" });
+  const [form, setForm] = useState({ amount: formatMoneyInput(payableBalance(debt)), date: today(), accountId: accounts[0]?.id || "" });
+  const baseline = useRef(JSON.stringify(form));
+  const [discard, setDiscard] = useState(false);
+  const closeDraft = () => JSON.stringify(form) === baseline.current ? onClose() : setDiscard(true);
   const [error, setError] = useState("");
   const set = (key: string, value: string) => { setForm({ ...form, [key]: value }); setError(""); };
   const save = async () => {
@@ -153,8 +159,9 @@ function PaySheet({ debt, onClose }: { debt: any; onClose: () => void }) {
       setError(e.message);
     }
   };
+  if (discard) return <DiscardDraftSheet title="Descartar alterações?" onContinue={() => setDiscard(false)} onDiscard={onClose} />;
   return (
-    <SheetModal title="Registrar pagamento" onClose={onClose} footer={<Button title="Registrar" onPress={() => void save()} />}>
+    <SheetModal title="Registrar pagamento" onClose={closeDraft} footer={<Button title="Registrar" onPress={() => void save()} />}>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: space.lg, paddingTop: space.xs, gap: space.md }}>
         <AmountField label="Valor pago" value={form.amount} onChange={(v) => set("amount", v)} />
         <DateField label="Data do pagamento" value={form.date} onChange={(v) => set("date", v)} />

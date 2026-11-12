@@ -7,7 +7,7 @@ import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { GestureDetector, GestureHandlerRootView, usePanGesture } from "react-native-gesture-handler";
 import Animated, { Easing, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
-import { focusAccessibility, IconButton, T, Muted, type ViewControl, space } from "./kit";
+import { focusAccessibility, Group, IconButton, Row, T, Muted, type Icon, type ViewControl, space } from "./kit";
 import { useTheme } from "./theme";
 
 // Referência ao BlurTargetView da raiz do app (o que fica atrás da folha). Sem ela, não há desfoque.
@@ -115,12 +115,14 @@ export function SheetModal({ title, onClose, children, footer }: {
 }
 
 // Confirmação com o que muda e o que fica (substitui o Alert simples em ações que tiram dados).
-export function ConfirmSheet({ title, changes, keeps, action, destructive = true, onConfirm, onClose }: {
+export function ConfirmSheet({ title, changes, keeps, action, destructive = true, cancelLabel = "Voltar", preferCancel = false, onConfirm, onClose }: {
   title: string;
   changes: string[];
   keeps: string[];
   action: string;
   destructive?: boolean;
+  cancelLabel?: string;
+  preferCancel?: boolean;
   onConfirm: () => void;
   onClose: () => void;
 }) {
@@ -141,13 +143,13 @@ export function ConfirmSheet({ title, changes, keeps, action, destructive = true
   return (
     <SheetModal title={title} onClose={onClose} footer={
       <View style={{ flexDirection: "row", gap: space.sm }}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Voltar" onPress={onClose}
-          style={[s.footerButton, { backgroundColor: c.soft }]}>
-          <T style={{ fontFamily: "SoraSemi", color: c.primary }}>Voltar</T>
+        <Pressable accessibilityRole="button" accessibilityLabel={cancelLabel} onPress={onClose}
+          style={[s.footerButton, { backgroundColor: preferCancel ? c.primary : c.soft }]}>
+          <T style={{ fontFamily: "SoraSemi", color: preferCancel ? c.onPrimary : c.primary, textAlign: "center" }}>{cancelLabel}</T>
         </Pressable>
         <Pressable accessibilityRole="button" accessibilityLabel={action} onPress={onConfirm}
-          style={[s.footerButton, { backgroundColor: fill, flex: 1.4 }]}>
-          <T style={{ fontFamily: "SoraSemi", color: onFill }}>{action}</T>
+          style={[s.footerButton, { backgroundColor: preferCancel ? c.soft : fill, flex: preferCancel ? 1 : 1.4 }]}>
+          <T style={{ fontFamily: "SoraSemi", color: preferCancel ? fill : onFill, textAlign: "center" }}>{action}</T>
         </Pressable>
       </View>
     }>
@@ -157,6 +159,32 @@ export function ConfirmSheet({ title, changes, keeps, action, destructive = true
       </View>
     </SheetModal>
   );
+}
+
+export function RowActions({ title, actions }: {
+  title: string;
+  actions: { label: string; icon: Icon; onPress: () => void; danger?: boolean }[];
+}) {
+  const [open, setOpen] = React.useState(false);
+  return <>
+    <IconButton name="more-vertical" label={`Ações de ${title}`} onPress={() => setOpen(true)} />
+    {open && <SheetModal title={title} onClose={() => setOpen(false)}>
+      <View style={{ paddingHorizontal: space.lg, paddingBottom: space.md }}>
+        <Group>{actions.map(({ label, onPress, ...action }) => (
+          <Row key={label} {...action} label={label} onPress={() => { setOpen(false); onPress(); }} />
+        ))}</Group>
+      </View>
+    </SheetModal>}
+  </>;
+}
+
+export function DiscardDraftSheet({ title = "Descartar este lançamento?", onDiscard, onContinue }: {
+  title?: string;
+  onDiscard: () => void;
+  onContinue: () => void;
+}) {
+  return <ConfirmSheet title={title} changes={["Os campos alterados serão descartados."]} keeps={[]}
+    action="Descartar" cancelLabel="Continuar editando" preferCancel onConfirm={onDiscard} onClose={onContinue} />;
 }
 
 const s = StyleSheet.create({

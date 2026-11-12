@@ -1,9 +1,10 @@
 // Contas, Cartões, Orçamento e Metas — telas empilhadas a partir de Mais.
 import React, { useState } from "react";
 import { Alert, View, Pressable, ScrollView } from "react-native";
-import { T, Muted, I, Box, Section, Button, Choice, Field, Empty, IconButton, Progress, Segmented, space, styles as k } from "../ui/kit";
+import { T, Muted, I, Box, Section, Button, CreateAction, Choice, Field, Empty, IconButton, Progress, Segmented, fitAmount, space, styles as k } from "../ui/kit";
+import { daysOverdue, overdueLabel } from "../reminders.mjs";
 import { minimumPayment, invoiceBreakdown } from "../invoices.mjs";
-import { SheetModal } from "../ui/pickers";
+import { RowActions, SheetModal } from "../ui/Sheet";
 import { entityColors, useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
@@ -41,7 +42,7 @@ export function AccountsScreen() {
       const next: any = archiveAccount(s, id, { force, now: date } as Parameters<typeof archiveAccount>[2]);
       if (next.error) throw Error(next.blockers?.map((blocker: any) => blocker.message).join("\n") || next.error);
       return next;
-    }, "Conta arquivada");
+    }, "Conta arquivada", { undoable: true, undo: (s) => unarchiveAccount(s, id) });
     if (preview.error && !force) {
       Alert.alert("Conta não arquivada", blockers.map((blocker: any) => blocker.message).join("\n") || preview.error);
       return;
@@ -51,12 +52,12 @@ export function AccountsScreen() {
   };
   return (
     <>
+      <CreateAction title="Nova conta" onPress={() => nav.push({ name: "form", kind: "account" })} />
       <Box>
         <Muted>Saldo total</Muted>
-        <T style={[k.balanceValue, { fontSize: 28, marginTop: 4 }]}>{show(totalBalance(state))}</T>
+        <T {...fitAmount} style={[k.balanceValue, { fontSize: 28, marginTop: 4 }]}>{show(totalBalance(state))}</T>
       </Box>
-      <Section title="Contas ativas" action={ordering ? "Concluir" : "Adicionar"}
-        onPress={() => ordering ? setOrdering(false) : nav.push({ name: "form", kind: "account" })} />
+      <Section title="Contas ativas" action={ordering ? "Concluir" : undefined} onPress={() => setOrdering(false)} />
       {ordering ? active.map((a: any, i: number) => (
         <Box key={a.id} style={{ gap: 8 }}>
           <T>{a.name}</T>
@@ -109,7 +110,11 @@ export function CardsScreen({ cardId }: { cardId?: string }) {
     state.transactions
       .filter((t: any) => t.invoicePayment?.startsWith(card.id + ":"))
       .reduce((n: number, t: any) => n + t.amount, 0);
-  const due = invoiceDueDate(card, month).split("-").reverse().join("/");
+  const dueDate = invoiceDueDate(card, month);
+  const due = dueDate.split("-").reverse().join("/");
+  const currentDate = today();
+  const overdue = bill.due > 0 ? daysOverdue(dueDate, currentDate) : 0;
+  const dueLabel = bill.due > 0 && dueDate === currentDate ? "Vence hoje" : `Vence ${due}`;
   const entity = entityColors(card.color, c);
   return (
     <>
@@ -152,15 +157,23 @@ export function CardsScreen({ cardId }: { cardId?: string }) {
         </View>
         <T style={{ color: entity.color, fontFamily: "SoraSemi", fontSize: 19 }}>{card.name}</T>
         <T style={{ color: entity.color, marginTop: 6 }}>•••• {card.lastFour || "••••"}</T>
-        <View style={[k.row, { marginTop: 22, justifyContent: "space-between" }]}>
-          <T style={{ color: entity.color, fontSize: 11 }}>Fecha dia {card.closingDay}</T>
-          <T style={{ color: entity.color, fontSize: 11 }}>Vence {due}</T>
+        <View style={[k.row, { marginTop: 22, justifyContent: "space-between", flexWrap: "wrap" }]}>
+          <T style={{ color: entity.color, fontSize: 12 }}>Fecha dia {card.closingDay}</T>
+          <T style={{ color: entity.color, fontSize: 12 }}>{dueLabel}</T>
+          {overdue > 0 && <T style={{ color: entity.color, fontSize: 12, fontFamily: "SoraSemi" }}>{overdueLabel(overdue)}</T>}
         </View>
       </View>
       <Section title="Fatura do mês" />
       <Box>
+        {overdue > 0 && (
+          <View style={[k.row, { flexWrap: "wrap", marginBottom: 8 }]}>
+            <I name="alert-circle" color={c.red} size={16} />
+            <T style={{ color: c.red, fontFamily: "SoraSemi" }}>{overdueLabel(overdue)}</T>
+            <Muted>{dueLabel}</Muted>
+          </View>
+        )}
         <Muted>Valor em aberto</Muted>
-        <T style={[k.balanceValue, { fontSize: 30 }]}>{show(bill.due)}</T>
+        <T {...fitAmount} style={[k.balanceValue, { fontSize: 30 }]}>{show(bill.due)}</T>
         <View style={[k.row, { justifyContent: "space-between", marginVertical: 12 }]}>
           <Muted>Pago {show(bill.paid)}</Muted>
           <Muted>Total {show(bill.total)}</Muted>
@@ -251,6 +264,7 @@ export function CardsScreen({ cardId }: { cardId?: string }) {
 }
 
 export function BudgetsScreen() {
+  const [expanded, setExpanded] = useState("");
   const { c } = useTheme();
   const { state, show, perform, confirm } = useStore();
   const nav = useNav();
@@ -260,7 +274,7 @@ export function BudgetsScreen() {
   return (
     <>
       <MonthBar />
-      <Section title="Orçamentos" action="Adicionar" onPress={() => nav.push({ name: "form", kind: "budget" })} />
+      <CreateAction title="Novo orçamento" onPress={() => nav.push({ name: "form", kind: "budget" })} />
       {state.budgets.length ? (
         state.budgets.map((raw: any) => {
           const b = normalizeBudget(raw);
@@ -273,33 +287,24 @@ export function BudgetsScreen() {
             <Box key={b.id}>
               <View style={[k.row, { justifyContent: "space-between" }]}>
                 <CategoryIcon look={categoryStyleOf(state, b.categories[0] || "Outros")} />
-                <View style={{ flex: 1 }}>
+                <Pressable style={{ flex: 1, minHeight: 48 }} accessibilityRole="button" accessibilityState={{ expanded: expanded === b.id }} onPress={() => setExpanded(expanded === b.id ? "" : b.id)}>
                   <T style={{ fontFamily: "SoraSemi" }}>{label}</T>
-                  <Muted style={{ fontSize: 11 }}>
-                    {income ? "Meta de receita" : "Teto de despesa"} · {cycleName[b.cycle]} · {u.start.split("-").reverse().join("/").slice(0, 5)}–
+                  <Muted style={{ fontSize: 12 }}>
+                    {income ? "Meta de receita" : "Teto de despesa"} · {cycleName[b.cycle]}{"\n"}{u.start.split("-").reverse().join("/").slice(0, 5)}–
                     {u.end.split("-").reverse().join("/").slice(0, 5)}
                   </Muted>
-                </View>
-                <IconButton
-                  name="edit-2"
-                  label={`Editar orçamento ${label}`}
-                  onPress={() =>
-                    nav.push({
-                      name: "form",
-                      kind: "budget",
-                      initial: { ...b, budgetType: b.type, amount: toInput(b.amount), startDay: String(b.startDay) },
-                    })
-                  }
-                />
-                <IconButton
-                  name="trash-2"
-                  label={`Excluir orçamento ${label}`}
-                  onPress={() =>
-                    confirm("Excluir orçamento?", label, () =>
-                      perform((s: any) => ({ ...s, budgets: s.budgets.filter((x: any) => x.id !== b.id) })),
-                    )
-                  }
-                />
+                </Pressable>
+                <RowActions title={label} actions={[
+                  { icon: "edit-2", label: "Editar orçamento", onPress: () => nav.push({
+                    name: "form", kind: "budget", initial: { ...b, budgetType: b.type, amount: toInput(b.amount), startDay: String(b.startDay) },
+                  }) },
+                  { icon: "trash-2", label: "Excluir orçamento", danger: true, onPress: () =>
+                    confirm("Excluir orçamento?", label, () => perform(
+                      (s: any) => ({ ...s, budgets: s.budgets.filter((x: any) => x.id !== b.id) }),
+                      "Orçamento excluído",
+                      { undoable: true, undo: (s) => s.budgets.some((x: any) => x.id === b.id) ? s : { ...s, budgets: [...s.budgets, raw] } },
+                    ), "Excluir") },
+                ]} />
               </View>
               <Muted style={{ marginBottom: 12 }}>
                 {show(u.used)} de {show(b.amount)}
@@ -316,9 +321,9 @@ export function BudgetsScreen() {
                     : `Faltam ${show(u.limit - u.used)}`
                   : `${show(Math.abs(u.left))} ${bad ? "acima do limite" : "restante"}`}
               </T>
-              <Muted style={{ fontSize: 11, marginTop: 4 }}>
+              {(bad || expanded === b.id) && <Muted style={{ fontSize: 12, marginTop: 4 }}>
                 {h.within} de {h.cycles.length} ciclos recentes {income ? "atingiram a meta" : "fecharam dentro do teto"}
-              </Muted>
+              </Muted>}
             </Box>
           );
         })
@@ -327,8 +332,6 @@ export function BudgetsScreen() {
           icon="pie-chart"
           title="Um limite que você decide"
           body="Defina quanto quer gastar por categoria. Os gastos confirmados aparecem automaticamente."
-          action="Criar orçamento"
-          onPress={() => nav.push({ name: "form", kind: "budget" })}
         />
       )}
     </>
@@ -336,6 +339,8 @@ export function BudgetsScreen() {
 }
 
 export function GoalsScreen() {
+  const [linking, setLinking] = useState("");
+  const [goalDetail, setGoalDetail] = useState("");
   const { c } = useTheme();
   const { state, show, perform, confirm } = useStore();
   const nav = useNav();
@@ -423,11 +428,11 @@ export function GoalsScreen() {
   );
   return (
     <>
-      <Segmented label="Planejamento" values={[["metas", "Metas"], ["caixinhas", "Caixinhas"]]}
+      <Segmented accessibilityLabel="Metas e caixinhas" values={[["metas", "Metas"], ["caixinhas", "Caixinhas"]]}
         value={tab} onChange={(value) => { setTab(value); setPotForm(null); }} />
       {tab === "caixinhas" ? (
         <View style={{ gap: space.sm, marginTop: space.sm }}>
-          <Button title="Criar caixinha" icon="plus" onPress={() => setPotForm({ action: "create", id: "" })} />
+          <CreateAction title="Criar caixinha" onPress={() => setPotForm({ action: "create", id: "" })} />
           {!pots.length && <Muted>Nenhuma caixinha ativa.</Muted>}
           {potForm?.action === "create" && <Box style={{ gap: 8 }}>
             <Field label="Nome da caixinha" value={potName} onChange={setPotName} maxLength={80} />
@@ -495,9 +500,9 @@ export function GoalsScreen() {
           </Box>)}
         </View>
       ) : <>
-      <Section title="Metas" action="Criar" onPress={() => nav.push({ name: "form", kind: "goal", initial: { goalKind: "goal" } })} />
+      <CreateAction title="Nova meta" onPress={() => nav.push({ name: "form", kind: "goal", initial: { goalKind: "goal" } })} />
       <Muted style={{ marginBottom: 12 }}>Metas acompanham um objetivo sem separar dinheiro.</Muted>
-      {metas.length === 0 && <Muted style={{ marginBottom: 12 }}>Nenhuma meta. Toque em Criar e escolha Meta.</Muted>}
+      {metas.length === 0 && <Muted style={{ marginBottom: 12 }}>Nenhuma meta cadastrada.</Muted>}
       {metas.map((g: any) => {
         const linked = (state.pots ?? []).find((pot: any) => pot.id === g.potId);
         const progress = linked ? { ...g, saved: linked.saved, moves: [] } : g;
@@ -505,13 +510,28 @@ export function GoalsScreen() {
         const moves = [...(g.moves || [])].sort((a: any, b: any) => b.date.localeCompare(a.date)).slice(0, 5);
         return (
         <Box key={g.id}>
-          {header(progress)}
-          <Choice label="Caixinha vinculada" values={[["", "Sem caixinha"], ...pots.map((pot: any) => [pot.id, pot.name] as [string, string])]}
+          <View style={[k.row, { alignItems: "flex-start" }]}>
+            <Pressable accessibilityRole="button" accessibilityLabel={g.name} accessibilityState={{ expanded: goalDetail === g.id }}
+              onPress={() => setGoalDetail(goalDetail === g.id ? "" : g.id)} style={{ flex: 1 }}>
+              {header(progress)}
+            </Pressable>
+            <RowActions title={g.name} actions={[
+              { icon: "link", label: "Vincular caixinha", onPress: () => setLinking(g.id) },
+              { icon: "archive", label: "Arquivar meta", onPress: () => void perform((s: any) => archiveGoal(s, g.id), "Meta arquivada", { undoable: true, undo: (s) => archiveGoal(s, g.id, false) }) },
+              { icon: "trash-2", label: "Excluir meta", danger: true, onPress: () => remove(g) },
+            ]} />
+          </View>
+          {linking === g.id && <SheetModal title="Caixinha vinculada" onClose={() => setLinking("")}>
+          <ScrollView contentContainerStyle={{ padding: 16 }}>
+          <Choice label="Escolha a caixinha" values={[["", "Sem caixinha"], ...pots.map((pot: any) => [pot.id, pot.name] as [string, string])]}
             value={g.potId ?? ""} onChange={(id) => void perform((s: any) => {
               const next: any = linkGoalToPot(s, g.id, id || null);
               if (next.error) throw Error(next.error);
               return next;
-            }, "Vínculo salvo")} />
+            }, "Vínculo salvo").then((ok) => { if (ok) setLinking(""); })} />
+          </ScrollView>
+          </SheetModal>}
+          {goalDetail === g.id && <>
           {g.completedAt && <T style={{ color: c.green, fontFamily: "SoraSemi", marginBottom: 6 }}>Concluída em {g.completedAt.split("-").reverse().join("/")}</T>}
           {!g.completedAt && (
             <View style={{ marginBottom: 10, gap: 2 }}>
@@ -563,15 +583,8 @@ export function GoalsScreen() {
                 ))}
               </View>
             )}
-            <View style={[k.row, { gap: 8 }]}>
-              <View style={{ flex: 1 }}>
-                <Button title="Arquivar" secondary icon="archive" onPress={() => perform((s: any) => archiveGoal(s, g.id), "Meta arquivada")} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Button title="Excluir" danger onPress={() => remove(g)} />
-              </View>
-            </View>
           </View>
+          </>}
         </Box>
         );
       })}

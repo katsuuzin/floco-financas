@@ -1,38 +1,28 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
   Pressable,
   TextInput,
-  ScrollView,
-  Modal,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useNav } from "./app/nav";
 import Feather from "@expo/vector-icons/Feather";
 import { subsOf } from "./categories.mjs";
 import CategoryIcon from "./ui/CategoryIcon";
 import { DateField, Segmented } from "./ui/kit";
-import AttachmentsField, { deleteAttachmentFiles } from "./ui/Attachments";
 import { brDate } from "./dates.mjs";
-import { useTheme } from "./ui/theme";
-import { CALEN_PREFIX, lookOf } from "./looks.mjs";
+import { CALEN_PREFIX } from "./looks.mjs";
 import { ALLOWED_COLORS, ALLOWED_ICONS, defaultStyleFor, readableOn, sanitizeStyle } from "./categoryStyle.mjs";
 import { categoryStyleOf, tagStyleOf } from "./ui/CategoryIcon";
-import { calenIconNames, calenSvg } from "./calenArt.mjs";
-import { SvgXml } from "react-native-svg";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import {
   today,
   money,
-  parseMoney,
   addMonths,
   monthKey,
-  invoice,
   spent,
   uid,
 } from "./finance.mjs";
@@ -40,73 +30,10 @@ import {
   categoryNames,
   saveLabel,
   removeLabel,
-  saveRecurrence,
-  generateRecurrences,
-  installmentSimulation,
-  saveFinancing,
-  addReceivable,
-  receiveDebt,
-  undoDebtPayment,
-  receivableBalance,
-  projection,
   report,
 } from "./planning.mjs";
 
-export const planningOptions = [
-  {
-    id: "categories",
-    label: "Categorias e subcategorias",
-    icon: "layers",
-    group: "Organizar",
-  },
-  { id: "tags", label: "Tags", icon: "tag", group: "Organizar" },
-  {
-    id: "recurrences",
-    label: "Recorrências",
-    icon: "repeat",
-    group: "Acompanhar",
-  },
-  {
-    id: "installments",
-    label: "Parcelamentos e simulador",
-    icon: "calendar",
-    group: "Acompanhar",
-  },
-  {
-    id: "financings",
-    label: "Financiamentos e empréstimos",
-    icon: "briefcase",
-    group: "Acompanhar",
-  },
-  {
-    id: "receivables",
-    label: "Quem me deve",
-    icon: "users",
-    group: "Acompanhar",
-  },
-  {
-    id: "projections",
-    label: "Projeções",
-    icon: "trending-up",
-    group: "Planejar",
-  },
-  {
-    id: "reports",
-    label: "Relatórios",
-    icon: "bar-chart-2",
-    group: "Analisar",
-  },
-] as const;
-const frequencies = [
-  ["daily", "Diária"],
-  ["weekly", "Semanal"],
-  ["fortnightly", "A cada 14 dias"],
-  ["monthly", "Mensal"],
-  ["yearly", "Anual"],
-];
 const decimal = (n: number) => (n / 100).toFixed(2).replace(".", ",");
-const asZeroMoney = (v: string) =>
-  !v?.trim() || /^0(?:,0{1,2})?$/.test(v.trim()) ? 0 : parseMoney(v);
 function Txt({
   c,
   children,
@@ -312,26 +239,13 @@ export default function PlanningPanel({
   state: s,
   c,
   initial,
-  onClose,
   onChange,
 }: any) {
   const [page, setPage] = useState(initial),
-    [form, setForm] = useState<any>(null),
-    [detail, setDetail] = useState("");
+    [form, setForm] = useState<any>(null);
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState("");
-  const [simulation, setSimulation] = useState<any>(null);
-  const [simInput, setSimInput] = useState({
-    amount: "",
-    entry: "",
-    count: "12",
-    rate: "0",
-    date: today(),
-  });
-  const [horizon, setHorizon] = useState(30),
-    [scenario, setScenario] = useState(""),
-    [scenarioType, setScenarioType] = useState("expense");
   const [filters, setFilters] = useState({
     start: monthKey(today()) + "-01",
     end: (() => {
@@ -348,8 +262,16 @@ export default function PlanningPanel({
     tag: "",
     group: "category",
   });
-  const [result, setResult] = useState<any>(null),
-    [forecast, setForecast] = useState<any>(null);
+  const [result, setResult] = useState<any>(null);
+  const { registerBackGuard } = useNav();
+  const editing = !!form;
+  useEffect(() => registerBackGuard(() => {
+    if (busy) return true;
+    if (!editing) return false;
+    setForm(null);
+    setError("");
+    return true;
+  }), [registerBackGuard, editing, busy]);
   const cash = (n: number) => (s.settings.hide ? "R$ ••••" : money(n));
   const names = categoryNames(s);
   const accounts = s.accounts.map((a: any) => [a.id, a.name]);
@@ -383,18 +305,6 @@ export default function PlanningPanel({
       onChange={(v: string) => setForm({ ...form, [key]: v })}
     />
   );
-  const back = () => {
-    setError("");
-    if (form) {
-      setForm(null);
-      return;
-    }
-    if (detail) {
-      setDetail("");
-      return;
-    }
-    onClose();
-  };
   const open = (kind: string, data: any = {}) => {
     setError("");
     setMessage("");
@@ -459,23 +369,6 @@ export default function PlanningPanel({
         change = (s: any) => ({ ...s, categoryLooks: { ...s.categoryLooks, [f.name]: sanitizeStyle({
           ...categoryStyleOf(s, f.name), ...(f.lookIcon && { icon: f.lookIcon }), ...(f.lookColor && { color: f.lookColor }),
         }) } });
-      if (f.kind === "recurrence") {
-        const amount = parseMoney(f.amount);
-        change = (s: any) => saveRecurrence(s, { ...f, amount });
-      }
-      if (f.kind === "financing") {
-        const amount = parseMoney(f.amount);
-        change = (s: any) => saveFinancing(s, { ...f, amount });
-      }
-      if (f.kind === "receivable") {
-        const amount = parseMoney(f.amount);
-        change = (s: any) => addReceivable(s, { ...f, amount });
-      }
-      if (f.kind === "receive") {
-        const amount = parseMoney(f.amount);
-        change = (s: any) =>
-          receiveDebt(s, f.receivableId, amount, f.accountId, f.date);
-      }
       if (await run(change)) setForm(null);
     } catch (e: any) {
       setError(e.message);
@@ -486,10 +379,7 @@ export default function PlanningPanel({
       { text: "Cancelar", style: "cancel" },
       { text: "Confirmar", onPress: action },
     ]);
-  const heading =
-    planningOptions.find((o) => o.id === page)?.label || "Planejamento";
   const labelList = page === "tags" ? "tags" : "customCategories";
-  const debt = (s.receivables || []).find((r: any) => r.id === detail);
   const reportNow = () => {
     try {
       setResult(report(s, filters));
@@ -534,62 +424,9 @@ export default function PlanningPanel({
       setBusy(false);
     }
   };
-  const pendingInstallments = s.transactions.filter(
-    (t: any) =>
-      t.installments > 1 &&
-      (t.cardId ? invoice(s, t.cardId, t.invoiceMonth).due > 0 : !t.confirmed),
-  );
-  const monthly = new Map<string, number>();
-  for (const t of pendingInstallments) {
-    const m = t.invoiceMonth || monthKey(t.date);
-    monthly.set(m, (monthly.get(m) || 0) + t.amount);
-  }
   return (
-    <Modal visible animationType="slide" onRequestClose={back}>
-      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              padding: 12,
-              borderBottomWidth: 1,
-              borderColor: c.line,
-              gap: 8,
-            }}
-          >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Voltar"
-              onPress={back}
-              hitSlop={8}
-              style={{
-                minWidth: 48,
-                minHeight: 48,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Feather name="arrow-left" size={24} color={c.text} />
-            </Pressable>
-            <Txt c={c} bold style={{ fontSize: 19, flex: 1 }}>
-              {form ? (form.kind === "categoryLook" ? "Ícone e cor" : form.id ? "Editar registro" : "Novo registro") : heading}
-            </Txt>
-          </View>
-          <ScrollView
-            key={form ? "form" : page + detail}
-            contentContainerStyle={{
-              padding: 20,
-              paddingBottom: 48,
-              maxWidth: 760,
-              width: "100%",
-              alignSelf: "center",
-            }}
-            keyboardShouldPersistTaps="handled"
-          >
+    <View style={{ gap: 10 }}>
+      {form && <Txt c={c} bold>{form.kind === "categoryLook" ? "Ícone e cor" : form.id ? "Editar registro" : "Novo registro"}</Txt>}
             {!!message && !form && (
               <Txt c={c} accessibilityRole="alert" style={{ marginBottom: 10 }}>
                 {message}
@@ -637,87 +474,6 @@ export default function PlanningPanel({
                           )
                           .map((n: string) => [n, n]),
                       ])}
-                  </>
-                )}
-                {form.kind === "recurrence" && (
-                  <>
-                    {field("description", "Descrição")}
-                    {choose("type", "Tipo", [
-                      ["expense", "Despesa"],
-                      ["income", "Receita"],
-                    ])}
-                    {field("amount", "Valor (R$)", true)}
-                    {field(
-                      "date",
-                      "Início (AAAA-MM-DD)",
-                      false,
-                      "Dias 29–31 são ajustados ao último dia de cada mês, preservando o dia original.",
-                    )}
-                    {choose("frequency", "Frequência", frequencies)}
-                    {field("endDate", "Término opcional (AAAA-MM-DD)")}
-                    {choose("accountId", "Conta", accounts)}
-                    {choose(
-                      "category",
-                      "Categoria",
-                      names.map((n: string) => [n, n]),
-                    )}
-                    <Txt c={c} muted>
-                      As ocorrências serão criadas pendentes ao tocar em Gerar
-                      até hoje. Pausar não remove lançamentos já gerados.
-                    </Txt>
-                  </>
-                )}
-                {form.kind === "financing" && (
-                  <>
-                    {choose("type", "Tipo", [
-                      ["financing", "Financiamento"],
-                      ["loan", "Empréstimo a pagar"],
-                    ])}
-                    {field("name", "Nome do contrato")}
-                    {field("institution", "Instituição (opcional)")}
-                    {field("amount", "Parcela mensal (R$)", true)}
-                    {field("count", "Total de parcelas", true)}
-                    {field("paid", "Parcelas já pagas antes do Floco", true)}
-                    {field(
-                      "date",
-                      "Primeiro vencimento em aberto (AAAA-MM-DD)",
-                    )}
-                    {choose("accountId", "Conta de pagamento", accounts)}
-                    {choose(
-                      "category",
-                      "Categoria",
-                      names.map((n: string) => [n, n]),
-                    )}
-                    <Txt c={c} muted>
-                      As parcelas restantes entram como despesas pendentes. O
-                      principal do contrato não vira uma receita. O valor
-                      informado deve incluir juros e encargos.
-                    </Txt>
-                  </>
-                )}
-                {form.kind === "receivable" && (
-                  <>
-                    {field("person", "Quem te deve")}
-                    {field("description", "Motivo / descrição")}
-                    {field("amount", "Valor a receber (R$)", true)}
-                    {field("date", "Data do registro (AAAA-MM-DD)")}
-                    {field("dueDate", "Vencimento opcional (AAAA-MM-DD)")}
-                    <Txt c={c} muted>
-                      Este cadastro acompanha um valor que já te devem. Não
-                      movimenta sua conta. Recebimentos aumentam o saldo sem
-                      inflar as receitas dos relatórios.
-                    </Txt>
-                  </>
-                )}
-                {form.kind === "receive" && (
-                  <>
-                    {field("amount", "Valor recebido (R$)", true)}
-                    {field("date", "Data do recebimento (AAAA-MM-DD)")}
-                    {choose("accountId", "Conta que recebeu", accounts)}
-                    <Txt c={c} muted>
-                      O recebimento será vinculado à dívida e poderá ser
-                      desfeito no histórico.
-                    </Txt>
                   </>
                 )}
                 {!!error && (
@@ -826,515 +582,6 @@ export default function PlanningPanel({
                         />
                       </Card>
                     ))}
-                  </>
-                )}
-                {page === "recurrences" && (
-                  <>
-                    <Txt c={c} muted>
-                      Receitas e despesas que se repetem, com controle de pausa
-                      e término.
-                    </Txt>
-                    <Action
-                      c={c}
-                      title="Nova recorrência"
-                      onPress={() => open("recurrence")}
-                    />
-                    <Action
-                      c={c}
-                      secondary
-                      title="Gerar pendentes até hoje"
-                      disabled={busy}
-                      onPress={() =>
-                        run(
-                          (s: any) => generateRecurrences(s),
-                          "Ocorrências pendentes atualizadas sem duplicatas",
-                        )
-                      }
-                    />
-                    {!(s.recurrences || []).length && (
-                      <Card c={c}>
-                        <Txt c={c}>
-                          Nenhuma recorrência. Cadastre salário, aluguel ou
-                          assinaturas.
-                        </Txt>
-                      </Card>
-                    )}
-                    {(s.recurrences || []).map((r: any) => (
-                      <Card c={c} key={r.id}>
-                        <Txt c={c} bold>
-                          {r.description}
-                        </Txt>
-                        <Txt c={c}>
-                          {cash(r.amount)} ·{" "}
-                          {r.type === "income" ? "Receita" : "Despesa"}
-                        </Txt>
-                        <Txt c={c} muted>
-                          {frequencies.find((f) => f[0] === r.frequency)?.[1]} ·{" "}
-                          {r.active ? "Ativa" : "Pausada"} · desde {brDate(r.date)}
-                          {r.endDate ? " até " + brDate(r.endDate) : ""}
-                        </Txt>
-                        <Action
-                          c={c}
-                          secondary
-                          title="Editar"
-                          onPress={() =>
-                            open("recurrence", {
-                              ...r,
-                              amount: decimal(r.amount),
-                            })
-                          }
-                        />
-                        <Action
-                          c={c}
-                          secondary
-                          disabled={busy}
-                          title={r.active ? "Pausar" : "Retomar"}
-                          onPress={() =>
-                            run((s: any) => ({
-                              ...s,
-                              recurrences: s.recurrences.map((x: any) =>
-                                x.id === r.id ? { ...x, active: !x.active } : x,
-                              ),
-                            }))
-                          }
-                        />
-                      </Card>
-                    ))}
-                  </>
-                )}
-                {page === "receivables" &&
-                  (debt ? (
-                    <>
-                      <Txt c={c} bold style={{ fontSize: 24 }}>
-                        {debt.person}
-                      </Txt>
-                      <Txt c={c}>{debt.description}</Txt>
-                      <Card c={c}>
-                        <Txt c={c} muted>
-                          Falta receber
-                        </Txt>
-                        <Txt c={c} bold style={{ fontSize: 28 }}>
-                          {cash(receivableBalance(debt))}
-                        </Txt>
-                        <Txt c={c} muted>
-                          Total registrado: {cash(debt.amount)}
-                          {debt.dueDate ? " · vence " + brDate(debt.dueDate) : ""}
-                        </Txt>
-                      </Card>
-                      {receivableBalance(debt) > 0 && (
-                        <Action
-                          c={c}
-                          title="Registrar recebimento"
-                          onPress={() =>
-                            open("receive", {
-                              receivableId: debt.id,
-                              amount: decimal(receivableBalance(debt)),
-                            })
-                          }
-                        />
-                      )}
-                      <Txt c={c} bold style={{ marginTop: 18 }}>
-                        Histórico de recebimentos
-                      </Txt>
-                      {!debt.payments.length && (
-                        <Txt c={c} muted>
-                          Nenhum recebimento registrado.
-                        </Txt>
-                      )}
-                      {debt.payments.map((p: any) => (
-                        <Card c={c} key={p.id}>
-                          <Txt c={c}>
-                            {cash(p.amount)} · {brDate(p.date)}
-                          </Txt>
-                          <Txt c={c} muted>
-                            {
-                              s.accounts.find((a: any) => a.id === p.accountId)
-                                ?.name
-                            }
-                          </Txt>
-                          <Action
-                            c={c}
-                            secondary
-                            danger
-                            title="Desfazer recebimento"
-                            disabled={busy}
-                            onPress={() =>
-                              confirm(
-                                "Desfazer recebimento?",
-                                "O valor sairá do saldo da conta e voltará ao saldo a receber.",
-                                () =>
-                                  run((s: any) =>
-                                    undoDebtPayment(s, debt.id, p.id),
-                                  ),
-                              )
-                            }
-                          />
-                        </Card>
-                      ))}
-                      <AttachmentsField list="receivables" rowId={debt.id} attachments={debt.attachments} />
-                      {!debt.payments.length && (
-                        <Action
-                          c={c}
-                          secondary
-                          danger
-                          title="Excluir registro da dívida"
-                          onPress={() =>
-                            confirm(
-                              "Excluir dívida?",
-                              "Este registro será removido. Nenhuma conta será movimentada.",
-                              async () => {
-                                const files = debt.attachments;
-                                if (
-                                  await run((s: any) => ({
-                                    ...s,
-                                    receivables: s.receivables.filter(
-                                      (r: any) => r.id !== debt.id,
-                                    ),
-                                  }))
-                                ) {
-                                  void deleteAttachmentFiles(files);
-                                  setDetail("");
-                                }
-                              },
-                            )
-                          }
-                        />
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <Card c={c}>
-                        <Txt c={c} muted>
-                          Total a receber
-                        </Txt>
-                        <Txt c={c} bold style={{ fontSize: 28 }}>
-                          {cash(
-                            (s.receivables || []).reduce(
-                              (n: number, r: any) => n + receivableBalance(r),
-                              0,
-                            ),
-                          )}
-                        </Txt>
-                      </Card>
-                      <Action
-                        c={c}
-                        title="Novo valor a receber"
-                        onPress={() => open("receivable")}
-                      />
-                      {!(s.receivables || []).length && (
-                        <Txt c={c} muted>
-                          Ninguém te deve por aqui. Acompanhe empréstimos,
-                          vendas ou divisões de conta.
-                        </Txt>
-                      )}
-                      {(s.receivables || []).map((r: any) => (
-                        <Card c={c} key={r.id}>
-                          <Txt c={c} bold>
-                            {r.person}
-                          </Txt>
-                          <Txt c={c}>{r.description}</Txt>
-                          <Txt c={c}>
-                            {receivableBalance(r)
-                              ? "A receber: " + cash(receivableBalance(r))
-                              : "Quitado"}
-                          </Txt>
-                          {!!r.dueDate && (
-                            <Txt c={c} muted>
-                              {r.dueDate < today() && receivableBalance(r) > 0
-                                ? "Vencido em "
-                                : "Vencimento: "}
-                              {brDate(r.dueDate)}
-                            </Txt>
-                          )}
-                          <Action
-                            c={c}
-                            secondary
-                            title="Ver dívida e recebimentos"
-                            onPress={() => setDetail(r.id)}
-                          />
-                        </Card>
-                      ))}
-                    </>
-                  ))}
-                {page === "financings" && (
-                  <>
-                    <Txt c={c} muted>
-                      Controle contratos com parcelas fixas e empréstimos que
-                      você precisa pagar. Confirme o pagamento na aba
-                      Transações.
-                    </Txt>
-                    <Action
-                      c={c}
-                      title="Novo contrato"
-                      onPress={() => open("financing", { type: "financing" })}
-                    />
-                    {!(s.financings || []).length && (
-                      <Card c={c}>
-                        <Txt c={c}>Nenhum contrato cadastrado.</Txt>
-                      </Card>
-                    )}
-                    {(s.financings || []).map((f: any) => {
-                      const tx = s.transactions.filter(
-                          (t: any) => t.financingId === f.id,
-                        ),
-                        pending = tx.filter((t: any) => !t.confirmed);
-                      return (
-                        <Card c={c} key={f.id}>
-                          <Txt c={c} bold>
-                            {f.name}
-                          </Txt>
-                          <Txt c={c} muted>
-                            {f.type === "loan" ? "Empréstimo" : "Financiamento"}
-                            {f.institution ? " · " + f.institution : ""}
-                          </Txt>
-                          <Txt c={c}>
-                            Parcela: {cash(f.amount)} · {f.count} no contrato
-                          </Txt>
-                          <Txt c={c}>
-                            Restam {pending.length} parcelas ·{" "}
-                            {cash(
-                              pending.reduce(
-                                (n: number, t: any) => n + t.amount,
-                                0,
-                              ),
-                            )}
-                          </Txt>
-                          <Txt c={c} muted>
-                            Este total soma as parcelas restantes, incluindo os
-                            encargos informados. Não é o saldo principal para
-                            quitação antecipada.
-                          </Txt>
-                          <Action
-                            c={c}
-                            secondary
-                            title={
-                              detail === f.id
-                                ? "Ocultar parcelas"
-                                : "Ver parcelas"
-                            }
-                            onPress={() =>
-                              setDetail(detail === f.id ? "" : f.id)
-                            }
-                          />
-                          {detail === f.id &&
-                            tx.map((t: any) => (
-                              <Txt c={c} key={t.id}>
-                                {brDate(t.date)} · {cash(t.amount)} ·{" "}
-                                {t.confirmed ? "Paga" : "Pendente"}
-                              </Txt>
-                            ))}
-                        </Card>
-                      );
-                    })}
-                  </>
-                )}
-                {page === "installments" && (
-                  <>
-                    <Card c={c}>
-                      <Txt c={c} bold>
-                        Comprometimento em parcelas
-                      </Txt>
-                      <Txt c={c} muted>
-                        Compras parceladas e contratos. Faturas com pagamento
-                        parcial mantêm as compras visíveis até a quitação; o
-                        saldo exato fica em Cartões.
-                      </Txt>
-                      {!monthly.size && (
-                        <Txt c={c}>Nenhuma parcela em aberto.</Txt>
-                      )}
-                      {[...monthly.entries()].sort().map(([m, v]) => (
-                        <Txt c={c} key={m}>
-                          {m} · {cash(v)}
-                        </Txt>
-                      ))}
-                    </Card>
-                    <Txt c={c} bold style={{ fontSize: 20, marginTop: 18 }}>
-                      Simular uma compra
-                    </Txt>
-                    <Txt c={c} muted>
-                      Simulação de parcelas fixas pelo sistema Price. Não cria
-                      lançamentos. Não inclui IOF, seguro nem tarifas
-                      adicionais.
-                    </Txt>
-                    {(
-                      [
-                        ["amount", "Preço à vista (R$)"],
-                        ["entry", "Entrada (R$, opcional)"],
-                        ["count", "Quantidade de parcelas"],
-                        ["rate", "Juros ao mês (%)"],
-                        ["date", "Primeiro vencimento"],
-                      ] as const
-                    ).map(([key, label]) => key === "date" ? (
-                      <DateField
-                        key={key}
-                        label={label}
-                        value={simInput[key]}
-                        onChange={(v: string) => {
-                          setSimInput({ ...simInput, [key]: v });
-                          setSimulation(null);
-                        }}
-                      />
-                    ) : (
-                      <Field
-                        c={c}
-                        key={key}
-                        label={label}
-                        number
-                        value={simInput[key]}
-                        onChange={(v: string) => {
-                          setSimInput({ ...simInput, [key]: v });
-                          setSimulation(null);
-                        }}
-                      />
-                    ))}
-                    <Action
-                      c={c}
-                      title="Calcular simulação"
-                      onPress={() => {
-                        try {
-                          setSimulation(
-                            installmentSimulation({
-                              amount: parseMoney(simInput.amount),
-                              entry: asZeroMoney(simInput.entry),
-                              count: Number(simInput.count),
-                              rate: Number(simInput.rate.replace(",", ".")),
-                              date: simInput.date,
-                            }),
-                          );
-                          setError("");
-                        } catch (e: any) {
-                          setError(e.message);
-                        }
-                      }}
-                    />
-                    {simulation && (
-                      <Card c={c}>
-                        <Txt c={c} bold>
-                          Parcela de referência: {cash(simulation.payment)}
-                        </Txt>
-                        <Txt c={c}>
-                          Total com entrada: {cash(simulation.total)}
-                        </Txt>
-                        <Txt c={c}>
-                          Juros estimados: {cash(simulation.interest)}
-                        </Txt>
-                        <Txt c={c} muted>
-                          A última parcela ajusta os centavos do saldo.
-                        </Txt>
-                        {simulation.rows.map((r: any) => (
-                          <Txt c={c} key={r.number}>
-                            {r.number} · {brDate(r.date)} · {cash(r.amount)}
-                          </Txt>
-                        ))}
-                      </Card>
-                    )}
-                  </>
-                )}
-                {page === "projections" && (
-                  <>
-                    <Txt c={c} muted>
-                      Saldo das contas incluídas, pendências, faturas e
-                      recorrências futuras. Valores vencidos entram no início do
-                      horizonte. Reservas dessas contas continuam incluídas.
-                      Recebimentos de dívidas sem pagamento confirmado não são
-                      presumidos.
-                    </Txt>
-                    <Options
-                      c={c}
-                      label="Horizonte"
-                      values={[
-                        [30, "30 dias"],
-                        [60, "60 dias"],
-                        [90, "90 dias"],
-                        [180, "6 meses"],
-                        [365, "12 meses"],
-                        [730, "24 meses"],
-                      ]}
-                      value={horizon}
-                      onChange={(v: number) => {
-                        setHorizon(v);
-                        setForecast(null);
-                      }}
-                    />
-                    <Options
-                      c={c}
-                      label="Cenário opcional mensal"
-                      values={[
-                        ["expense", "Despesa extra"],
-                        ["income", "Receita extra"],
-                      ]}
-                      value={scenarioType}
-                      onChange={(v: string) => {
-                        setScenarioType(v);
-                        setForecast(null);
-                      }}
-                    />
-                    <Field
-                      c={c}
-                      label="Valor mensal simulado (R$)"
-                      number
-                      value={scenario}
-                      onChange={(v: string) => {
-                        setScenario(v);
-                        setForecast(null);
-                      }}
-                      hint="Primeiro evento hoje; seguintes na mesma data de cada mês. Não altera seus dados."
-                    />
-                    <Action
-                      c={c}
-                      title="Calcular projeção"
-                      onPress={() => {
-                        try {
-                          const d = new Date(today() + "T12:00:00Z");
-                          d.setUTCDate(d.getUTCDate() + horizon);
-                          const cap = addMonths(today(), 24);
-                          setForecast(
-                            projection(
-                              s,
-                              d.toISOString().slice(0, 10) > cap
-                                ? cap
-                                : d.toISOString().slice(0, 10),
-                              {
-                                scenarioMonthly:
-                                  asZeroMoney(scenario) *
-                                  (scenarioType === "expense" ? -1 : 1),
-                              },
-                            ),
-                          );
-                          setError("");
-                        } catch (e: any) {
-                          setError(e.message);
-                        }
-                      }}
-                    />
-                    {forecast && (
-                      <>
-                        <Card c={c}>
-                          <Txt c={c}>Hoje: {cash(forecast.initial)}</Txt>
-                          <Txt c={c} bold>
-                            Saldo final projetado: {cash(forecast.final)}
-                          </Txt>
-                          <Txt c={c}>Menor saldo: {cash(forecast.min)}</Txt>
-                          <Txt c={c} muted>
-                            Estimativa pelos registros atuais. Não prevê juros
-                            bancários, inflação ou novos gastos.
-                          </Txt>
-                        </Card>
-                        {forecast.rows.map((r: any, i: number) => (
-                          <Card c={c} key={i}>
-                            <Txt c={c} bold>
-                              {r.description}
-                            </Txt>
-                            <Txt c={c} muted>
-                              {brDate(r.date)}
-                            </Txt>
-                            <Txt c={c}>
-                              {cash(r.amount)} · Saldo: {cash(r.balance)}
-                            </Txt>
-                          </Card>
-                        ))}
-                      </>
-                    )}
                   </>
                 )}
                 {page === "reports" && (
@@ -1522,9 +769,6 @@ export default function PlanningPanel({
                 style={{ marginTop: 15 }}
               />
             )}
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </Modal>
+    </View>
   );
 }
