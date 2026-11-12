@@ -3,6 +3,8 @@
 import React, { useRef, useState } from "react";
 import {
   AccessibilityInfo,
+  Animated,
+  Easing,
   findNodeHandle,
   useWindowDimensions,
   View,
@@ -17,11 +19,13 @@ import {
   StyleProp,
 } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
-import MotionPressable from "./motion";
+import MotionPressable, { useShake } from "./motion";
+import { Reveal } from "./reveal";
+import { useReducedMotion } from "react-native-reanimated";
 import { useTheme } from "./theme";
-import { formatMoneyInput, money, parseMoney } from "../finance.mjs";
+import { money } from "../finance.mjs";
 import { evaluateAmount, isExpression } from "../amountExpression.mjs";
-import { brDate, maskBrDate, parseBrDate } from "../dates.mjs";
+import { maskMoney, normalizeMoneyText } from "../moneyInput.mjs";
 
 export type ViewControl = React.ComponentRef<typeof View>;
 export type TextControl = React.ComponentRef<typeof TextInput>;
@@ -122,7 +126,7 @@ export function Button({
 }
 
 export function CreateAction({ title, onPress }: { title: string; onPress: () => void }) {
-  return <Button title={title} icon="plus" onPress={onPress} />;
+  return <View style={{ marginBottom: 12 }}><Button title={title} icon="plus" onPress={onPress} /></View>;
 }
 
 export function IconButton({
@@ -204,16 +208,19 @@ export function Section({
 export function Box({
   children,
   style,
+  enter,
 }: {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
+  enter?: number; // posição na lista: o cartão entra em cascata
 }) {
   const { c } = useTheme();
-  return (
+  const box = (
     <View style={[styles.box, { backgroundColor: c.surface }, style]}>
       {children}
     </View>
   );
+  return enter === undefined ? box : <Reveal index={enter}>{box}</Reveal>;
 }
 
 export function Empty({
@@ -242,17 +249,37 @@ export function Empty({
   );
 }
 
+// Barra que enche até o valor ao aparecer (500 ms, desacelerando). Só nas telas que pedem (animate).
+function FillingBar({ pct, color }: { pct: number; color: string }) {
+  const reduce = useReducedMotion();
+  const width = useRef(new Animated.Value(reduce ? pct : 0)).current;
+  React.useEffect(() => {
+    if (reduce) width.setValue(pct);
+    else Animated.timing(width, { toValue: pct, duration: 500, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  }, [pct, reduce, width]);
+  return <Animated.View style={{ height: 7, borderRadius: 4, backgroundColor: color, width: width.interpolate({ inputRange: [0, 100], outputRange: ["0%", "100%"] }) }} />;
+}
+
 export function Progress({
   value,
   max,
   color,
+  animate = false,
 }: {
   value: number;
   max: number;
   color?: string;
+  animate?: boolean;
 }) {
   const { c } = useTheme();
   const pct = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
+  if (animate) {
+    return (
+      <View accessibilityLabel={`${Math.round(pct)} por cento`} style={[styles.track, { backgroundColor: c.soft }]}>
+        <FillingBar pct={pct} color={color || c.primary} />
+      </View>
+    );
+  }
   return (
     <View
       accessibilityLabel={`${Math.round(pct)} por cento`}
@@ -336,40 +363,6 @@ export function Field({
       {!!hint && <Muted>{hint}</Muted>}
       {!!error && <T accessibilityRole="alert" accessibilityLiveRegion="polite" style={{ color: c.red }}>{error}</T>}
     </View>
-  );
-}
-
-// Campo de data em formato brasileiro (DD/MM/AAAA). O valor do formulário continua "AAAA-MM-DD": ao completar uma
-// data que existe, devolve o ISO; enquanto está incompleta ou inválida, devolve o texto digitado (a validação do
-// formulário recusa e mostra a mensagem). Mostra a barra sozinho enquanto se digita.
-export function DateField({ label, value, onChange, hint, optional = false }: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  hint?: string;
-  optional?: boolean;
-}) {
-  const [text, setText] = React.useState(brDate(value || ""));
-  // Mudança de fora (por exemplo, "Hoje" ou editar outro item) atualiza o texto; a digitação em andamento não é sobrescrita.
-  React.useEffect(() => {
-    if (value && parseBrDate(text) !== value) setText(brDate(value));
-    if (!value && text && parseBrDate(text)) setText("");
-  }, [value]);
-  return (
-    <Field
-      label={label}
-      value={text}
-      numeric
-      maxLength={10}
-      placeholder="DD/MM/AAAA"
-      hint={hint ?? (optional ? "Opcional. Digite dia, mês e ano." : undefined)}
-      onChange={(raw) => {
-        const masked = maskBrDate(raw);
-        setText(masked);
-        const iso = parseBrDate(masked);
-        onChange(masked.length === 10 && iso ? iso : masked === "" ? "" : masked);
-      }}
-    />
   );
 }
 
@@ -627,7 +620,84 @@ export function Segmented<K extends string>({
   );
 }
 
-// Valor em destaque no topo dos formulários de lançamento.
+// Texto do campo de dinheiro: dígitos entram pela direita ("1500" -> "15,00"). Aviso rápido se passar do teto.
+function useMoneyInput(value: string, onChange: (v: string) => void, allowZero = false) {
+  const [tooBig, setTooBig] = useState(false);
+  const shown = normalizeMoneyText(value, { allowZero });
+  const onText = (text: string) => {
+    const next = maskMoney(text, shown, { allowZero });
+    setTooBig(next.tooBig);
+    onChange(next.text);
+  };
+  return { shown, onText, tooBig, setTooBig };
+}
+
+const MAX_TEXT = "Valor máximo: R$ 999.999.999,99.";
+
+// Valor em dinheiro de uso geral (limites, saldos, metas, orçamentos): mesma entrada "de caixa eletrônico".
+export function MoneyField({
+  label,
+  value,
+  onChange,
+  hint,
+  error,
+  placeholder = "0,00",
+  autoFocus = false,
+  allowZero = false,
+  inputRef,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  hint?: string;
+  error?: string;
+  placeholder?: string;
+  autoFocus?: boolean;
+  allowZero?: boolean;
+  inputRef?: React.Ref<TextControl>;
+}) {
+  const { c } = useTheme();
+  const { shown, onText, tooBig } = useMoneyInput(value, onChange, allowZero);
+  const problem = error || (tooBig ? MAX_TEXT : "");
+  const shake = useShake(problem);
+  return (
+    <View style={{ gap: 8 }}>
+      <T style={styles.label}>{label.replace(/\s*\(R\$\)$/u, "")}</T>
+      <Animated.View
+        style={[
+          styles.input,
+          { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: c.surface, borderColor: problem ? c.red : c.muted },
+          { transform: [{ translateX: shake }] },
+        ]}
+      >
+        <T style={{ fontFamily: "SoraSemi", fontSize: 15, color: c.muted }} importantForAccessibility="no">R$</T>
+        <TextInput
+          ref={inputRef}
+          accessibilityLabel={`${label.replace(/\s*\(R\$\)$/u, "")} em reais`}
+          accessibilityHint={problem || hint}
+          selectionColor={c.accent}
+          cursorColor={c.accent}
+          value={shown}
+          onChangeText={onText}
+          placeholder={placeholder}
+          placeholderTextColor={c.muted}
+          keyboardType="number-pad"
+          autoFocus={autoFocus}
+          maxLength={16}
+          selection={{ start: shown.length, end: shown.length }}
+          style={{ flex: 1, padding: 0, color: c.text, fontFamily: "SoraSemi", fontSize: 16, minHeight: 24 }}
+        />
+      </Animated.View>
+      {!!hint && !problem && <Muted>{hint}</Muted>}
+      {!!problem && <T accessibilityRole="alert" accessibilityLiveRegion="polite" style={{ color: c.red }}>{problem}</T>}
+    </View>
+  );
+}
+
+const PAD_NAMES: Record<string, string> = { "÷": "dividir", "×": "multiplicar", "−": "menos", "+": "mais", "⌫": "apagar", C: "limpar", "=": "Calcular", ",": "vírgula", "(": "Abrir parênteses", ")": "Fechar parênteses" };
+
+// Valor em destaque no topo dos formulários de lançamento. Os dígitos entram pela direita; a calculadora continua
+// ao lado: ao usar um operador o campo vira uma conta, e "=" devolve o resultado já formatado.
 export function AmountField({
   value,
   onChange,
@@ -647,68 +717,72 @@ export function AmountField({
 }) {
   const { c } = useTheme();
   const [pad, setPad] = useState(false);
-  const [focused, setFocused] = useState(false);
-  const valueOnFocus = useRef(value);
+  // Na calculadora os números entram como numa calculadora comum ("150" = 150), não pela direita; o texto cru fica aqui.
+  const [raw, setRaw] = useState("");
   const expression = isExpression(value);
   const preview = expression ? evaluateAmount(value) : null;
-  let plainCents: number | undefined;
-  if (!expression && value.trim()) {
-    try {
-      plainCents = parseMoney(value);
-    } catch {
-      // Enquanto o valor estiver incompleto, aguarde mais dígitos.
-    }
-  }
-  const formatOnBlur = () => {
-    setFocused(false);
-    if (plainCents !== undefined && valueOnFocus.current !== value) {
-      const formatted = formatMoneyInput(plainCents);
-      if (formatted !== value) onChange(formatted);
+  const money$ = useMoneyInput(value, onChange);
+  const shown = pad ? raw : expression ? value : money$.shown;
+  const problem = error || (money$.tooBig ? MAX_TEXT : "");
+  const shake = useShake(problem);
+  const calculate = () => {
+    if (preview?.ok && preview.display !== undefined) {
+      const text = normalizeMoneyText(preview.display);
+      setRaw(text.replace(/\.(?=\d{3})/gu, "").replace(/,00$/u, ""));
+      onChange(text);
     }
   };
-  const calculate = () => {
-    if (preview?.ok && preview.display !== undefined) onChange(preview.display);
+  const togglePad = () => {
+    if (!pad) setRaw(expression ? value : value.replace(/\.(?=\d{3})/gu, "").replace(/,00$/u, ""));
+    setPad(!pad);
   };
   const press = (key: string) => {
+    money$.setTooBig(false);
     if (key === "=") { calculate(); return; }
-    if (key === "C") onChange("");
-    else if (key === "⌫") onChange(value.slice(0, -1));
-    else if (value.length < 100) onChange(value + key);
+    let next = raw;
+    if (key === "C") next = "";
+    else if (key === "⌫") next = raw.slice(0, -1);
+    else if (key === ",") {
+      const last = raw.split(/[+−×÷()]/u).pop() ?? "";
+      if (!last.includes(",")) next = raw + (last === "" ? "0," : ",");
+    } else if (raw.length < 100) next = raw + key;
+    setRaw(next);
+    // Número simples vai direto para o campo (já formatado); com operador, o campo guarda a conta até o "=".
+    onChange(isExpression(next) ? next : normalizeMoneyText(next.replace(/,$/u, "")));
   };
+  const size = shown.length > 12 ? 26 : shown.length > 10 ? 30 : 34;
   return (
-    <View style={[styles.amountBox, { backgroundColor: c.surface }, error && { borderWidth: 1, borderColor: c.red }]}>
+    <Animated.View
+      style={[
+        styles.amountBox,
+        { backgroundColor: c.surface },
+        problem && { borderWidth: 1, borderColor: c.red },
+        { transform: [{ translateX: shake }] },
+      ]}
+    >
       <Muted>{label}</Muted>
       <View style={[styles.row, { gap: space.sm }]}>
-        <T
-          style={{
-            fontSize: 22,
-            fontFamily: "SoraSemi",
-            color: color || c.text,
-          }}
-        >
-          R$
-        </T>
+        <T style={{ fontSize: 22, fontFamily: "SoraSemi", color: color || c.text }} importantForAccessibility="no">R$</T>
         <TextInput
           ref={inputRef}
           accessibilityLabel={`${label} em reais`}
-          accessibilityHint={error}
+          accessibilityHint={problem || "Os dígitos entram da direita para a esquerda. Digite 1500 para R$ 15,00."}
           maxFontSizeMultiplier={1.3}
           selectionColor={c.accent}
           cursorColor={c.accent}
-          value={value}
+          value={shown}
           editable={!pad}
-          onFocus={() => { valueOnFocus.current = value; setFocused(true); }}
-          onBlur={formatOnBlur}
-          onChangeText={onChange}
+          onChangeText={(text) => (expression ? onChange(text) : money$.onText(text))}
           placeholder="0,00"
           placeholderTextColor={c.muted}
-          keyboardType="decimal-pad"
+          keyboardType="number-pad"
           autoFocus={autoFocus}
           maxLength={100}
+          selection={{ start: shown.length, end: shown.length }}
           style={{
             flex: 1,
             minHeight: 48,
-            fontSize: 34,
+            fontSize: size,
             fontFamily: "SoraBold",
             color: color || c.text,
             paddingVertical: space.xs,
@@ -717,51 +791,50 @@ export function AmountField({
         <IconButton
           name={pad ? "x" : "divide"}
           label={pad ? "Fechar calculadora" : "Abrir calculadora"}
-          onPress={() => setPad(!pad)}
+          onPress={togglePad}
         />
       </View>
       <View accessibilityLiveRegion="polite">
         {preview && <Muted style={{ color: preview.ok ? c.muted : c.red }}>
           {preview.ok ? "= " + money(preview.cents!) : preview.message}
         </Muted>}
-        {focused && plainCents !== undefined && <Muted {...fitAmount}>= {money(plainCents)}</Muted>}
+        {!shown && !pad && !problem && <Muted importantForAccessibility="no">Digite os centavos: 1500 = R$ 15,00</Muted>}
       </View>
-      {!!error && <T accessibilityRole="alert" accessibilityLiveRegion="polite" style={{ color: c.red }}>{error}</T>}
+      {!!problem && <T accessibilityRole="alert" accessibilityLiveRegion="polite" style={{ color: c.red }}>{problem}</T>}
       {!pad && expression && <Button title="Calcular" secondary disabled={!preview?.ok} onPress={calculate} />}
       {pad && (
-        <>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
-            {["7", "8", "9", "÷", "4", "5", "6", "×", "1", "2", "3", "−", ",", "0", "⌫", "+", "(", ")", "C",
-              ...(expression ? ["="] : [])].map((key) => {
-              const op = "÷×−+=".includes(key);
-              const names: Record<string, string> = { "÷": "dividir", "×": "multiplicar", "−": "menos", "+": "mais", "⌫": "apagar", C: "limpar", "=": "Calcular", ",": "vírgula", "(": "Abrir parênteses", ")": "Fechar parênteses" };
-              return (
-                <Pressable
-                  key={key}
-                  accessibilityRole="button"
-                  accessibilityLabel={names[key] || key}
-                  accessibilityState={{ disabled: key === "=" && !preview?.ok }}
-                  disabled={key === "=" && !preview?.ok}
-                  onPress={() => press(key)}
-                  android_ripple={{ color: c.soft }}
-                  style={{
-                    width: key === "=" ? "48%" : "22.6%",
-                    flexGrow: key === "=" ? 1 : 0,
-                    minHeight: 48,
-                    borderRadius: 14,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: key === "=" ? c.primary : op ? c.soft : c.bg,
-                  }}
-                >
-                  <T style={{ fontSize: 20, fontFamily: "SoraSemi", color: key === "=" ? c.onPrimary : op ? c.primary : c.text }}>{key}</T>
-                </Pressable>
-              );
-            })}
-          </View>
-        </>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+          {["7", "8", "9", "÷", "4", "5", "6", "×", "1", "2", "3", "−", ",", "0", "⌫", "+", "(", ")", "C",
+            ...(expression ? ["="] : [])].map((key) => {
+            const op = "÷×−+=".includes(key);
+            const off = key === "=" && !preview?.ok;
+            return (
+              <Pressable
+                key={key}
+                accessibilityRole="button"
+                accessibilityLabel={PAD_NAMES[key] || key}
+                accessibilityState={{ disabled: off }}
+                disabled={off}
+                onPress={() => press(key)}
+                android_ripple={{ color: c.soft }}
+                style={{
+                  width: key === "=" ? "48%" : "22.6%",
+                  flexGrow: key === "=" ? 1 : 0,
+                  minHeight: 48,
+                  borderRadius: 14,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: off ? 0.4 : 1,
+                  backgroundColor: key === "=" ? c.primary : op ? c.soft : c.bg,
+                }}
+              >
+                <T style={{ fontSize: 20, fontFamily: "SoraSemi", color: key === "=" ? c.onPrimary : op ? c.primary : c.text }}>{key}</T>
+              </Pressable>
+            );
+          })}
+        </View>
       )}
-    </View>
+    </Animated.View>
   );
 }
 

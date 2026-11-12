@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { View, Pressable } from "react-native";
-import { CreateAction, T, Muted, Box, Section, Button, Empty, IconButton, Progress, Chips, Field, styles as k } from "../ui/kit";
+import { CreateAction, T, Muted, Box, Section, Button, Empty, IconButton, Progress, Chips, Field, MoneyField, styles as k } from "../ui/kit";
+import { useHeaderAction } from "../app/headerAction";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
@@ -22,6 +23,7 @@ export function ContractsScreen({ type }: { type: "financing" | "loan" }) {
   const [open, setOpen] = useState("");
   const list = (state.financings || []).filter((f: any) => (f.type || "financing") === type && !f.archived);
   const label = type === "loan" ? "empréstimo" : "financiamento";
+  useHeaderAction(`Novo ${label}`, () => nav.push({ name: "form", kind: "contract", initial: { type } }));
   if (!list.length)
     return (
       <Empty
@@ -38,7 +40,6 @@ export function ContractsScreen({ type }: { type: "financing" | "loan" }) {
     );
   return (
     <>
-      <CreateAction title={`Novo ${label}`} onPress={() => nav.push({ name: "form", kind: "contract", initial: { type } })} />
       {list.map((f: any) => {
         const st = contractStatus(state, f.id);
         const rows = contractRows(state, f.id);
@@ -202,9 +203,10 @@ export function RecurrencesScreen() {
   const [view, setView] = useState<"list" | "calendar">("list");
   const totals = recurrenceTotals(state);
   const list = [...(state.recurrences || [])].sort((a: any, b: any) => (a.type + a.description).localeCompare(b.type + b.description));
+  useHeaderAction("Criar recorrência", () => nav.push({ name: "form", kind: "recurrence" }));
   return (
     <>
-      <CreateAction title="Criar recorrência" onPress={() => nav.push({ name: "form", kind: "recurrence" })} />
+      {!list.length && <CreateAction title="Criar recorrência" onPress={() => nav.push({ name: "form", kind: "recurrence" })} />}
       {!!list.length && <View style={[k.row, { gap: 12 }]}>
         <Box style={{ flex: 1 }}>
           <Muted>Despesas</Muted>
@@ -356,7 +358,7 @@ export function InstallmentsScreen() {
       )}
       <Section title="Simular uma compra parcelada" />
       <Box style={{ gap: 12 }}>
-        <Field label="Valor da compra (R$)" value={sim.amount} onChange={(v) => setSim({ ...sim, amount: v })} numeric />
+        <MoneyField label="Valor da compra" value={sim.amount} onChange={(v) => setSim({ ...sim, amount: v })} />
         <View style={[k.row, { alignItems: "flex-start" }]}>
           <View style={{ flex: 1 }}>
             <Field label="Parcelas" value={sim.count} onChange={(v) => setSim({ ...sim, count: v })} numeric maxLength={3} />

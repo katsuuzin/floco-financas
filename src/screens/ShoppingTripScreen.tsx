@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Alert, Pressable, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Box, Button, Empty, Field, I, Muted, Section, T, focusAccessibility, type ViewControl, styles as k } from "../ui/kit";
+import { Box, Button, Empty, MoneyField, I, Muted, Section, T, focusAccessibility, type ViewControl, styles as k } from "../ui/kit";
 import { useTheme } from "../ui/theme";
 import CategoryIcon, { CategoryBadge } from "../ui/ShoppingIcons";
 import { useStore } from "../app/store";
@@ -144,7 +144,7 @@ export default function ShoppingTripScreen({ lists }: { lists?: string[] }) {
       <View style={{ marginTop: 12, gap: 8 }}>
         {editLimit ? (
           <>
-            <Field label="Limite da compra (R$)" value={limitText} onChange={(text) => { setLimitText(text); setLimitError(""); }} numeric autoFocus placeholder="Ex.: 250,00" hint="Deixe vazio para tirar o limite." />
+            <MoneyField label="Limite da compra" value={limitText} onChange={(text) => { setLimitText(text); setLimitError(""); }} autoFocus placeholder="Ex.: 250,00" hint="Deixe vazio para tirar o limite." />
             <View accessibilityLiveRegion="polite">{!!limitError && <Muted style={{ color: c.red }}>{limitError}</Muted>}</View>
             <Button title="Salvar limite" onPress={saveLimit} />
           </>

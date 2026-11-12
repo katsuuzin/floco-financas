@@ -4,7 +4,8 @@ import { View, Alert } from "react-native";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system/legacy";
-import { DateField, T, Muted, Box, Section, Button, Chips, Field, ListItem, Progress, styles as k } from "../ui/kit";
+import { T, Muted, Box, Section, Button, Chips, Field, MoneyField, ListItem, Progress, styles as k } from "../ui/kit";
+import { DateField } from "../ui/DateTime";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
@@ -554,7 +555,7 @@ export function ProjectionsScreen() {
       )}
       {view === "whatif" && (
         <>
-          <Field label="E se você economizasse por mês (R$)?" value={cut} onChange={setCut} numeric placeholder="200,00" hint="Use um valor para ver como a trajetória muda. Nada é gravado." />
+          <MoneyField label="E se você economizasse por mês?" value={cut} onChange={setCut} placeholder="200,00" hint="Use um valor para ver como a trajetória muda. Nada é gravado." />
           <Chips
             values={[
               ["6", "6 meses"],

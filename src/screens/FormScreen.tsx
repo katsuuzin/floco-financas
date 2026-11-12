@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Pressable, Keyboard } from "react-native";
-import { T, Muted, I, Field, DateField, Choice, Toggle, Button, Box, IconButton, Segmented, AmountField, type TextControl, styles as k } from "../ui/kit";
+import { View, Pressable, Keyboard, ScrollView, StyleSheet } from "react-native";
+import { T, Muted, I, Field, MoneyField, Choice, Toggle, Button, Box, IconButton, Segmented, AmountField, type TextControl, styles as k } from "../ui/kit";
+import { DateField, TimeField } from "../ui/DateTime";
 import { DiscardDraftSheet } from "../ui/Sheet";
 import { CATALOG, parentOf } from "../categories.mjs";
 import { useTheme } from "../ui/theme";
@@ -36,8 +37,8 @@ const COLORS: [string, string][] = [
   ["#B53846", "Vermelho"],
 ];
 
-export default function FormScreen({ kind, initial, scrollTo }: { kind: string; initial?: any; scrollTo: (y: number) => void }) {
-  return kind === "expenseBatch" ? <ExpenseBatchReview initial={initial} /> : <RegularFormScreen kind={kind} initial={initial} scrollTo={scrollTo} />;
+export default function FormScreen({ kind, initial }: { kind: string; initial?: any }) {
+  return kind === "expenseBatch" ? <ExpenseBatchReview initial={initial} /> : <RegularFormScreen kind={kind} initial={initial} />;
 }
 
 function ExpenseBatchReview({ initial }: { initial: any }) {
@@ -150,8 +151,10 @@ function ExpenseBatchReview({ initial }: { initial: any }) {
   );
 }
 
-function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?: any; scrollTo: (y: number) => void }) {
+function RegularFormScreen({ kind, initial }: { kind: string; initial?: any }) {
   const { c } = useTheme();
+  const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const scrollTo = (y: number) => scroll.current?.scrollTo({ y: Math.max(0, y), animated: true });
   const { state, commit, setNotice, perform, confirm, show } = useStore();
   const nav = useNav();
   const [form, setForm] = useState<any>(() => defaults(kind, state, initial));
@@ -162,7 +165,7 @@ function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?
   const amountTop = useRef(0);
   const [moreCategories, setMoreCategories] = useState(false);
   const [details, setDetails] = useState(
-    () => !!(initial?.notes || initial?.refund || initial?.ignored || initial?.tags?.length || initial?.repeat === "installments"),
+    () => !!(initial?.notes || initial?.refund || initial?.ignored || initial?.tags?.length || initial?.spendType || initial?.repeat === "installments"),
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -187,7 +190,8 @@ function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?
       try {
         parseMoney(form.amount);
       } catch (error: any) {
-        setAmountError(error.message);
+        const empty = !String(form.amount ?? "").trim() || /^0+(,0+)?$/.test(String(form.amount).trim());
+        setAmountError(empty ? "Informe um valor maior que R$ 0,00." : error.message);
         scrollTo(amountTop.current);
         requestAnimationFrame(() => amountInput.current?.focus());
         return;
@@ -246,6 +250,8 @@ function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?
   const tx = form.kind === "transaction";
   const availableCategories: string[] = form.kind === "budget" ? budgetCategories(state, form.budgetType || "expense") : [];
   return (
+    <View style={{ flex: 1 }}>
+    <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" contentContainerStyle={[k.content, { paddingBottom: 24, maxWidth: 900, width: "100%", alignSelf: "center" }]}>
     <View style={{ gap: 18 }}>
       <View style={[k.row, { justifyContent: "space-between" }]}>
         <T style={k.pageTitle}>{formTitles[form.kind]?.(form)}</T>
@@ -295,11 +301,11 @@ function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?
             </Pressable>
           )}
           <View style={[k.row, { alignItems: "flex-end", gap: 8 }]}>
-            <View style={{ flex: 1.6 }}>
+            <View style={{ flex: 1.2 }}>
               <DateField label="Data" value={form.date} onChange={(v) => set("date", v)} />
             </View>
             <View style={{ flex: 1 }}>
-              <Field label="Hora" value={form.time} onChange={(v) => set("time", v)} placeholder="HH:MM" maxLength={5} />
+              <TimeField value={form.time} onChange={(v) => set("time", v)} />
             </View>
           </View>
           <View style={[k.row, { marginTop: -8, gap: 4 }]}>
@@ -308,6 +314,7 @@ function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?
               <T style={{ fontSize: 13, color: c.primary }}>Hoje</T>
             </Pressable>
             <IconButton name="chevron-right" label="Próximo dia" onPress={() => set("date", shiftDay(form.date, 1))} />
+            <Muted style={{ flex: 1, textAlign: "right" }}>Lápis = digitar</Muted>
           </View>
           {!form.cardId && form.type !== "transfer" && (
             <Toggle
@@ -326,7 +333,7 @@ function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?
                 return { ...f, description: v, ...(rule ? { category: rule.category, subcategory: rule.subcategory || "" } : {}) };
               })
             }
-            hint={form.type === "transfer" ? "Use a descrição para identificar a transferência." : "As regras sugerem a categoria pela descrição. Se o campo ficar vazio, o nome da categoria será usado."}
+            hint={form.type === "transfer" ? "Use a descrição para identificar a transferência." : "A categoria é sugerida pela descrição. Vazio usa o nome da categoria."}
           />
           {form.type !== "transfer" && (
             <CategoryRow
@@ -335,14 +342,6 @@ function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?
               category={form.category}
               subcategory={form.subcategory}
               onChange={(cat, sub) => setForm((f: any) => ({ ...f, category: cat, subcategory: sub, categoryTouched: true }))}
-            />
-          )}
-          {form.type === "expense" && (
-            <Choice
-              label="Tipo de gasto"
-              values={[["", "Automático (pela categoria)"], ...spendTypeConfig(state).types.filter((t: any) => !t.saved).map((t: any) => [t.id, t.id === "cuttable" && t.name === "Cortável" ? "Pode cortar" : t.name])] as [string, string][]}
-              value={form.spendType || ""}
-              onChange={(v) => set("spendType", v)}
             />
           )}
           {form.cardId && (() => {
@@ -387,13 +386,23 @@ function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?
             onPress={() => setDetails(!details)}
             style={[k.row, { minHeight: 48, borderBottomWidth: 1, borderColor: c.line }]}
           >
-            <T style={{ fontFamily: "SoraSemi", color: c.primary, flex: 1 }}>Mais detalhes</T>
+            <T style={{ fontFamily: "SoraSemi", color: c.primary, flex: 1 }}>
+              Mais detalhes{!details && form.type === "expense" && form.spendType ? ` · ${spendTypeConfig(state).types.find((t: any) => t.id === form.spendType)?.name ?? ""}` : ""}
+            </T>
             <View style={{ transform: [{ rotate: details ? "180deg" : "0deg" }] }} importantForAccessibility="no">
               <I name="chevron-down" color={c.primary} />
             </View>
           </Pressable>
           {details && (
             <View style={{ gap: 18 }}>
+              {form.type === "expense" && (
+                <Choice
+                  label="Tipo de gasto"
+                  values={[["", "Automático (pela categoria)"], ...spendTypeConfig(state).types.filter((t: any) => !t.saved).map((t: any) => [t.id, t.id === "cuttable" && t.name === "Cortável" ? "Pode cortar" : t.name])] as [string, string][]}
+                  value={form.spendType || ""}
+                  onChange={(v) => set("spendType", v)}
+                />
+              )}
               {form.type !== "transfer" && !form.editId && (
                 <Choice
                   label="Repetição"
@@ -524,11 +533,10 @@ function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?
           {!bankProfile(form.profileId) && (
             <Field label="Instituição (opcional)" value={form.institution} onChange={(v) => set("institution", v)} placeholder="Nubank, Itaú, Dinheiro…" />
           )}
-          <Field
-            label="Saldo inicial (R$)"
+          <MoneyField
+            label="Saldo inicial"
             value={form.initial}
             onChange={(v) => set("initial", v)}
-            numeric
             placeholder="0,00"
             hint="O saldo atual é calculado a partir deste valor e dos lançamentos confirmados."
           />
@@ -578,7 +586,7 @@ function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?
       {form.kind === "card" && (
         <>
           <Field label="Nome do cartão" value={form.name} onChange={(v) => set("name", v)} autoFocus={!form.id} />
-          <Field label="Limite total (R$)" value={form.limit} onChange={(v) => set("limit", v)} numeric />
+          <MoneyField label="Limite total" value={form.limit} onChange={(v) => set("limit", v)} />
           <View style={[k.row, { alignItems: "flex-start" }]}>
             <View style={{ flex: 1 }}>
               <Field label="Fechamento (dia)" value={form.closingDay} onChange={(v) => set("closingDay", v)} numeric maxLength={2} />
@@ -622,8 +630,8 @@ function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?
             }}
           />
           <View onLayout={(event) => { amountTop.current = event.nativeEvent.layout.y; }}>
-            <Field label="Valor (R$)" placeholder="0,00" value={form.amount} onChange={(v) => set("amount", v)}
-              numeric autoFocus={!form.id} error={amountError} inputRef={amountInput} />
+            <MoneyField label="Valor" value={form.amount} onChange={(v) => set("amount", v)}
+              autoFocus={!form.id} error={amountError} inputRef={amountInput} />
           </View>
           <Field label="Nome (opcional)" value={form.name} onChange={(v) => set("name", v)} placeholder="Ex.: Essenciais" />
           <View style={{ gap: 8 }}>
@@ -728,7 +736,7 @@ function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?
               : "Caixinha reserva dinheiro dentro de uma conta. O saldo total não muda; o disponível diminui."}
           </Muted>
           <Field label={form.goalKind === "goal" ? "Nome da meta" : "Nome da caixinha"} value={form.name} onChange={(v) => set("name", v)} autoFocus={!form.id} />
-          <Field label="Quanto quer guardar? (R$)" value={form.target} onChange={(v) => set("target", v)} numeric />
+          <MoneyField label="Quanto quer guardar?" value={form.target} onChange={(v) => set("target", v)} />
           <DateField label="Prazo" value={form.deadline || ""} onChange={(v) => set("deadline", v)} optional />
         </>
       )}
@@ -749,11 +757,11 @@ function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?
             <Muted>
               {account?.name} · saldo atual {show(current)}
             </Muted>
-            <Field
-              label="Saldo real (R$)"
+            <MoneyField
+              label="Saldo real"
+              allowZero
               value={form.amount}
               onChange={(v) => set("amount", v)}
-              numeric
               autoFocus
               hint="O valor que a conta tem de verdade agora, como no app do banco."
             />
@@ -805,7 +813,7 @@ function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?
 
       {form.kind === "goalProgress" && (
         <>
-          <Field label="Quanto você já juntou? (R$)" value={form.amount} onChange={(v) => set("amount", v)} numeric autoFocus />
+          <MoneyField allowZero label="Quanto você já juntou?" value={form.amount} onChange={(v) => set("amount", v)} autoFocus />
           <Muted>Corrige o total. A diferença fica no histórico como ajuste e não conta no ritmo dos depósitos.</Muted>
         </>
       )}
@@ -815,7 +823,7 @@ function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?
           <Muted>
             {state.goals.find((g: any) => g.id === form.goalId)?.name} · juntou {show(state.goals.find((g: any) => g.id === form.goalId)?.saved || 0)}
           </Muted>
-          <Field label="Valor (R$)" value={form.amount} onChange={(v) => set("amount", v)} numeric autoFocus />
+          <MoneyField label="Valor" value={form.amount} onChange={(v) => set("amount", v)} autoFocus />
           <Muted>O depósito só marca o progresso da meta. Nenhuma conta muda.</Muted>
           <DateField label="Data" value={form.date} onChange={(v) => set("date", v)} />
           <Field label="Observação (opcional)" value={form.description} onChange={(v) => set("description", v)} placeholder="Ex.: salário de março" />
@@ -825,7 +833,7 @@ function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?
       {["deposit", "withdraw", "reserveTransfer"].includes(form.kind) && (
         <>
           <Choice label="Caixinha" values={state.goals.filter((g: any) => g.kind !== "goal" && !g.archived).map((g: any) => [g.id, g.name])} value={form.goalId} onChange={(v) => set("goalId", v)} />
-          <Field label="Valor (R$)" value={form.amount} onChange={(v) => set("amount", v)} numeric autoFocus />
+          <MoneyField label="Valor" value={form.amount} onChange={(v) => set("amount", v)} autoFocus />
           <Choice
             label={form.kind === "deposit" ? "Reservar de qual conta?" : "De qual conta?"}
             values={accounts.map((a: any) => [a.id, `${a.name} · ${show(balance(state, a.id) - reserved(state, a.id))} livre`])}
@@ -867,11 +875,11 @@ function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?
               value={form.yieldMode}
               onChange={(v) => set("yieldMode", v)}
             />
-            <Field
-              label={form.yieldMode === "total" ? "Saldo atual da caixinha (R$)" : "Quanto rendeu (R$)"}
+            <MoneyField
+              allowZero
+              label={form.yieldMode === "total" ? "Saldo atual da caixinha" : "Quanto rendeu"}
               value={form.amount}
               onChange={(v) => set("amount", v)}
-              numeric
               autoFocus
             />
             {gain !== null && (
@@ -902,11 +910,10 @@ function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?
               Compras lançadas: {show(inv.purchasesTotal)}
               {inv.manual ? ` · total ajustado: ${show(inv.total)}` : ""}
             </Muted>
-            <Field
-              label="Total da fatura no banco (R$)"
+            <MoneyField
+              label="Total da fatura no banco"
               value={form.amount}
               onChange={(v) => set("amount", v)}
-              numeric
               autoFocus
               hint="Deixe vazio e salve para voltar à soma das compras. O ajuste vale só para esta fatura e não pode ficar abaixo do que já foi pago."
             />
@@ -927,11 +934,10 @@ function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?
               </View>
             ) : null;
           })()}
-          <Field
-            label="Valor a pagar (R$)"
+          <MoneyField
+            label="Valor a pagar"
             value={form.amount}
             onChange={(v) => set("amount", v)}
-            numeric
             hint="Deixe vazio para pagar todo o saldo. Informe um valor para pagamento parcial."
           />
           <Choice label="Pagar usando" values={accounts.map((a: any) => [a.id, a.name])} value={form.accountId} onChange={(v) => set("accountId", v)} />
@@ -979,22 +985,20 @@ function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?
                 : "A parcela cai um pouco a cada mês; comum em imóveis. Informe a taxa e o saldo devedor."}
           </Muted>
           {form.method !== "sac" && (
-            <Field
-              label="Valor da parcela mensal (R$)"
+            <MoneyField
+              label="Valor da parcela mensal"
               value={form.amount}
               onChange={(v) => set("amount", v)}
-              numeric
               hint="Quanto você paga por mês, sem seguros — não o total do contrato."
             />
           )}
           {form.method !== "fixed" && (
             <>
               <Field label="Taxa de juros (% ao mês)" value={form.rate} onChange={(v) => set("rate", v)} numeric placeholder="1,2" />
-              <Field
-                label={form.method === "sac" ? "Saldo devedor (R$)" : "Saldo devedor (opcional, R$)"}
+              <MoneyField
+                label={form.method === "sac" ? "Saldo devedor" : "Saldo devedor (opcional)"}
                 value={form.principal}
                 onChange={(v) => set("principal", v)}
-                numeric
                 hint={form.method === "price" ? "Se informar, a parcela é calculada a partir dele." : undefined}
               />
             </>
@@ -1030,8 +1034,8 @@ function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?
             onChange={(v) => set("type", v)}
           />
           <View onLayout={(event) => { amountTop.current = event.nativeEvent.layout.y; }}>
-            <Field label="Valor (R$)" placeholder="0,00" value={form.amount} onChange={(v) => set("amount", v)}
-              numeric autoFocus={!form.id} error={amountError} inputRef={amountInput} />
+            <MoneyField label="Valor" value={form.amount} onChange={(v) => set("amount", v)}
+              autoFocus={!form.id} error={amountError} inputRef={amountInput} />
           </View>
           <Field label="Descrição" value={form.description} onChange={(v) => set("description", v)} placeholder="Ex.: Aluguel, Salário, Streaming" />
           <Choice
@@ -1074,11 +1078,10 @@ function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?
               onChange={(v) => set("mode", v)}
             />
           )}
-          <Field
-            label={form.kind === "settle" ? "Valor da quitação (R$)" : form.kind === "extraAmort" ? "Valor pago (R$)" : "Valor (R$)"}
+          <MoneyField
+            label={form.kind === "settle" ? "Valor da quitação" : form.kind === "extraAmort" ? "Valor pago" : "Valor"}
             value={form.amount}
             onChange={(v) => set("amount", v)}
-            numeric
             autoFocus
             hint={
               form.kind === "settle"
@@ -1090,11 +1093,11 @@ function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?
           />
           {form.kind === "extraAmort" && (
             <>
-              <Field
-                label="Novo saldo devedor (R$)"
+              <MoneyField
+                allowZero
+                label="Novo saldo devedor"
                 value={form.newDebt}
                 onChange={(v) => set("newDebt", v)}
-                numeric
                 hint="Deixe vazio para usar o calculado (saldo atual menos o valor pago). Informe o valor do banco se ele for diferente."
               />
               <Toggle
@@ -1140,20 +1143,32 @@ function RegularFormScreen({ kind, initial, scrollTo }: { kind: string; initial?
         return text ? <Muted accessibilityLiveRegion="polite">{text}</Muted> : null;
       })()}
 
+    </View>
+    </ScrollView>
+    {/* Barra fixa: Salvar fica sempre à vista, acima do teclado, sem rolar até o fim do formulário. */}
+    <View style={{ backgroundColor: c.bg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.line, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12, gap: 8 }}>
       {!!error && (
         <T accessibilityRole="alert" accessibilityLiveRegion="polite" style={{ color: c.red }}>
           {error}
         </T>
       )}
-      <Button
-        title={saving ? "Salvando…" : form.kind === "payment" ? "Confirmar pagamento" : "Salvar"}
-        disabled={saving}
-        onPress={() => save(false)}
-        icon="check"
-      />
-      {tx && !form.editId && <Button title="Salvar e continuar" secondary disabled={saving} onPress={() => save(true)} />}
-      <View style={{ height: 24 }} />
-      {discard && <DiscardDraftSheet onContinue={() => setDiscard(false)} onDiscard={nav.dismiss} />}
+      <View style={{ flexDirection: "row", gap: 8, maxWidth: 900, width: "100%", alignSelf: "center" }}>
+        {tx && !form.editId && (
+          <View style={{ flex: 1 }}>
+            <Button title="Salvar e novo" secondary disabled={saving} onPress={() => save(true)} />
+          </View>
+        )}
+        <View style={{ flex: tx && !form.editId ? 1.4 : 1 }}>
+          <Button
+            title={saving ? "Salvando…" : form.kind === "payment" ? "Confirmar pagamento" : "Salvar"}
+            disabled={saving}
+            onPress={() => save(false)}
+            icon="check"
+          />
+        </View>
+      </View>
+    </View>
+    {discard && <DiscardDraftSheet onContinue={() => setDiscard(false)} onDiscard={nav.dismiss} />}
     </View>
   );
 }

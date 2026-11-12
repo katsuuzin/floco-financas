@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from "react";
 import { View, TextInput, Pressable, ScrollView, SectionList, useWindowDimensions } from "react-native";
-import { Box, Button, Chips, Empty, I, Muted, T, fitAmount, focusAccessibility, type ViewControl, styles as k } from "../ui/kit";
+import { Box, Button, Chips, Empty, I, Muted, MoneyField, T, fitAmount, focusAccessibility, type ViewControl, styles as k } from "../ui/kit";
 import { SheetModal } from "../ui/Sheet";
 import { applyFilters, centsOf, emptyFilters, toggle } from "../tx-filters.mjs";
 import { activeFilterCount, applyStatementFilter, describeFilter, sanitizeFilter } from "../statementFilter.mjs";
@@ -142,17 +142,41 @@ export default function TransactionsScreen({ storageError }: { storageError: str
     <>
       {!!storageError && <Box><T style={{ color: c.red }}>{storageError}</T></Box>}
       <MonthBar />
-      <TextInput
-        accessibilityLabel="Buscar por descrição, valor ou observação"
-        placeholder="Descrição ou valor"
-        maxFontSizeMultiplier={1.3}
-        selectionColor={c.accent}
-        cursorColor={c.accent}
-        placeholderTextColor={c.muted}
-        value={search}
-        onChangeText={setSearch}
-        style={[k.input, { backgroundColor: c.surface, color: c.text, borderColor: c.line }]}
-      />
+      <View style={[k.row, { gap: 6 }]}>
+        <TextInput
+          accessibilityLabel="Buscar por descrição, valor ou observação"
+          placeholder="Descrição ou valor"
+          maxFontSizeMultiplier={1.3}
+          selectionColor={c.accent}
+          cursorColor={c.accent}
+          placeholderTextColor={c.muted}
+          value={search}
+          onChangeText={setSearch}
+          style={[k.input, { flex: 1, backgroundColor: c.surface, color: c.text, borderColor: c.line }]}
+        />
+        <Pressable
+          accessibilityRole="button"
+          ref={filterButton}
+          accessibilityLabel={panel ? "Fechar filtros" : advCount ? `Filtros, ${advCount} ativos` : "Abrir filtros"}
+          accessibilityState={{ expanded: panel }}
+          onPress={openFilters}
+          style={[k.row, { minWidth: 52, height: 52, justifyContent: "center", gap: 4, paddingHorizontal: 12, borderRadius: 26, borderWidth: 1,
+            backgroundColor: advCount ? c.primary : c.surface, borderColor: advCount ? c.primary : c.line }]}
+        >
+          <I name="sliders" size={18} color={advCount ? c.onPrimary : c.text} />
+          {advCount > 0 && <T style={{ fontSize: 13, fontFamily: "SoraBold", color: c.onPrimary }}>{advCount}</T>}
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={cal ? "Ver lista" : "Ver calendário"}
+          accessibilityState={{ selected: cal }}
+          onPress={() => { setCal(!cal); setDay(null); }}
+          style={[k.row, { width: 52, height: 52, justifyContent: "center", borderRadius: 26, borderWidth: 1,
+            backgroundColor: cal ? c.primary : c.surface, borderColor: cal ? c.primary : c.line }]}
+        >
+          <I name={cal ? "list" : "calendar"} size={18} color={cal ? c.onPrimary : c.text} />
+        </Pressable>
+      </View>
       <Chips
         values={[
           ["all", "Todas"],
@@ -164,23 +188,6 @@ export default function TransactionsScreen({ storageError }: { storageError: str
         value={filter}
         onChange={setFilter}
       />
-      <View style={[k.row, { gap: 8, marginTop: 2, flexWrap: "wrap" }]}>
-        <Pressable
-          accessibilityRole="button"
-          ref={filterButton}
-          accessibilityLabel={panel ? "Fechar filtros" : advCount ? `Filtros, ${advCount} ativos` : "Abrir filtros"}
-          accessibilityState={{ expanded: panel }}
-          onPress={openFilters}
-          hitSlop={8}
-          style={[k.compactChip, k.row, { minHeight: 48, gap: 8, backgroundColor: advCount ? c.primary : c.surface, borderColor: advCount ? c.primary : c.line }]}
-        >
-          <I name="sliders" size={16} color={advCount ? c.onPrimary : c.text} />
-          <T style={{ fontSize: 13, fontFamily: "SoraSemi", color: advCount ? c.onPrimary : c.text }}>
-            {advCount ? `Filtros · ${advCount}` : "Filtros"}
-          </T>
-        </Pressable>
-        <Button secondary title={cal ? "Ver lista" : "Ver calendário"} onPress={() => { setCal(!cal); setDay(null); }} />
-      </View>
       <View style={[k.row, { flexWrap: "wrap", gap: 4 }]} accessibilityLiveRegion="polite">
         <Muted>{found.length} {found.length === 1 ? "lançamento" : "lançamentos"} · Resultado</Muted>
         <Muted {...fitAmount} style={{ maxWidth: "100%" }}>{(total < 0 ? "−" : "") + show(Math.abs(total))}</Muted>
@@ -202,9 +209,9 @@ export default function TransactionsScreen({ storageError }: { storageError: str
       )}
       {panel && (
         <SheetModal title={advCount ? `Filtros do extrato (${advCount})` : "Filtros do extrato"} onClose={closeFilters}
-          footer={<View style={[k.row, { flexWrap: "wrap", gap: 8 }]}>
-            <Button title="Limpar" secondary onPress={() => saveFilters(true)} />
-            <Button title="Aplicar filtros" onPress={() => saveFilters()} />
+          footer={<View style={[k.row, { gap: 8 }]}>
+            <View style={{ flex: 1 }}><Button title="Limpar" secondary onPress={() => saveFilters(true)} /></View>
+            <View style={{ flex: 1.4 }}><Button title="Aplicar filtros" onPress={() => saveFilters()} /></View>
           </View>}>
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, gap: 6 }}>
           <Pick title="Conta ou cartão" opts={sourceOpts} on={adv.sources} set={(v) => setAdv({ ...adv, sources: toggle(adv.sources, v) })} />
@@ -212,19 +219,16 @@ export default function TransactionsScreen({ storageError }: { storageError: str
             <Pick title="Categoria" badge={(name) => categoryStyleOf(state, name)} opts={catOpts.map((x) => [x, x])} on={adv.categories} set={(v) => setAdv({ ...adv, categories: toggle(adv.categories, v) })} />
           )}
           {tagOpts.length > 0 && <Pick title="Tags" badge={(id) => tagStyleOf((state.tags || []).find((tag: any) => tag.id === id))} opts={tagOpts} on={adv.tags} set={(v) => setAdv({ ...adv, tags: toggle(adv.tags, v) })} />}
-          <Muted style={{ marginTop: 6 }}>Faixa de valor (R$)</Muted>
-          <View style={[k.row, { gap: 10 }]}>
+          <View style={[k.row, { gap: 10, alignItems: "flex-start", marginTop: 6 }]}>
             {(["min", "max"] as const).map((key) => (
-              <TextInput
-                key={key}
-                accessibilityLabel={key === "min" ? "Valor mínimo" : "Valor máximo"}
-                placeholder={key === "min" ? "De 0,00" : "Até 0,00"}
-                placeholderTextColor={c.muted}
-                keyboardType="decimal-pad"
-                value={adv[key]}
-                onChangeText={(v) => setAdv({ ...adv, [key]: v })}
-                style={[k.input, { flex: 1, marginTop: 0, backgroundColor: c.bg, color: c.text, borderColor: c.muted }]}
-              />
+              <View key={key} style={{ flex: 1 }}>
+                <MoneyField
+                  label={key === "min" ? "Valor mínimo" : "Valor máximo"}
+                  placeholder="0,00"
+                  value={adv[key]}
+                  onChange={(v) => setAdv({ ...adv, [key]: v })}
+                />
+              </View>
             ))}
           </View>
           <Pick

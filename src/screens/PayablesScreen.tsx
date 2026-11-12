@@ -2,7 +2,9 @@
 // (print, comprovante ou documento). É o espelho de "Quem me deve". Pagar cria uma despesa na conta escolhida.
 import React, { useRef, useState } from "react";
 import { Alert, ScrollView, View } from "react-native";
-import { AmountField, Box, Button, CreateAction, Choice, DateField, Empty, Field, Muted, T, space } from "../ui/kit";
+import { AmountField, Box, Button, CreateAction, Choice, Empty, Field, Muted, T, space } from "../ui/kit";
+import { useHeaderAction } from "../app/headerAction";
+import { DateField } from "../ui/DateTime";
 import { DiscardDraftSheet, SheetModal } from "../ui/Sheet";
 import AttachmentsField, { deleteAttachmentFiles } from "../ui/Attachments";
 import { useTheme } from "../ui/theme";
@@ -21,6 +23,7 @@ export default function PayablesScreen() {
   const [creating, setCreating] = useState(false);
   const [paying, setPaying] = useState(false);
   const current = debts.find((d) => d.id === detail);
+  useHeaderAction(detail ? null : "Nova dívida", () => setCreating(true));
   const total = debts.reduce((n, d) => n + payableBalance(d), 0);
 
   if (current) {
@@ -77,7 +80,7 @@ export default function PayablesScreen() {
         <Muted>Total que você deve</Muted>
         <T accessibilityLabel={`Total que você deve ${show(total)}`} style={{ fontFamily: "SoraBold", fontSize: 28 }}>{show(total)}</T>
       </Box>
-      <CreateAction title="Nova dívida" onPress={() => setCreating(true)} />
+      {debts.length === 0 && <CreateAction title="Nova dívida" onPress={() => setCreating(true)} />}
       {debts.length === 0 && (
         <Empty icon="users" title="Você não deve a ninguém por aqui" body="Anote empréstimos, compras combinadas e contas que você precisa pagar a alguém, com o print da conversa." />
       )}

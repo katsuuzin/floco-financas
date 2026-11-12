@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Pressable, PressableProps, StyleProp, ViewStyle } from "react-native";
+import { useReducedMotion } from "react-native-reanimated";
 import { motionConfig, shouldReduce } from "../motion.mjs";
 
 type Kind = "button" | "icon" | "row" | "chip" | "fab";
@@ -21,6 +22,50 @@ export function useReduceMotion(): boolean {
     };
   }, []);
   return shouldReduce(value);
+}
+
+// "Tremida" curta quando aparece um erro no campo (3 vaivéns de 6 dp em 220 ms). Com "remover animações", fica parado.
+export function useShake(problem: string | boolean | undefined) {
+  const reduce = useReduceMotion();
+  const x = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!problem || reduce) return;
+    Animated.sequence([
+      Animated.timing(x, { toValue: 6, duration: 40, useNativeDriver: true }),
+      Animated.timing(x, { toValue: -6, duration: 60, useNativeDriver: true }),
+      Animated.timing(x, { toValue: 4, duration: 50, useNativeDriver: true }),
+      Animated.timing(x, { toValue: 0, duration: 70, useNativeDriver: true }),
+    ]).start();
+  }, [problem, reduce, x]);
+  return x;
+}
+
+// Número que corre do último valor mostrado até o novo (450 ms). A memória é por chave, então voltar a uma tela depois de
+// lançar uma despesa mostra o saldo "andando" até o valor certo. Sem valor anterior ou com "remover animações": direto.
+const lastShown = new Map<string, number>();
+export function useCountUp(key: string, target: number, ms = 450): number {
+  const reduce = useReducedMotion(); // síncrono (o useReduceMotion acima só responde depois de uma consulta)
+  const [value, setValue] = useState(() => (reduce ? target : lastShown.get(key) ?? target));
+  useEffect(() => {
+    const from = lastShown.get(key) ?? target;
+    if (reduce || from === target) {
+      lastShown.set(key, target);
+      setValue(target);
+      return;
+    }
+    const start = Date.now();
+    let frame = 0;
+    const tick = () => {
+      const t = Math.min(1, (Date.now() - start) / ms);
+      const now = Math.round(from + (target - from) * (1 - Math.pow(1 - t, 3)));
+      setValue(now);
+      if (t < 1) frame = requestAnimationFrame(tick);
+      else lastShown.set(key, target);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [key, target, reduce]);
+  return value;
 }
 
 type Props = Omit<PressableProps, "style"> & {

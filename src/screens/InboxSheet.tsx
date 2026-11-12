@@ -2,7 +2,9 @@
 // Linhas compactas com seta que abrem listas (tipo, conta ou cartão, categoria, tags).
 import React, { useEffect, useRef, useState } from "react";
 import { View, Modal, Keyboard, Pressable, ScrollView, TextInput, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
-import { T, Muted, I, Button, DateField, IconButton, styles as k } from "../ui/kit";
+import { T, Muted, I, Button, IconButton, styles as k } from "../ui/kit";
+import { DateField } from "../ui/DateTime";
+import { maskMoney, normalizeMoneyText } from "../moneyInput.mjs";
 import { DiscardDraftSheet } from "../ui/Sheet";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
@@ -90,9 +92,9 @@ export default function InboxSheet({ row, editDate = false, onClose, onDone }: {
             <T style={{ fontSize: 24, fontFamily: "SoraSemi", color }}>R$</T>
             <TextInput
               accessibilityLabel="Valor em reais"
-              value={f.amount}
-              onChangeText={(v) => set("amount", v)}
-              keyboardType="decimal-pad"
+              value={normalizeMoneyText(f.amount)}
+              onChangeText={(v) => set("amount", maskMoney(v, normalizeMoneyText(f.amount)).text)}
+              keyboardType="number-pad"
               style={{ flex: 1, fontSize: 32, fontFamily: "SoraBold", color, paddingVertical: 2 }}
             />
             <I name="edit-2" size={18} />

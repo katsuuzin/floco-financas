@@ -1,10 +1,12 @@
 // Contas, Cartões, Orçamento e Metas — telas empilhadas a partir de Mais.
 import React, { useState } from "react";
 import { Alert, View, Pressable, ScrollView } from "react-native";
-import { T, Muted, I, Box, Section, Button, CreateAction, Choice, Field, Empty, IconButton, Progress, Segmented, fitAmount, space, styles as k } from "../ui/kit";
+import { T, Muted, I, Box, Section, Button, CreateAction, Choice, Field, MoneyField, Empty, IconButton, Progress, Segmented, fitAmount, space, styles as k } from "../ui/kit";
 import { daysOverdue, overdueLabel } from "../reminders.mjs";
 import { minimumPayment, invoiceBreakdown } from "../invoices.mjs";
 import { RowActions, SheetModal } from "../ui/Sheet";
+import { useHeaderAction } from "../app/headerAction";
+import { useCountUp } from "../ui/motion";
 import { entityColors, useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
@@ -22,10 +24,13 @@ import { archivePot, depositToPot, linkGoalToPot, potSummary, withdrawFromPot } 
 export function AccountsScreen() {
   const { state, perform, show, confirm, current } = useStore();
   const nav = useNav();
+  const { c } = useTheme();
   const active = visibleAccounts(state);
   const archived = visibleAccounts(state, { includeArchived: true }).filter((a: any) => a.archived);
   const [ordering, setOrdering] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  useHeaderAction("Nova conta", () => nav.push({ name: "form", kind: "account" }));
+  const shownTotal = useCountUp("accounts-total", totalBalance(state));
   const move = (id: string, delta: number) => void perform((s: any) => {
     const ordered = visibleAccounts(s, { includeArchived: true });
     const visible = ordered.filter((a: any) => !a.archived);
@@ -52,10 +57,10 @@ export function AccountsScreen() {
   };
   return (
     <>
-      <CreateAction title="Nova conta" onPress={() => nav.push({ name: "form", kind: "account" })} />
+      {!active.length && <CreateAction title="Nova conta" onPress={() => nav.push({ name: "form", kind: "account" })} />}
       <Box>
         <Muted>Saldo total</Muted>
-        <T {...fitAmount} style={[k.balanceValue, { fontSize: 28, marginTop: 4 }]}>{show(totalBalance(state))}</T>
+        <T {...fitAmount} style={[k.balanceValue, { fontSize: 28, marginTop: 4 }]}>{show(shownTotal)}</T>
       </Box>
       <Section title="Contas ativas" action={ordering ? "Concluir" : undefined} onPress={() => setOrdering(false)} />
       {ordering ? active.map((a: any, i: number) => (
@@ -69,7 +74,13 @@ export function AccountsScreen() {
       )) : (
         <View style={{ gap: space.sm }}>
           <AccountList onArchive={archive} />
-          {active.length > 1 && <Button secondary icon="list" title="Reordenar contas" onPress={() => setOrdering(true)} />}
+          {active.length > 1 && (
+            <Pressable accessibilityRole="button" accessibilityLabel="Reordenar contas" onPress={() => setOrdering(true)}
+              style={[k.row, { minHeight: 48, justifyContent: "center", gap: 8 }]}>
+              <I name="list" size={16} color={c.primary} />
+              <T style={{ fontFamily: "SoraSemi", fontSize: 13, color: c.primary }}>Reordenar contas</T>
+            </Pressable>
+          )}
         </View>
       )}
       {!!archived.length && <View style={{ gap: space.sm, marginTop: space.sm }}>
@@ -271,12 +282,13 @@ export function BudgetsScreen() {
   const { month } = nav;
   const ref = month === monthKey(today()) ? today() : `${month}-15`;
   const cycleName: Record<string, string> = { monthly: "Mensal", fortnightly: "Quinzenal", weekly: "Semanal" };
+  useHeaderAction("Novo orçamento", () => nav.push({ name: "form", kind: "budget" }));
   return (
     <>
       <MonthBar />
-      <CreateAction title="Novo orçamento" onPress={() => nav.push({ name: "form", kind: "budget" })} />
+      {!state.budgets.length && <CreateAction title="Novo orçamento" onPress={() => nav.push({ name: "form", kind: "budget" })} />}
       {state.budgets.length ? (
-        state.budgets.map((raw: any) => {
+        state.budgets.map((raw: any, index: number) => {
           const b = normalizeBudget(raw);
           const u = budgetUsage(state, b, ref);
           const h = budgetHistory(state, b, 6, ref);
@@ -284,7 +296,7 @@ export function BudgetsScreen() {
           const bad = income ? false : u.used > u.limit;
           const label = b.name || b.categories.join(", ");
           return (
-            <Box key={b.id}>
+            <Box key={b.id} enter={index}>
               <View style={[k.row, { justifyContent: "space-between" }]}>
                 <CategoryIcon look={categoryStyleOf(state, b.categories[0] || "Outros")} />
                 <Pressable style={{ flex: 1, minHeight: 48 }} accessibilityRole="button" accessibilityState={{ expanded: expanded === b.id }} onPress={() => setExpanded(expanded === b.id ? "" : b.id)}>
@@ -310,6 +322,7 @@ export function BudgetsScreen() {
                 {show(u.used)} de {show(b.amount)}
               </Muted>
               <Progress
+                animate
                 value={u.used}
                 max={b.amount}
                 color={income ? c.green : bad ? c.red : u.ratio >= 0.8 ? c.amber : c.primary}
@@ -348,6 +361,10 @@ export function GoalsScreen() {
   const [tab, setTab] = useState<"metas" | "caixinhas">("metas");
   const [potActions, setPotActions] = useState<string | null>(null);
   const [potForm, setPotForm] = useState<{ action: "create" | "deposit" | "withdraw" | "archive" | "yield" | "transfer" | "rename"; id: string } | null>(null);
+  useHeaderAction(
+    tab === "metas" ? "Nova meta" : "Criar caixinha",
+    () => (tab === "metas" ? nav.push({ name: "form", kind: "goal", initial: { goalKind: "goal" } }) : setPotForm({ action: "create", id: "" })),
+  );
   const [potName, setPotName] = useState("");
   const [potAmount, setPotAmount] = useState("");
   const [potDestination, setPotDestination] = useState("");
@@ -409,7 +426,7 @@ export function GoalsScreen() {
       () => perform((s: any) => ({ ...s, goals: s.goals.filter((x: any) => x.id !== g.id) })),
       "Excluir",
     );
-  const header = (g: any) => (
+  const header = (g: any, open: boolean) => (
     <>
       <View style={[k.row, { justifyContent: "space-between" }]}>
         <View style={{ flex: 1 }}>
@@ -419,20 +436,22 @@ export function GoalsScreen() {
             {g.deadline ? ` · até ${g.deadline.split("-").reverse().join("/")}` : ""}
           </Muted>
         </View>
-        <IconButton name="edit-2" label={`Editar ${g.name}`} onPress={() => edit(g)} />
-      </View>
-      <View style={{ marginVertical: 14 }}>
-        <Progress value={g.saved} max={g.target} color={g.saved >= g.target ? c.green : undefined} />
+        <T style={{ fontFamily: "SoraBold", color: g.saved >= g.target ? c.green : c.text }}>
+          {g.target > 0 ? Math.min(100, Math.floor((g.saved / g.target) * 100)) : 0}%
+        </T>
+        <I name={open ? "chevron-up" : "chevron-down"} size={18} color={c.muted} />
       </View>
     </>
   );
   return (
     <>
-      <Segmented accessibilityLabel="Metas e caixinhas" values={[["metas", "Metas"], ["caixinhas", "Caixinhas"]]}
-        value={tab} onChange={(value) => { setTab(value); setPotForm(null); }} />
+      <View style={{ marginBottom: 12 }}>
+        <Segmented accessibilityLabel="Metas e caixinhas" values={[["metas", "Metas"], ["caixinhas", "Caixinhas"]]}
+          value={tab} onChange={(value) => { setTab(value); setPotForm(null); }} />
+      </View>
       {tab === "caixinhas" ? (
         <View style={{ gap: space.sm, marginTop: space.sm }}>
-          <CreateAction title="Criar caixinha" onPress={() => setPotForm({ action: "create", id: "" })} />
+          {!pots.length && !potForm && <CreateAction title="Criar caixinha" onPress={() => setPotForm({ action: "create", id: "" })} />}
           {!pots.length && <Muted>Nenhuma caixinha ativa.</Muted>}
           {potForm?.action === "create" && <Box style={{ gap: 8 }}>
             <Field label="Nome da caixinha" value={potName} onChange={setPotName} maxLength={80} />
@@ -444,7 +463,7 @@ export function GoalsScreen() {
             }} />
             <Button title="Cancelar" secondary onPress={() => setPotForm(null)} />
           </Box>}
-          {pots.map((pot: any) => <Box key={pot.id} style={{ gap: 8 }}>
+          {pots.map((pot: any, index: number) => <Box key={pot.id} enter={index} style={{ gap: 8 }}>
             <T accessibilityRole="header">{pot.name}</T>
             <Muted>Guardado {show(pot.saved)}</Muted>
             {potSummary({ pots: [pot] }, today()).pots[0]?.monthly.slice(0, 3).map((row: any) =>
@@ -482,7 +501,7 @@ export function GoalsScreen() {
                   value={potDestination} onChange={setPotDestination} />
                 {potForm.action === "transfer" && <Choice label="Caixinha de destino" values={pots.filter((item: any) => item.id !== pot.id)
                   .map((item: any) => [item.id, item.name] as [string, string])} value={potTarget} onChange={setPotTarget} />}
-                <Field label="Valor (R$)" value={potAmount} onChange={setPotAmount} numeric autoFocus />
+                <MoneyField label="Valor" value={potAmount} onChange={setPotAmount} autoFocus />
               </>}
               <Button title={potForm.action === "archive" ? "Confirmar arquivamento" : potForm.action === "rename" ? "Salvar nome" : "Confirmar valor"}
                 disabled={potForm.action === "archive" ? pot.saved > 0 && !potDestination : potForm.action === "rename" ? !potName.trim() :
@@ -500,27 +519,32 @@ export function GoalsScreen() {
           </Box>)}
         </View>
       ) : <>
-      <CreateAction title="Nova meta" onPress={() => nav.push({ name: "form", kind: "goal", initial: { goalKind: "goal" } })} />
+      {metas.length === 0 && <CreateAction title="Nova meta" onPress={() => nav.push({ name: "form", kind: "goal", initial: { goalKind: "goal" } })} />}
       <Muted style={{ marginBottom: 12 }}>Metas acompanham um objetivo sem separar dinheiro.</Muted>
       {metas.length === 0 && <Muted style={{ marginBottom: 12 }}>Nenhuma meta cadastrada.</Muted>}
-      {metas.map((g: any) => {
+      {metas.map((g: any, index: number) => {
         const linked = (state.pots ?? []).find((pot: any) => pot.id === g.potId);
         const progress = linked ? { ...g, saved: linked.saved, moves: [] } : g;
         const fc = goalForecast(progress);
         const moves = [...(g.moves || [])].sort((a: any, b: any) => b.date.localeCompare(a.date)).slice(0, 5);
         return (
-        <Box key={g.id}>
+        <Box key={g.id} enter={index}>
           <View style={[k.row, { alignItems: "flex-start" }]}>
             <Pressable accessibilityRole="button" accessibilityLabel={g.name} accessibilityState={{ expanded: goalDetail === g.id }}
               onPress={() => setGoalDetail(goalDetail === g.id ? "" : g.id)} style={{ flex: 1 }}>
-              {header(progress)}
+              {header(progress, goalDetail === g.id)}
             </Pressable>
             <RowActions title={g.name} actions={[
+              { icon: "edit-2", label: "Editar meta", onPress: () => edit(g) },
               { icon: "link", label: "Vincular caixinha", onPress: () => setLinking(g.id) },
               { icon: "archive", label: "Arquivar meta", onPress: () => void perform((s: any) => archiveGoal(s, g.id), "Meta arquivada", { undoable: true, undo: (s) => archiveGoal(s, g.id, false) }) },
               { icon: "trash-2", label: "Excluir meta", danger: true, onPress: () => remove(g) },
             ]} />
           </View>
+          <Pressable accessibilityRole="button" accessibilityLabel={`${g.name}, progresso`} accessibilityState={{ expanded: goalDetail === g.id }}
+            onPress={() => setGoalDetail(goalDetail === g.id ? "" : g.id)} style={{ marginTop: 14, paddingVertical: 6 }}>
+            <Progress animate value={progress.saved} max={g.target} color={progress.saved >= g.target ? c.green : undefined} />
+          </Pressable>
           {linking === g.id && <SheetModal title="Caixinha vinculada" onClose={() => setLinking("")}>
           <ScrollView contentContainerStyle={{ padding: 16 }}>
           <Choice label="Escolha a caixinha" values={[["", "Sem caixinha"], ...pots.map((pot: any) => [pot.id, pot.name] as [string, string])]}

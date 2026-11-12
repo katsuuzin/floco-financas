@@ -18,7 +18,7 @@ const ITEMS: { key: Tab; label: string; full?: string; icon: any }[] = [
   { key: "categories", label: "Categorias", icon: "pie-chart" },
   { key: "spend", label: "Tipos", full: "Tipo de gasto", icon: "layers" },
   { key: "flow", label: "Fluxo", icon: "repeat" },
-  { key: "more", label: "Resumo do mês", icon: "more-horizontal" },
+  { key: "more", label: "Mês", full: "Resumo do mês", icon: "calendar" },
 ];
 
 export default function AnalysisScreen() {

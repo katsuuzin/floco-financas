@@ -2,7 +2,9 @@
 // (print, comprovante ou documento). É o espelho de "Quem eu devo". Receber cria uma receita na conta escolhida.
 import React, { useRef, useState } from "react";
 import { Alert, ScrollView, View } from "react-native";
-import { AmountField, Box, Button, CreateAction, Choice, DateField, Empty, Field, Muted, T, space } from "../ui/kit";
+import { AmountField, Box, Button, CreateAction, Choice, Empty, Field, Muted, T, space } from "../ui/kit";
+import { useHeaderAction } from "../app/headerAction";
+import { DateField } from "../ui/DateTime";
 import { DiscardDraftSheet, SheetModal } from "../ui/Sheet";
 import AttachmentsField, { deleteAttachmentFiles } from "../ui/Attachments";
 import { useTheme } from "../ui/theme";
@@ -21,6 +23,7 @@ export default function ReceivablesScreen() {
   const [creating, setCreating] = useState(false);
   const [receiving, setReceiving] = useState(false);
   const current = debts.find((d) => d.id === detail);
+  useHeaderAction(detail ? null : "Novo valor a receber", () => setCreating(true));
   const total = debts.reduce((n, d) => n + receivableBalance(d), 0);
 
   if (current) {
@@ -77,7 +80,7 @@ export default function ReceivablesScreen() {
         <Muted>Total a receber</Muted>
         <T accessibilityLabel={`Total a receber ${show(total)}`} style={{ fontFamily: "SoraBold", fontSize: 28 }}>{show(total)}</T>
       </Box>
-      <CreateAction title="Novo valor a receber" onPress={() => setCreating(true)} />
+      {debts.length === 0 && <CreateAction title="Novo valor a receber" onPress={() => setCreating(true)} />}
       {debts.length === 0 && (
         <Empty icon="users" title="Ninguém te deve por aqui" body="Acompanhe empréstimos, vendas ou divisões de conta, com o print da conversa." />
       )}

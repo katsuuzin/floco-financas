@@ -1,5 +1,6 @@
 import { visibleAccounts } from "./accountOrder.mjs";
-import { Button, DateField } from "./ui/kit";
+import { Button, MoneyField } from "./ui/kit";
+import { DateField } from "./ui/DateTime";
 import React, { useState } from "react";
 import {
   View,
@@ -93,13 +94,15 @@ export default function ReceiptPanel({ state, c, onChange }: any) {
   const field = (key: "amount" | "description" | "date", label: string) =>
     key === "date" ? (
       <DateField label={label} value={form.date} onChange={(v) => setForm({ ...form, date: v })} />
+    ) : key === "amount" ? (
+      <MoneyField label={label} value={form.amount} onChange={(v) => setForm({ ...form, amount: v })} />
     ) : (
     <View style={{ gap: 6, marginVertical: 8 }}>
       {text(label, true)}
       <TextInput
         accessibilityLabel={label}
-        keyboardType={key === "amount" ? "decimal-pad" : "default"}
-        maxLength={key === "amount" ? 16 : 100}
+        keyboardType="default"
+        maxLength={100}
         value={form[key]}
         onChangeText={(v) => setForm({ ...form, [key]: v })}
         style={{

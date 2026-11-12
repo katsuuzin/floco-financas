@@ -27,7 +27,7 @@ import { T, I, Button, IconButton, Muted, styles as k } from "./src/ui/kit";
 import type { Icon } from "./src/ui/kit";
 import MotionPressable from "./src/ui/motion";
 import { StoreProvider, useStore, type NoticeAction } from "./src/app/store";
-import Animated, { Easing as Ease, SlideInDown, withTiming } from "react-native-reanimated";
+import Animated, { Easing as Ease, FadeIn, SlideInDown, useReducedMotion, withTiming } from "react-native-reanimated";
 
 // Entrar numa lista: desliza 40 dp da direita esmaecendo, 300 ms com desaceleração (A7).
 const listEnter = () => {
@@ -49,6 +49,7 @@ import { calenTokens } from "./src/calenTheme.mjs";
 import MoreScreen from "./src/screens/MoreScreen";
 import SettingsScreen from "./src/screens/SettingsScreen";
 import DataToolsScreen from "./src/screens/DataToolsScreen";
+import { useHeaderActionValue } from "./src/app/headerAction";
 import FormScreen from "./src/screens/FormScreen";
 import {
   AccountsScreen,
@@ -412,6 +413,8 @@ function Shell({
   }, []);
   const top = nav.top;
   const pageScroll = React.useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const headerAction = useHeaderActionValue();
+  const reduceMotion = useReducedMotion();
 
   const firstRun =
     !state.settings.onboarded &&
@@ -438,7 +441,7 @@ function Shell({
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         // Telas com campo ou barra fora da rolagem: sem isso o teclado os cobre no Android.
-        behavior={Platform.OS === "ios" || top?.name === "shoppingTrip" || top?.name === "scanProduct" || top?.name === "scanNota" || top?.name === "imports" || top?.name === "receipt" || top?.name === "security" || top?.name === "tool" || top?.name === "notifications" || (top?.name === "form" && top.kind === "expenseBatch") ? "padding" : undefined}
+        behavior={Platform.OS === "ios" || top?.name === "shoppingTrip" || top?.name === "scanProduct" || top?.name === "scanNota" || top?.name === "imports" || top?.name === "receipt" || top?.name === "security" || top?.name === "tool" || top?.name === "notifications" || top?.name === "form" ? "padding" : undefined}
       >
         {top?.name !== "form" && (
           <View style={[s.header, { backgroundColor: pageBg }]}>
@@ -464,16 +467,24 @@ function Shell({
                 {!top && nav.tab === "home" ? "Floco Finanças" : title}
               </T>
             </View>
+            {!!top && !!headerAction && (
+              <IconButton name="plus" label={headerAction.label} onPress={headerAction.onPress} />
+            )}
             {!top && (
-              <IconButton
-                name="settings"
-                label="Abrir configurações"
-                onPress={() => nav.push({ name: "settings" })}
-              />
+              <View>
+                <IconButton
+                  name="settings"
+                  label={updates.release && nav.tab !== "home" ? "Abrir configurações, atualização disponível" : "Abrir configurações"}
+                  onPress={() => nav.push({ name: "settings" })}
+                />
+                {!!updates.release && nav.tab !== "home" && (
+                  <View pointerEvents="none" style={{ position: "absolute", top: 8, right: 8, width: 10, height: 10, borderRadius: 5, backgroundColor: c.red, borderWidth: 2, borderColor: pageBg }} />
+                )}
+              </View>
             )}
           </View>
         )}
-        {!!updates.release && !top && (
+        {!!updates.release && !top && nav.tab === "home" && (
           <Pressable
             accessibilityRole="button"
             onPress={() => nav.push({ name: "updates" })}
@@ -489,7 +500,7 @@ function Shell({
         )}
         {!top && nav.tab === "transactions" ? (
           <TransactionsScreen storageError={storageError} />
-        ) : top?.name === "trash" || top?.name === "imports" ? content : (
+        ) : top?.name === "trash" || top?.name === "imports" || (top?.name === "form" && top.kind !== "expenseBatch") ? content : (
         <ScrollView
           ref={pageScroll}
           key={top ? `${top.name}-${nav.stack.length}` : nav.tab}
@@ -505,7 +516,11 @@ function Shell({
               <T style={{ color: c.red }}>{storageError}</T>
             </View>
           )}
-          {content}
+          {(top && top.name !== "shoppingList") || (!top && nav.tab !== "home") ? (
+            <Animated.View key={top ? `${top.name}-${nav.stack.length}` : nav.tab} entering={reduceMotion ? undefined : FadeIn.duration(200)}>
+              {content}
+            </Animated.View>
+          ) : content}
         </ScrollView>
         )}
         {!top && (
@@ -647,7 +662,7 @@ function renderRoute(r: Route, { state, c, onChange, onPinChange, updates, stora
     case "productDetail":
       return <ProductDetailScreen id={r.id} />;
     case "form":
-      return <FormScreen kind={r.kind} initial={r.initial} scrollTo={scrollTo} />;
+      return <FormScreen kind={r.kind} initial={r.initial} />;
   }
   return null;
 }

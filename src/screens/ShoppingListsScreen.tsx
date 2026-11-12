@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, Vibration, View, useWindowDimensions } from "react-native";
 import Animated, { Easing, useReducedMotion, withDelay, withTiming } from "react-native-reanimated";
 import { Button, CreateAction, Choice, Field, I, IconButton, Muted, T, radius, space, styles as k } from "../ui/kit";
+import { useHeaderAction } from "../app/headerAction";
 import MotionPressable from "../ui/motion";
 import { useTheme } from "../ui/theme";
 import { SheetModal } from "../ui/pickers";
@@ -46,6 +47,7 @@ export default function ShoppingListsScreen() {
   const [editor, setEditor] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [draft, setDraft] = useState<EditRow[] | null>(null);
+  useHeaderAction(draft ? null : "Nova lista", () => setEditor(true));
   // Fotos de itens que não existem mais são apagadas ao abrir as Listas.
   useEffect(() => { void cleanupPhotos(new Set((state.shoppingItems || []).map((item: any) => item.photo).filter(Boolean))); }, []);
   const organize = () => setDraft(all as EditRow[]);
@@ -70,8 +72,6 @@ export default function ShoppingListsScreen() {
       <View style={[k.row, { justifyContent: "flex-end" }]}>
         <IconButton name="move" label="Organizar listas" onPress={organize} />
       </View>
-      <CreateAction title="Nova lista" onPress={() => setEditor(true)} />
-
       {rows.map((row, index) => (
         <Animated.View key={row.id} entering={reduce ? undefined : cascade(index)}>
           {row.kind === "divider"
