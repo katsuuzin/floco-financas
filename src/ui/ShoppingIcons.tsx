@@ -40,7 +40,9 @@ SOFTWARE.
 */
 import React from "react";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
+import { View } from "react-native";
 import { useTheme } from "./theme";
+import { categoryTone } from "../tones.mjs";
 
 const CATEGORY_ART = {
   "Hortifrúti": ( // carrot
@@ -143,6 +145,64 @@ const CATEGORY_ART = {
       <Path d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z" />
     </>
   ),
+  "Frutas": ( // apple
+    <>
+      <Path d="M12 20.94c1.5 0 2.75 1.06 4 1.06 3 0 6-8 6-12.22A4.91 4.91 0 0 0 17 5c-2.22 0-4 1.44-5 2-1-.56-2.78-2-5-2a4.9 4.9 0 0 0-5 4.78C2 14 5 22 8 22c1.25 0 2.5-1.06 4-1.06Z" />
+      <Path d="M10 2c1 .5 2 2 2 5" />
+    </>
+  ),
+  "Matinais": ( // coffee
+    <>
+      <Path d="M10 2v2" />
+      <Path d="M14 2v2" />
+      <Path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1" />
+      <Path d="M6 2v2" />
+    </>
+  ),
+  "Doces e lanches": ( // cookie
+    <>
+      <Path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5" />
+      <Path d="M8.5 8.5v.01" />
+      <Path d="M16 15.5v.01" />
+      <Path d="M12 12v.01" />
+      <Path d="M11 17v.01" />
+      <Path d="M7 14v.01" />
+    </>
+  ),
+  "Bebidas alcoólicas": ( // wine
+    <>
+      <Path d="M8 22h8" />
+      <Path d="M7 10h10" />
+      <Path d="M12 15v7" />
+      <Path d="M12 15a5 5 0 0 0 5-5c0-2-.5-4-2-8H9c-1.5 4-2 6-2 8a5 5 0 0 0 5 5Z" />
+    </>
+  ),
+  "Farmácia": ( // pill
+    <>
+      <Path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z" />
+      <Path d="m8.5 8.5 7 7" />
+    </>
+  ),
+  "Bebê": ( // baby
+    <>
+      <Path d="M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5" />
+      <Path d="M15 12h.01" />
+      <Path d="M19.38 6.813A9 9 0 0 1 20.8 10.2a2 2 0 0 1 0 3.6 9 9 0 0 1-17.6 0 2 2 0 0 1 0-3.6A9 9 0 0 1 12 3c2 0 3.5 1.1 3.5 2.5s-.9 2.5-2 2.5c-.8 0-1.5-.4-1.5-1" />
+      <Path d="M9 12h.01" />
+    </>
+  ),
+  "Casa e utilidades": ( // house
+    <>
+      <Path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />
+      <Path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    </>
+  ),
+  "Para outra compra": ( // clock
+    <>
+      <Circle cx="12" cy="12" r="10" />
+      <Path d="M12 6v6l4 2" />
+    </>
+  ),
   "Outros": ( // shopping-bag
     <>
       <Path d="M16 10a4 4 0 0 1-8 0" />
@@ -189,5 +249,18 @@ export default function CategoryIcon({ category, size = 22, color }: {
     >
       {art}
     </Svg>
+  );
+}
+
+// Ícone da categoria num círculo colorido (estilo dos itens; tons próprios do Floco em tones.mjs).
+// Decorativo: o nome da categoria vem do texto ao lado.
+export function CategoryBadge({ category, size = 36 }: { category: string; size?: number }): React.JSX.Element {
+  const { dark } = useTheme();
+  const tone = categoryTone(category, dark);
+  return (
+    <View accessible={false} importantForAccessibility="no-hide-descendants"
+      style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: tone.bg, alignItems: "center", justifyContent: "center" }}>
+      <CategoryIcon category={category} size={Math.round(size * 0.56)} color={tone.fg} />
+    </View>
   );
 }

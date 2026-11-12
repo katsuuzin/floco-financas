@@ -133,7 +133,7 @@ export default function DataToolsScreen() {
             const uri = FileSystem.cacheDirectory + "modelo-floco.csv";
             await FileSystem.writeAsStringAsync(
               uri,
-              "\uFEFFData;Descrição;Valor (R$);Tipo;Categoria\r\n2026-01-01;Compra de exemplo;12,34;Despesa;Mercado\r\n",
+              "\uFEFFData;Descrição;Valor (R$);Tipo;Categoria\r\n01/01/2026;Compra de exemplo;12,34;Despesa;Mercado\r\n",
             );
             await Sharing.shareAsync(uri, { mimeType: "text/csv" });
           })

@@ -20,6 +20,7 @@ import Feather from "@expo/vector-icons/Feather";
 import MotionPressable from "./motion";
 import { useTheme } from "./theme";
 import { evaluateAmount, isExpression } from "../amountExpression.mjs";
+import { brDate, maskBrDate, parseBrDate } from "../dates.mjs";
 
 export type ViewControl = React.ComponentRef<typeof View>;
 export type TextControl = React.ComponentRef<typeof TextInput>;
@@ -320,6 +321,40 @@ export function Field({
       />
       {!!hint && <Muted>{hint}</Muted>}
     </View>
+  );
+}
+
+// Campo de data em formato brasileiro (DD/MM/AAAA). O valor do formulário continua "AAAA-MM-DD": ao completar uma
+// data que existe, devolve o ISO; enquanto está incompleta ou inválida, devolve o texto digitado (a validação do
+// formulário recusa e mostra a mensagem). Mostra a barra sozinho enquanto se digita.
+export function DateField({ label, value, onChange, hint, optional = false }: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  hint?: string;
+  optional?: boolean;
+}) {
+  const [text, setText] = React.useState(brDate(value || ""));
+  // Mudança de fora (por exemplo, "Hoje" ou editar outro item) atualiza o texto; a digitação em andamento não é sobrescrita.
+  React.useEffect(() => {
+    if (value && parseBrDate(text) !== value) setText(brDate(value));
+    if (!value && text && parseBrDate(text)) setText("");
+  }, [value]);
+  return (
+    <Field
+      label={label}
+      value={text}
+      numeric
+      maxLength={10}
+      placeholder="DD/MM/AAAA"
+      hint={hint ?? (optional ? "Opcional. Digite dia, mês e ano." : undefined)}
+      onChange={(raw) => {
+        const masked = maskBrDate(raw);
+        setText(masked);
+        const iso = parseBrDate(masked);
+        onChange(masked.length === 10 && iso ? iso : masked === "" ? "" : masked);
+      }}
+    />
   );
 }
 

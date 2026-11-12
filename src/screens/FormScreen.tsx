@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { View, Pressable } from "react-native";
-import { T, Muted, I, Field, Choice, Toggle, Button, Box, IconButton, Segmented, AmountField, styles as k } from "../ui/kit";
+import { T, Muted, I, Field, DateField, Choice, Toggle, Button, Box, IconButton, Segmented, AmountField, styles as k } from "../ui/kit";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
@@ -254,7 +254,7 @@ function RegularFormScreen({ kind, initial }: { kind: string; initial?: any }) {
           )}
           <View style={[k.row, { alignItems: "flex-end", gap: 8 }]}>
             <View style={{ flex: 1.6 }}>
-              <Field label="Data" value={form.date} onChange={(v) => set("date", v)} placeholder={today()} maxLength={10} />
+              <DateField label="Data" value={form.date} onChange={(v) => set("date", v)} />
             </View>
             <View style={{ flex: 1 }}>
               <Field label="Hora" value={form.time} onChange={(v) => set("time", v)} placeholder="HH:MM" maxLength={5} />
@@ -653,7 +653,7 @@ function RegularFormScreen({ kind, initial }: { kind: string; initial?: any }) {
           </Muted>
           <Field label={form.goalKind === "goal" ? "Nome da meta" : "Nome da caixinha"} value={form.name} onChange={(v) => set("name", v)} autoFocus={!form.id} />
           <Field label="Quanto quer guardar? (R$)" value={form.target} onChange={(v) => set("target", v)} numeric />
-          <Field label="Prazo (opcional, AAAA-MM-DD)" value={form.deadline || ""} onChange={(v) => set("deadline", v)} placeholder={addMonths(today(), 12)} />
+          <DateField label="Prazo" value={form.deadline || ""} onChange={(v) => set("deadline", v)} optional />
         </>
       )}
 
@@ -721,7 +721,7 @@ function RegularFormScreen({ kind, initial }: { kind: string; initial?: any }) {
                 empty="Cadastre outra conta para registrar uma transferência."
               />
             )}
-            <Field label="Data (AAAA-MM-DD)" value={form.date} onChange={(v) => set("date", v)} maxLength={10} />
+            <DateField label="Data" value={form.date} onChange={(v) => set("date", v)} />
             <Field label="Motivo (opcional)" value={form.description} onChange={(v) => set("description", v)} placeholder="Ex.: dinheiro esquecido na carteira" />
           </>
         );
@@ -741,7 +741,7 @@ function RegularFormScreen({ kind, initial }: { kind: string; initial?: any }) {
           </Muted>
           <Field label="Valor (R$)" value={form.amount} onChange={(v) => set("amount", v)} numeric autoFocus />
           <Muted>O depósito só marca o progresso da meta. Nenhuma conta muda.</Muted>
-          <Field label="Data (AAAA-MM-DD)" value={form.date} onChange={(v) => set("date", v)} maxLength={10} />
+          <DateField label="Data" value={form.date} onChange={(v) => set("date", v)} />
           <Field label="Observação (opcional)" value={form.description} onChange={(v) => set("description", v)} placeholder="Ex.: salário de março" />
         </>
       )}
@@ -812,7 +812,7 @@ function RegularFormScreen({ kind, initial }: { kind: string; initial?: any }) {
               />
             )}
             <Muted>O rendimento sobe o saldo da conta e a caixinha. O disponível não muda e a receita entra nos relatórios.</Muted>
-            <Field label="Data (AAAA-MM-DD)" value={form.date} onChange={(v) => set("date", v)} maxLength={10} />
+            <DateField label="Data" value={form.date} onChange={(v) => set("date", v)} />
             <Field label="Observação (opcional)" value={form.description} onChange={(v) => set("description", v)} placeholder="Ex.: rendimento do mês" />
           </>
         );
@@ -859,7 +859,7 @@ function RegularFormScreen({ kind, initial }: { kind: string; initial?: any }) {
             hint="Deixe vazio para pagar todo o saldo. Informe um valor para pagamento parcial."
           />
           <Choice label="Pagar usando" values={accounts.map((a: any) => [a.id, a.name])} value={form.accountId} onChange={(v) => set("accountId", v)} />
-          <Field label="Data (AAAA-MM-DD)" value={form.date} onChange={(v) => set("date", v)} />
+          <DateField label="Data" value={form.date} onChange={(v) => set("date", v)} />
         </>
       )}
 
@@ -934,7 +934,7 @@ function RegularFormScreen({ kind, initial }: { kind: string; initial?: any }) {
                   <Field label="Já pagas" value={form.paid} onChange={(v) => set("paid", v)} numeric maxLength={3} />
                 </View>
               </View>
-              <Field label="Próxima parcela (AAAA-MM-DD)" value={form.date} onChange={(v) => set("date", v)} />
+              <DateField label="Próxima parcela" value={form.date} onChange={(v) => set("date", v)} />
               <Choice label="Categoria" values={categoryNames(state).map((x: string) => [x, x])} value={form.category} onChange={(v) => set("category", v)} />
               <Choice label="Conta de pagamento" values={accounts.map((a: any) => [a.id, a.name])} value={form.accountId} onChange={(v) => set("accountId", v)} />
             </>
@@ -967,8 +967,8 @@ function RegularFormScreen({ kind, initial }: { kind: string; initial?: any }) {
             value={form.frequency}
             onChange={(v) => set("frequency", v)}
           />
-          <Field label="Primeira data (AAAA-MM-DD)" value={form.date} onChange={(v) => set("date", v)} />
-          <Field label="Término (opcional)" value={form.endDate} onChange={(v) => set("endDate", v)} placeholder="AAAA-MM-DD" />
+          <DateField label="Primeira data" value={form.date} onChange={(v) => set("date", v)} />
+          <DateField label="Término" value={form.endDate} onChange={(v) => set("endDate", v)} optional />
           <CategoryRow
             state={state}
             type={form.type === "income" ? "income" : "expense"}
@@ -1031,7 +1031,7 @@ function RegularFormScreen({ kind, initial }: { kind: string; initial?: any }) {
               {!(form.kind === "extraAmort" && form.offApp) && (
                 <Choice label="Pagar com" values={accounts.map((a: any) => [a.id, a.name])} value={form.accountId} onChange={(v) => set("accountId", v)} />
               )}
-              <Field label="Data (AAAA-MM-DD)" value={form.date} onChange={(v) => set("date", v)} />
+              <DateField label="Data" value={form.date} onChange={(v) => set("date", v)} />
             </>
           )}
           {form.kind === "extraAmort" && (

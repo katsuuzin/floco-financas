@@ -1,26 +1,31 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { Alert } from "react-native";
+import { AccessibilityInfo, Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { emptyState, migratePotState, money, today } from "../finance.mjs";
+import { applyDarkDefault, emptyState, migratePotState, money, today } from "../finance.mjs";
 import { planPurge } from "../trashPurge.mjs";
 import { migrateShoppingLists } from "../shopping.mjs";
 import { describeUndo, pushUndo, redo, undo } from "../shoppingUndo.mjs";
 
-const shoppingKeys = ["shoppingItems", "shoppingStaples", "shoppingLists", "shoppingListTemplates"];
+const shoppingKeys = ["shoppingItems", "shoppingStaples", "shoppingLists", "shoppingListTemplates", "shoppingListLayout"];
 const shoppingSnapshot = (state: any) => Object.fromEntries(shoppingKeys.map((key) => [key, state[key]]));
 import { migrateProductKeys } from "../shoppingKeyMigration.mjs";
 import { loadState, saveState, replaceState, LEGACY_KEY } from "../sqliteStore";
 import { seedRules, upgradeBuiltInRules } from "../rules.mjs";
 
 type Change = any | ((s: any) => any);
+export type NoticeAction = { label: string; onPress: () => void };
+export const NOTICE_MS = 5000;
+export const NOTICE_ACTION_MS = 10000;
 type Store = {
   state: any;
   loaded: boolean;
   storageError: string;
   notice: string;
-  setNotice: (m: string) => void;
+  // Ação do aviso (ex.: Desfazer). Com ação, o aviso fica 10 s (ou o tempo recomendado pelo Android).
+  noticeAction: NoticeAction | null;
+  setNotice: (m: string, action?: NoticeAction | null) => void;
   commit: (change: Change) => Promise<void>;
-  perform: (change: Change, message?: string) => Promise<boolean>;
+  perform: (change: Change, message?: string, options?: { undoable?: boolean }) => Promise<boolean>;
   confirm: (title: string, message: string, action: () => void, label?: string) => void;
   show: (cents: number, hidden?: boolean) => string;
   current: () => any;
@@ -35,9 +40,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const ref = useRef<any>(state);
   const queue = useRef(Promise.resolve());
   const shoppingHistory = useRef<any>(null);
+  const undoRef = useRef<((direction: "undo" | "redo") => Promise<void>) | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [storageError, setStorageError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [notice, setNoticeText] = useState("");
+  const [noticeAction, setNoticeAction] = useState<NoticeAction | null>(null);
+  const setNotice = useCallback((message: string, action: NoticeAction | null = null) => {
+    setNoticeText(message);
+    setNoticeAction(message ? action : null);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -46,7 +57,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         // Regras de categorização sugeridas entram uma única vez (o campo passa a existir).
         // Chaves de produto do histórico de compras seguem a regra atual de nomes (uma vez; sem mudança = mesmo objeto).
         const rulesApplied = upgradeBuiltInRules(loadedState.rules === undefined ? seedRules(loadedState) : loadedState);
-        let restored = migrateShoppingLists(migratePotState(migrateProductKeys(rulesApplied).state));
+        let restored = applyDarkDefault(migrateShoppingLists(migratePotState(migrateProductKeys(rulesApplied).state)));
         const day = today();
         const purgeKey = "floco.trashPurgeDay";
         const lastPurge = await AsyncStorage.getItem(purgeKey).catch(() => null);
@@ -74,9 +85,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!notice) return;
-    const t = setTimeout(() => setNotice(""), 5000);
+    let t: ReturnType<typeof setTimeout> | undefined;
+    let alive = true;
+    const wait = noticeAction ? AccessibilityInfo.getRecommendedTimeoutMillis(NOTICE_ACTION_MS).catch(() => NOTICE_ACTION_MS)
+      : Promise.resolve(NOTICE_MS);
+    void wait.then((ms) => { if (alive) t = setTimeout(() => setNotice(""), Math.max(ms, noticeAction ? NOTICE_ACTION_MS : NOTICE_MS)); });
+    return () => { alive = false; if (t) clearTimeout(t); };
     return () => clearTimeout(t);
-  }, [notice]);
+  }, [notice, noticeAction]);
 
   // Escritas serializadas: cada mudança parte do estado gravado mais recente.
   const commit = useCallback(
@@ -110,10 +126,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   const perform = useCallback(
-    async (change: Change, message = "Salvo no aparelho") => {
+    async (change: Change, message = "Salvo no aparelho", options: { undoable?: boolean } = {}) => {
       try {
         await commit(change, message || "editar lista");
-        setNotice(message);
+        setNotice(message, options.undoable && message ? { label: "Desfazer", onPress: () => void undoRef.current?.("undo") } : null);
         return true;
       } catch (e: any) {
         Alert.alert("Não foi possível salvar", e?.message || String(e));
@@ -138,6 +154,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   const rewindShopping = async (direction: "undo" | "redo") => {
+    setNotice("");
     let updated: any;
     try {
       await commit((current: any) => {
@@ -154,6 +171,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     } catch (error: any) { Alert.alert("Não foi possível alterar a lista", error.message); }
   };
 
+  undoRef.current = rewindShopping;
   const value: Store = {
     undoLabel: describeUndo(shoppingHistory.current),
     redoLabel: shoppingHistory.current?.future[0] ? `Refazer: ${shoppingHistory.current.future[0].label}` : "",
@@ -162,6 +180,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     loaded,
     storageError,
     notice,
+    noticeAction,
     setNotice,
     commit,
     perform,

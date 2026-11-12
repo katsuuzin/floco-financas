@@ -16,7 +16,7 @@ export const HOME_BLOCKS = [
   ["restock", "Já deve estar acabando"],
   ["shopping", "Lista de compras"],
 ];
-export const DEFAULT_HOME_HIDDEN = ["insights", "goals", "receivables", "installments", "recurrences"];
+export const DEFAULT_HOME_HIDDEN = ["insights", "shortcuts", "goals", "receivables", "installments", "recurrences"];
 
 export const ANALYSIS_BLOCKS = [
   ["balance", "Balanço do mês"],
@@ -43,6 +43,7 @@ export const DESTINATIONS = [
   ["financings", "Financiamentos", "home"],
   ["loans", "Empréstimos", "dollar-sign"],
   ["receivables", "Quem me deve", "users"],
+  ["payables", "Quem eu devo", "user-minus"],
   ["reports", "Relatórios", "file-text"],
   ["cashflow", "Fluxo de caixa", "activity"],
   ["accounts", "Contas", "briefcase"],

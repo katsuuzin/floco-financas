@@ -3,10 +3,10 @@ import { Alert, Pressable, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Box, Button, Empty, Field, I, Muted, Section, T, focusAccessibility, type ViewControl, styles as k } from "../ui/kit";
 import { useTheme } from "../ui/theme";
-import CategoryIcon from "../ui/ShoppingIcons";
+import CategoryIcon, { CategoryBadge } from "../ui/ShoppingIcons";
 import { useStore } from "../app/store";
 import { reviewExpenses, useNav } from "../app/nav";
-import { activeShoppingState, itemsOf, toggleCart } from "../shopping.mjs";
+import { itemsOf, setItemStatus, toggleCart, tripScopeState } from "../shopping.mjs";
 import { endSession, parseSession, resumeSession, serializeSession, startSession } from "../shoppingTripSession.mjs";
 import { finishPlan, parseLimitInput, tripViewModel } from "../shoppingTripView.mjs";
 
@@ -14,7 +14,7 @@ const SESSION_KEY = "floco.tripSession";
 const BUDGET_KEY = "floco.tripBudgetCents";
 
 // Modo compra: tela para usar no mercado. Total do carrinho, progresso, tempo e o que falta pegar.
-export default function ShoppingTripScreen() {
+export default function ShoppingTripScreen({ lists }: { lists?: string[] }) {
   const { c } = useTheme();
   const { state, perform } = useStore();
   const nav = useNav();
@@ -84,9 +84,9 @@ export default function ShoppingTripScreen() {
     AsyncStorage.removeItem(SESSION_KEY).catch(() => {});
   };
 
-  const selectedState = activeShoppingState(state);
+  const selectedState = tripScopeState(state, lists);
   const view = tripViewModel(selectedState, { session, limitCents, now });
-  const { cart, progress, elapsed, budget, groups, inCart, estimate, spoken } = view;
+  const { cart, progress, elapsed, budget, groups, missing, inCart, estimate, spoken } = view;
   const pct = progress.percent;
 
   if (view.empty) {
@@ -98,6 +98,11 @@ export default function ShoppingTripScreen() {
     if (await perform((s: any) => toggleCart(s, item.id), action)) {
       setCartStatus(`${item.name} ${item.inCart ? "voltou aos pendentes" : "foi para o carrinho"}.`);
       setCartFocus(item.id);
+    }
+  };
+  const markMissing = async (item: any, status: "missing" | null) => {
+    if (await perform((s: any) => setItemStatus(s, item.id, status), status ? "item marcado em falta" : "item voltou à lista")) {
+      setCartStatus(status ? `${item.name} marcado em falta.` : `${item.name} voltou à lista.`);
     }
   };
   const bindCartControl = (id: string, node: ViewControl | null) => {
@@ -171,12 +176,25 @@ export default function ShoppingTripScreen() {
             <Box style={{ padding: 0, overflow: "hidden" }}>
               {g.items.map((i: any, idx: number) => (
                 <View key={i.id} style={idx < g.items.length - 1 && [k.hairline, { borderBottomColor: c.line }]}>
-                  <TripRow item={i} bindControl={(node: ViewControl | null) => bindCartControl(i.id, node)} onToggle={() => void toggle(i)} />
+                  <TripRow item={i} bindControl={(node: ViewControl | null) => bindCartControl(i.id, node)} onToggle={() => void toggle(i)} onMissing={() => void markMissing(i, "missing")} />
                 </View>
               ))}
             </Box>
           </View>
         ))
+      )}
+
+      {missing.length > 0 && (
+        <View>
+          <Section title={`Em falta (${missing.length})`} />
+          <Box style={{ padding: 0, overflow: "hidden" }}>
+            {missing.map((i: any, idx: number) => (
+              <View key={i.id} style={idx < missing.length - 1 && [k.hairline, { borderBottomColor: c.line }]}>
+                <TripRow item={i} bindControl={(node: ViewControl | null) => bindCartControl(i.id, node)} onToggle={() => void toggle(i)} onMissing={() => void markMissing(i, null)} missingNow />
+              </View>
+            ))}
+          </Box>
+        </View>
       )}
 
       {inCart.length > 0 && (
@@ -231,10 +249,11 @@ export default function ShoppingTripScreen() {
   );
 }
 
-function TripRow({ item, onToggle, bindControl }: any) {
+function TripRow({ item, onToggle, onMissing, missingNow = false, bindControl }: any) {
   const { c } = useTheme();
   const { inCart: checked, totalText, quantityText: q } = item;
   return (
+    <View style={[k.row, { gap: 0 }]}>
     <Pressable
       ref={bindControl}
       accessibilityRole="checkbox"
@@ -242,7 +261,7 @@ function TripRow({ item, onToggle, bindControl }: any) {
       accessibilityLabel={item.spoken}
       accessibilityHint="Toque duas vezes para alternar"
       onPress={onToggle}
-      style={[k.row, { minHeight: 60, paddingHorizontal: 8, gap: 0 }]}
+      style={[k.row, { flex: 1, minHeight: 60, paddingHorizontal: 8, gap: 0 }]}
     >
       <View style={{ width: 48, height: 48, alignItems: "center", justifyContent: "center" }}>
         <View
@@ -260,6 +279,7 @@ function TripRow({ item, onToggle, bindControl }: any) {
           {checked && <I name="check" size={18} color={c.onPrimary} />}
         </View>
       </View>
+      <View style={{ marginRight: 8 }}><CategoryBadge category={item.category || "Outros"} size={32} /></View>
       <View style={{ flex: 1, paddingVertical: 6 }}>
         <T style={checked ? { color: c.muted, textDecorationLine: "line-through" } : undefined}>
           {item.name}
@@ -273,5 +293,12 @@ function TripRow({ item, onToggle, bindControl }: any) {
         )}
       </View>
     </Pressable>
+      {onMissing && !checked && (
+        <Pressable accessibilityRole="button" accessibilityLabel={missingNow ? `Tirar ${item.name} de em falta` : `Marcar ${item.name} em falta`}
+          onPress={onMissing} style={{ width: 48, height: 48, alignItems: "center", justifyContent: "center" }}>
+          <I name={missingNow ? "rotate-ccw" : "x-circle"} size={20} color={c.muted} />
+        </Pressable>
+      )}
+    </View>
   );
 }

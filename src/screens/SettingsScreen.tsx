@@ -1,3 +1,4 @@
+import { brDate } from "../dates.mjs";
 import React, { useEffect, useState } from "react";
 import { Alert, Linking, View, Pressable, NativeModules, Image } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
@@ -17,7 +18,7 @@ export async function exportCSV(state: any) {
   const rows = [
     ["Data", "Hora", "Descrição", "Tipo", "Valor (R$)", "Categoria", "Conta", "Cartão", "Confirmado", "Estorno", "Ignorado", "Tags", "Observações"],
     ...state.transactions.map((t: any) => [
-      t.date,
+      brDate(t.date),
       t.time || "",
       t.description,
       t.type === "income" ? "Receita" : t.type === "transfer" ? "Transferência" : "Despesa",
@@ -218,6 +219,12 @@ export default function SettingsScreen() {
         />
       </Box>
       <Section title="Ajuda" />
+      <ListItem
+        icon="bar-chart-2"
+        label="Uso dos botões"
+        detail="Contagem local de telas abertas, só neste aparelho"
+        onPress={() => nav.push({ name: "usage" })}
+      />
       <ListItem
         icon="github"
         label="Enviar sugestão ou relatar problema"

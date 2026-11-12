@@ -279,7 +279,7 @@ export function ProductDetailScreen({ id }: { id: string }) {
         ) : (
           <Button title="Colocar na lista" icon="plus" onPress={() => void addToList()} />
         )}
-        <Button title="Ver a lista" secondary onPress={() => nav.push({ name: "shopping" })} />
+        <Button title="Ver a lista" secondary onPress={() => nav.push({ name: "shoppingList" })} />
       </View>
     </>
   );

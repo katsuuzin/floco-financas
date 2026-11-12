@@ -12,6 +12,30 @@ const read = (path) => ts.createSourceFile(path, readFileSync(new URL(path, root
 
 const exceptions = [
   {
+    file: "src/ui/Sheet.tsx",
+    reason: "Texto da ação destrutiva sobre o vermelho de c.red (contraste 4,5:1 nos dois temas).",
+    colors: ["#311E0D", "#FFFFFF"],
+    accepts: (node) => node.parent.getText().includes("dark ?"),
+  },
+  {
+    file: "src/ui/SwipeRow.tsx",
+    reason: "Ícone e texto sobre a faixa vermelha de apagar (contraste 4,5:1 nos dois temas).",
+    colors: ["#311E0D", "#FFFFFF"],
+    accepts: (node) => node.parent.getText().includes("dark ?"),
+  },
+  {
+    file: "src/ui/ItemPhoto.tsx",
+    reason: "Fundo preto do visor da câmera, que não muda com o tema.",
+    colors: ["#000"],
+    accepts: (node) => node.parent.getText().includes("backgroundColor"),
+  },
+  {
+    file: "src/ui/ListsEditor.tsx",
+    reason: "Sombra do cartão levantado ao arrastar: sombra é sempre preta.",
+    colors: ["#000"],
+    accepts: (node) => node.parent.getText().startsWith("shadowColor"),
+  },
+  {
     file: "src/screens/analysis/SpendTypeTab.tsx",
     reason: "Paleta do ícone ilustrado do cofre.",
     colors: ["#64748B"],

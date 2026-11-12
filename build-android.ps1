@@ -6,7 +6,8 @@ param(
   # O Android Gradle Plugin recusa caminhos com acentos ("Finanças") e o CMake do NDK falha
   # através de junções. Por isso o build roda numa cópia espelhada em um caminho ASCII.
   # A cópia é descartável: edite sempre o repositório, nunca esta pasta.
-  [string]$BuildDir=(Join-Path $env:USERPROFILE 'AndroidBuild\floco-work')
+  # Caminho curto de propósito: o CMake do reanimated passa de 260 caracteres em pastas longas.
+  [string]$BuildDir='C:\fw'
 )
 $ErrorActionPreference='Stop'
 # Gradle usa o cache das ferramentas por padrão (não depende de variável de ambiente).

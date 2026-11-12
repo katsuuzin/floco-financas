@@ -265,7 +265,9 @@ function PendingInbox() {
                 1. Toque em “Permitir acesso” e ative o Floco Finanças.{"\n"}2. Se a opção estiver bloqueada (“configuração restrita”), abra as informações do app, toque em ⋮ e em “Permitir configurações restritas”, e repita o passo 1.
               </Muted>
               <Button title="Permitir acesso" icon="bell" onPress={() => inbox.native.openSettings().catch(() => {})} />
-              <Button title="Abrir informações do app" secondary icon="info" onPress={() => inbox.native.openAppInfo?.().catch(() => {})} />
+              <Pressable accessibilityRole="link" accessibilityLabel="Abrir informações do app" onPress={() => inbox.native.openAppInfo?.().catch(() => {})} style={{ minHeight: 48, justifyContent: "center" }}>
+                <T style={{ fontFamily: "SoraSemi", textDecorationLine: "underline" }}>Abrir informações do app</T>
+              </Pressable>
               {!st.enabled && <Button title="Ligar captura" secondary onPress={() => inbox.native.setEnabled(true).then(inbox.refresh)} />}
             </>
           )}
@@ -551,7 +553,7 @@ export default function HomeScreen() {
       return (
         open.length > 0 && (
           <>
-            <Section title="Quem me deve" action="Ver" onPress={() => nav.push({ name: "tool", id: "receivables" })} />
+            <Section title="Quem me deve" action="Ver" onPress={() => nav.push({ name: "people", tab: "receivables" })} />
             <Box>
               {open.slice(0, 4).map((r: any) => (
                 <View key={r.id} style={[k.row, { justifyContent: "space-between", marginBottom: 6 }]}>
@@ -569,7 +571,7 @@ export default function HomeScreen() {
       return (
         plan.remaining > 0 && (
           <>
-            <Section title="Parcelamentos" action="Ver" onPress={() => nav.push({ name: "installments" })} />
+            <Section title="Parcelamentos" action="Ver" onPress={() => nav.push({ name: "debts", tab: "installments" })} />
             <Box>
               <Muted>Falta pagar {show(plan.remaining)} em parcelas.</Muted>
               {plan.rows.map((r: any) => (
@@ -610,7 +612,8 @@ export default function HomeScreen() {
     },
     shopping: () => {
       const sum = shoppingSummary(state);
-      const open = () => nav.push({ name: "shopping" });
+      // O bloco abre a lista ativa por cima das Listas: voltar leva às Listas e, de novo, à Início.
+      const open = () => { nav.push({ name: "shopping" }); nav.push({ name: "shoppingList" }); };
       const title =
         sum.total === 0
           ? "Lista vazia"
@@ -665,7 +668,7 @@ export default function HomeScreen() {
                 name="plus"
                 label="Adicionar item à lista de compras"
                 color={c.primary}
-                onPress={() => nav.push({ name: "shopping", add: true })}
+                onPress={() => { nav.push({ name: "shopping" }); nav.push({ name: "shoppingList", add: true }); }}
               />
             </View>
           </Pressable>

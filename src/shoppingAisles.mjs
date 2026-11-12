@@ -2,8 +2,9 @@ import { normalizeName } from "./shoppingPurchases.mjs";
 
 // Usa os rótulos da lista para hortifrúti, açougue e laticínios.
 export const aisleOrder = Object.freeze([
-  "Hortifrúti", "Padaria", "Carnes e peixes", "Frios e laticínios", "Mercearia",
-  "Bebidas", "Limpeza", "Higiene", "Outros",
+  "Hortifrúti", "Frutas", "Padaria", "Carnes e peixes", "Frios e laticínios", "Matinais", "Mercearia",
+  "Doces e lanches", "Bebidas", "Bebidas alcoólicas", "Limpeza", "Casa e utilidades", "Higiene",
+  "Farmácia", "Bebê", "Outros",
 ]);
 
 const aliases = new Map([

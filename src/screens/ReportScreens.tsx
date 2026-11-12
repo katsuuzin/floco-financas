@@ -4,7 +4,7 @@ import { View, Alert } from "react-native";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system/legacy";
-import { T, Muted, Box, Section, Button, Chips, Field, ListItem, Progress, styles as k } from "../ui/kit";
+import { DateField, T, Muted, Box, Section, Button, Chips, Field, ListItem, Progress, styles as k } from "../ui/kit";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
@@ -49,10 +49,10 @@ function usePeriod() {
       {kind === "custom" ? (
         <View style={[k.row, { alignItems: "flex-start" }]}>
           <View style={{ flex: 1 }}>
-            <Field label="De" value={custom.start} onChange={(v) => setCustom({ ...custom, start: v })} />
+            <DateField label="De" value={custom.start} onChange={(v) => setCustom({ ...custom, start: v })} />
           </View>
           <View style={{ flex: 1 }}>
-            <Field label="Até" value={custom.end} onChange={(v) => setCustom({ ...custom, end: v })} />
+            <DateField label="Até" value={custom.end} onChange={(v) => setCustom({ ...custom, end: v })} />
           </View>
         </View>
       ) : (
@@ -418,7 +418,7 @@ function Export() {
                 ...state.transactions
                   .filter((t: any) => t.date >= range.start && t.date <= range.end)
                   .map((t: any) => [
-                    t.date,
+                    br(t.date),
                     t.time || "",
                     t.description,
                     t.type === "income" ? "Receita" : t.type === "transfer" ? "Transferência" : t.refund ? "Estorno" : "Despesa",

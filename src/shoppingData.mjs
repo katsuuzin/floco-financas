@@ -8,19 +8,48 @@ export const addCents = (a, b) => Math.min(Number.MAX_SAFE_INTEGER, a + b);
 export const MAX_ITEMS = 2000;
 export const MAX_NAME = 80;
 
+// Ordem de exibição (perto da ordem de um mercado). As 11 primeiras versões continuam com o mesmo nome:
+// itens antigos não mudam de categoria. As novas entraram na 1.12 (Frutas, Matinais, Doces e lanches,
+// Bebidas alcoólicas, Farmácia, Bebê, Casa e utilidades).
 export const SHOPPING_CATEGORIES = [
   "Hortifrúti",
+  "Frutas",
   "Carnes e peixes",
   "Frios e laticínios",
   "Padaria",
+  "Matinais",
   "Mercearia",
+  "Doces e lanches",
   "Bebidas",
+  "Bebidas alcoólicas",
   "Congelados",
   "Limpeza",
   "Higiene",
+  "Farmácia",
+  "Bebê",
   "Pet",
+  "Casa e utilidades",
   "Outros",
 ];
+
+// Cores de lista (chaves; os tons ficam no tema, claro e escuro).
+export const LIST_COLORS = ["amarelo", "areia", "terracota", "oliva", "petroleo", "ameixa", "grafite"];
+// Estados do item além de pendente / no carrinho: faltou no mercado, ou fica para outra compra.
+export const ITEM_STATUSES = ["missing", "later"];
+export const MAX_DETAILS = 120;
+const PHOTO_NAME = /^[A-Za-z0-9_-]{1,100}\.jpg$/u;
+
+// Campos opcionais do item (1.12). Ausentes = comportamento antigo.
+function optionalItemFields(i, unit, inCart) {
+  const out = {};
+  if (!inCart && ITEM_STATUSES.includes(i.status)) out.status = i.status;
+  if (inCart && Number.isFinite(i.cartAt) && i.cartAt > 0) out.cartAt = i.cartAt;
+  if (i.pricePer === "kg" && (unit === "g" || unit === "kg")) out.pricePer = "kg";
+  const details = typeof i.details === "string" ? i.details.trim().slice(0, MAX_DETAILS) : "";
+  if (details) out.details = details;
+  if (typeof i.photo === "string" && PHOTO_NAME.test(i.photo)) out.photo = i.photo;
+  return out;
+}
 
 export function sanitizeItemDeal(deal) {
   if (!validateDeal(deal).ok) return undefined;
@@ -40,7 +69,7 @@ export function sanitizeShoppingStaples(value, lists) {
   return value.slice(0, MAX_ITEMS).flatMap((row) => {
     if (!row || !row.staple || ids.has(row.id)) return [];
     try {
-      const [item] = sanitizeShoppingItems([row], lists);
+      const [{ status, cartAt, photo, ...item }] = sanitizeShoppingItems([row], lists);
       if (!item.staple) return [];
       ids.add(item.id);
       return [{ ...item, inCart: false, ...(isIsoDate(row.lastRestockedAt) ? { lastRestockedAt: row.lastRestockedAt } : {}) }];
@@ -61,7 +90,7 @@ export function sanitizeShoppingLists(value) {
     if (!safeListId(row?.id) || !name || name.length > 60 || ids.has(row.id) || names.has(normalized)) return [];
     ids.add(row.id);
     names.add(normalized);
-    return [{ id: row.id, name, archived: row.archived === true }];
+    return [{ id: row.id, name, archived: row.archived === true, ...(LIST_COLORS.includes(row.color) ? { color: row.color } : {}) }];
   });
   if (lists.length && !lists.some((list) => !list.archived)) lists[0].archived = false;
   return lists.length ? lists : undefined;
@@ -110,7 +139,31 @@ export function sanitizeShoppingItems(value, lists) {
       category: SHOPPING_CATEGORIES.includes(i.category) ? i.category : "Outros",
       inCart: i.inCart === true,
       createdAt: Number.isFinite(i.createdAt) ? i.createdAt : 0,
+      ...optionalItemFields(i, ["", "g", "kg", "ml", "l"].includes(i.unit) ? i.unit : "", i.inCart === true),
     };
+  });
+}
+
+// Ordem das listas e divisores (grupos). `undefined` = sem ordem própria (vale a ordem das listas).
+// Entradas de lista que não existem são descartadas; repetidas também.
+export const MAX_DIVIDER = 40;
+export function sanitizeShoppingLayout(value, lists) {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return [];
+  const known = new Set((lists || []).map((list) => list.id));
+  const seen = new Set();
+  return value.slice(0, 300).flatMap((row) => {
+    if (!row || !safeListId(row.id) || seen.has(row.id)) return [];
+    if (row.kind === "list" && known.has(row.id)) {
+      seen.add(row.id);
+      return [{ kind: "list", id: row.id }];
+    }
+    const name = typeof row.name === "string" ? row.name.trim().slice(0, MAX_DIVIDER) : "";
+    if (row.kind === "divider" && name && !known.has(row.id)) {
+      seen.add(row.id);
+      return [{ kind: "divider", id: row.id, name }];
+    }
+    return [];
   });
 }
 

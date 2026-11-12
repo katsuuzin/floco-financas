@@ -1,3 +1,4 @@
+import { brDate } from "./dates.mjs";
 import { visibleAccounts } from "./accountOrder.mjs";
 import React, { useState, useMemo } from "react";
 import {
@@ -265,7 +266,7 @@ export default function ImportsPanel({ state, c, onChange, onClose }: any) {
           ),
         )}
         {text(
-          "CSV: Data;Descrição;Valor (R$);Tipo;Categoria. Datas AAAA-MM-DD ou DD/MM/AAAA, valores brasileiros. OFX: lançamentos bancários e FITID. Transferências CSV devem ser lançadas entre duas contas no Floco.",
+          "CSV: Data;Descrição;Valor (R$);Tipo;Categoria. Datas DD/MM/AAAA (também aceita AAAA-MM-DD), valores brasileiros. OFX: lançamentos bancários e FITID. Transferências CSV devem ser lançadas entre duas contas no Floco.",
         )}
         {button(
           "Separador CSV: " +
@@ -380,7 +381,7 @@ export default function ImportsPanel({ state, c, onChange, onClose }: any) {
                     text(r.error)
                   ) : (
                     <>
-                      {text(`${r.date} · ${r.description}`)}
+                      {text(`${brDate(r.date)} · ${r.description}`)}
                       {text(state.settings.hide ? "R$ ••••" : money(r.amount))}
                       {text(r.type === "income" ? "Receita" : "Despesa")}
                       {possibleDuplicate(state, r, account) &&

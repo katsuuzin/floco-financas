@@ -9,6 +9,7 @@ import React, {
   useState,
 } from "react";
 import { BackHandler } from "react-native";
+import { trackUse } from "../usageTracker";
 
 export type Tab = "home" | "transactions" | "analysis" | "more";
 export type Route =
@@ -31,6 +32,9 @@ export type Route =
   | { name: "welcome" }
   | { name: "reconcile" }
   | { name: "tool"; id: string }
+  | { name: "people"; tab?: "receivables" | "payables" }
+  | { name: "debts"; tab?: "installments" | "financing" | "loan" }
+  | { name: "usage" }
   | { name: "dataTools" }
   | { name: "imports" }
   | { name: "receipt" }
@@ -39,7 +43,8 @@ export type Route =
   | { name: "updates" }
   | { name: "trash" }
   | { name: "shopping"; add?: boolean }
-  | { name: "shoppingTrip" }
+  | { name: "shoppingList"; add?: boolean }
+  | { name: "shoppingTrip"; lists?: string[] }
   | { name: "scanProduct" }
   | { name: "scanNota" }
   | { name: "nfceConsulta"; info: any }
@@ -112,11 +117,18 @@ export function NavProvider({
       stack,
       top: stack[stack.length - 1] || null,
       setTab: (t) => {
+        trackUse(t);
         setStack([]);
         setTabState(t);
       },
-      push: (r) => setStack((s) => [...s, r]),
-      replace: (r) => setStack((s) => [...s.slice(0, -1), r]),
+      push: (r) => {
+        trackUse(r);
+        setStack((s) => [...s, r]);
+      },
+      replace: (r) => {
+        trackUse(r);
+        setStack((s) => [...s.slice(0, -1), r]);
+      },
       back,
       reset: () => setStack([]),
       month,
@@ -134,17 +146,18 @@ export function destination(id: string): { tab?: Tab; route?: Route } {
     goals: { name: "goals" },
     projections: { name: "projections" },
     recurrences: { name: "recurrences" },
-    installments: { name: "installments" },
-    financings: { name: "contracts", type: "financing" },
-    loans: { name: "contracts", type: "loan" },
-    receivables: { name: "tool", id: "receivables" },
+    installments: { name: "debts", tab: "installments" },
+    financings: { name: "debts", tab: "financing" },
+    loans: { name: "debts", tab: "loan" },
+    receivables: { name: "people", tab: "receivables" },
+    payables: { name: "people", tab: "payables" },
     reports: { name: "reports" },
     cashflow: { name: "report", id: "cashflow" },
     accounts: { name: "accounts" },
     cards: { name: "cards" },
     assistant: { name: "assistant" },
     receipt: { name: "receipt" },
-    shopping: { name: "shopping" },
+    shopping: { name: "shoppingList" },
   };
   return id === "analysis" ? { tab: "analysis" } : { route: map[id] };
 }

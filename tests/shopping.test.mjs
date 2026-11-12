@@ -298,7 +298,7 @@ test("quem já personalizou a Início mantém a ordem e recebe o bloco no fim", 
 });
 
 test("resumo do bloco: vazio, só no carrinho e com mais de 3 pendentes", () => {
-  assert.deepEqual(shoppingSummary(emptyState()), { total: 0, pending: 0, inCart: 0, estimatedCents: 0, unpriced: 0, preview: [] });
+  assert.deepEqual(shoppingSummary(emptyState()), { total: 0, pending: 0, inCart: 0, later: 0, missing: 0, estimatedCents: 0, unpriced: 0, preview: [] });
   let s = toggleCart(sample(), "a");
   s = toggleCart(toggleCart(s, "b"), "c");
   assert.equal(shoppingSummary(s).pending, 0);

@@ -59,9 +59,12 @@ export default function TransactionRow({ t, withDate = false, last = false }: { 
   const options = () => {
     const actions: any[] = [
         ...(t.loanSettlement
-          ? [{ text: "Ver dívida e recebimentos", onPress: () => nav.push({ name: "tool", id: "receivables" }) }]
+          ? [{ text: "Ver dívida e recebimentos", onPress: () => nav.push({ name: "people", tab: "receivables" }) }]
           : []),
-        ...(!t.cardId && !t.loanSettlement && !t.invoicePayment
+        ...(t.payableId
+          ? [{ text: "Ver dívida e pagamentos", onPress: () => nav.push({ name: "people", tab: "payables" }) }]
+          : []),
+        ...(!t.cardId && !t.loanSettlement && !t.payableId && !t.invoicePayment
           ? [
               {
                 text: t.confirmed ? "Marcar como pendente" : "Confirmar",
@@ -72,10 +75,10 @@ export default function TransactionRow({ t, withDate = false, last = false }: { 
               },
             ]
           : []),
-        ...(!t.invoicePayment && !t.loanSettlement && !t.financingId && !t.adjustment && !t.boxYield
+        ...(!t.invoicePayment && !t.loanSettlement && !t.payableId && !t.financingId && !t.adjustment && !t.boxYield
           ? [{ text: "Editar", onPress: () => nav.push({ name: "form", kind: "transaction", initial: editInitial(state, t) }) }]
           : []),
-        ...(!t.loanSettlement && !t.financingId && !t.boxYield
+        ...(!t.loanSettlement && !t.payableId && !t.financingId && !t.boxYield
           ? [
               {
                 text: "Excluir",

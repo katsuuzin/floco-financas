@@ -23,7 +23,7 @@ export const SCHEMA = [
 export const SCHEMA_VERSION = 1;
 
 const isCollection = (value) => Array.isArray(value);
-const optionalCollections = new Set(["pots", "shoppingLists", "shoppingStaples", "shoppingListTemplates"]);
+const optionalCollections = new Set(["pots", "shoppingLists", "shoppingStaples", "shoppingListTemplates", "shoppingListLayout"]);
 
 export function diffState(prev, next) {
   const upserts = [];

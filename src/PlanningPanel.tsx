@@ -15,6 +15,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
 import { subsOf } from "./categories.mjs";
 import CategoryIcon from "./ui/CategoryIcon";
+import { DateField, Segmented } from "./ui/kit";
+import AttachmentsField, { deleteAttachmentFiles } from "./ui/Attachments";
+import { brDate } from "./dates.mjs";
 import { useTheme } from "./ui/theme";
 import { CALEN_PREFIX, lookOf } from "./looks.mjs";
 import { ALLOWED_COLORS, ALLOWED_ICONS, defaultStyleFor, readableOn, sanitizeStyle } from "./categoryStyle.mjs";
@@ -350,7 +353,16 @@ export default function PlanningPanel({
   const cash = (n: number) => (s.settings.hide ? "R$ ••••" : money(n));
   const names = categoryNames(s);
   const accounts = s.accounts.map((a: any) => [a.id, a.name]);
-  const field = (key: string, label: string, number = false, hint?: string) => (
+  const field = (key: string, label: string, number = false, hint?: string) =>
+    label.includes("AAAA-MM-DD") ? (
+      <DateField
+        key={key}
+        label={label.replace(/\s*\(AAAA-MM-DD\)/, "")}
+        optional={/opcional/i.test(label)}
+        value={form?.[key] || ""}
+        onChange={(v: string) => setForm({ ...form, [key]: v })}
+      />
+    ) : (
     <Field
       key={key}
       c={c}
@@ -360,7 +372,7 @@ export default function PlanningPanel({
       number={number}
       hint={hint}
     />
-  );
+    );
   const choose = (key: string, label: string, values: any) => (
     <Options
       key={key}
@@ -497,7 +509,7 @@ export default function PlanningPanel({
         [
           ["Data", "Descrição", "Tipo", "Categoria", "Valor (R$)", "Situação"],
           ...r.rows.map((t: any) => [
-            t.date,
+            brDate(t.date),
             t.description,
             t.type === "income" ? "Receita" : "Despesa",
             t.category,
@@ -731,6 +743,14 @@ export default function PlanningPanel({
               <>
                 {(page === "categories" || page === "tags") && (
                   <>
+                    <Segmented
+                      value={page}
+                      onChange={(v: string) => setPage(v)}
+                      values={[
+                        ["categories", "Categorias"],
+                        ["tags", "Tags"],
+                      ]}
+                    />
                     <Txt c={c} muted>
                       {page === "tags"
                         ? "Use várias tags em cada lançamento e filtre os relatórios."
@@ -850,8 +870,8 @@ export default function PlanningPanel({
                         </Txt>
                         <Txt c={c} muted>
                           {frequencies.find((f) => f[0] === r.frequency)?.[1]} ·{" "}
-                          {r.active ? "Ativa" : "Pausada"} · desde {r.date}
-                          {r.endDate ? " até " + r.endDate : ""}
+                          {r.active ? "Ativa" : "Pausada"} · desde {brDate(r.date)}
+                          {r.endDate ? " até " + brDate(r.endDate) : ""}
                         </Txt>
                         <Action
                           c={c}
@@ -898,7 +918,7 @@ export default function PlanningPanel({
                         </Txt>
                         <Txt c={c} muted>
                           Total registrado: {cash(debt.amount)}
-                          {debt.dueDate ? " · vence " + debt.dueDate : ""}
+                          {debt.dueDate ? " · vence " + brDate(debt.dueDate) : ""}
                         </Txt>
                       </Card>
                       {receivableBalance(debt) > 0 && (
@@ -924,7 +944,7 @@ export default function PlanningPanel({
                       {debt.payments.map((p: any) => (
                         <Card c={c} key={p.id}>
                           <Txt c={c}>
-                            {cash(p.amount)} · {p.date}
+                            {cash(p.amount)} · {brDate(p.date)}
                           </Txt>
                           <Txt c={c} muted>
                             {
@@ -951,6 +971,7 @@ export default function PlanningPanel({
                           />
                         </Card>
                       ))}
+                      <AttachmentsField list="receivables" rowId={debt.id} attachments={debt.attachments} />
                       {!debt.payments.length && (
                         <Action
                           c={c}
@@ -962,6 +983,7 @@ export default function PlanningPanel({
                               "Excluir dívida?",
                               "Este registro será removido. Nenhuma conta será movimentada.",
                               async () => {
+                                const files = debt.attachments;
                                 if (
                                   await run((s: any) => ({
                                     ...s,
@@ -969,8 +991,10 @@ export default function PlanningPanel({
                                       (r: any) => r.id !== debt.id,
                                     ),
                                   }))
-                                )
+                                ) {
+                                  void deleteAttachmentFiles(files);
                                   setDetail("");
+                                }
                               },
                             )
                           }
@@ -1019,7 +1043,7 @@ export default function PlanningPanel({
                               {r.dueDate < today() && receivableBalance(r) > 0
                                 ? "Vencido em "
                                 : "Vencimento: "}
-                              {r.dueDate}
+                              {brDate(r.dueDate)}
                             </Txt>
                           )}
                           <Action
@@ -1095,7 +1119,7 @@ export default function PlanningPanel({
                           {detail === f.id &&
                             tx.map((t: any) => (
                               <Txt c={c} key={t.id}>
-                                {t.date} · {cash(t.amount)} ·{" "}
+                                {brDate(t.date)} · {cash(t.amount)} ·{" "}
                                 {t.confirmed ? "Paga" : "Pendente"}
                               </Txt>
                             ))}
@@ -1138,14 +1162,24 @@ export default function PlanningPanel({
                         ["entry", "Entrada (R$, opcional)"],
                         ["count", "Quantidade de parcelas"],
                         ["rate", "Juros ao mês (%)"],
-                        ["date", "Primeiro vencimento (AAAA-MM-DD)"],
+                        ["date", "Primeiro vencimento"],
                       ] as const
-                    ).map(([key, label]) => (
+                    ).map(([key, label]) => key === "date" ? (
+                      <DateField
+                        key={key}
+                        label={label}
+                        value={simInput[key]}
+                        onChange={(v: string) => {
+                          setSimInput({ ...simInput, [key]: v });
+                          setSimulation(null);
+                        }}
+                      />
+                    ) : (
                       <Field
                         c={c}
                         key={key}
                         label={label}
-                        number={key !== "date"}
+                        number
                         value={simInput[key]}
                         onChange={(v: string) => {
                           setSimInput({ ...simInput, [key]: v });
@@ -1189,7 +1223,7 @@ export default function PlanningPanel({
                         </Txt>
                         {simulation.rows.map((r: any) => (
                           <Txt c={c} key={r.number}>
-                            {r.number} · {r.date} · {cash(r.amount)}
+                            {r.number} · {brDate(r.date)} · {cash(r.amount)}
                           </Txt>
                         ))}
                       </Card>
@@ -1292,7 +1326,7 @@ export default function PlanningPanel({
                               {r.description}
                             </Txt>
                             <Txt c={c} muted>
-                              {r.date}
+                              {brDate(r.date)}
                             </Txt>
                             <Txt c={c}>
                               {cash(r.amount)} · Saldo: {cash(r.balance)}
@@ -1311,18 +1345,16 @@ export default function PlanningPanel({
                       dos resultados. Compras no cartão aparecem no mês da
                       compra/parcela.
                     </Txt>
-                    <Field
-                      c={c}
-                      label="De (AAAA-MM-DD)"
+                    <DateField
+                      label="De"
                       value={filters.start}
                       onChange={(v: string) => {
                         setFilters({ ...filters, start: v });
                         setResult(null);
                       }}
                     />
-                    <Field
-                      c={c}
-                      label="Até, inclusive (AAAA-MM-DD)"
+                    <DateField
+                      label="Até, inclusive"
                       value={filters.end}
                       onChange={(v: string) => {
                         setFilters({ ...filters, end: v });

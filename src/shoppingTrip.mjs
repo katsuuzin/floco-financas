@@ -1,4 +1,4 @@
-import { itemsOf, lineTotal } from "./shopping.mjs";
+import { currentItemsOf as itemsOf, lineTotal } from "./shopping.mjs";
 import { SHOPPING_CATEGORIES, addCents } from "./shoppingData.mjs";
 
 const CATEGORY_ORDER = new Map(SHOPPING_CATEGORIES.map((category, index) => [category, index]));
@@ -60,10 +60,10 @@ export function nextToGet(state, { limit = 5 } = {}) {
 
 export function pendingByCategory(state) {
   const groups = new Map();
-  for (const { id, name, qty, unit, category, priceCents, deal } of sortedPending(state)) {
+  for (const { id, name, qty, unit, category, priceCents, deal, status } of sortedPending(state)) {
     if (!groups.has(category)) groups.set(category, { category, count: 0, items: [] });
     const group = groups.get(category);
-    group.items.push({ id, name, qty, unit, priceCents, ...(deal ? { deal } : {}) });
+    group.items.push({ id, name, qty, unit, priceCents, ...(deal ? { deal } : {}), ...(status ? { status } : {}) });
     group.count++;
   }
   return [...groups.values()];

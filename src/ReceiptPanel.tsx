@@ -1,4 +1,5 @@
 import { visibleAccounts } from "./accountOrder.mjs";
+import { DateField } from "./ui/kit";
 import React, { useState } from "react";
 import {
   View,
@@ -105,19 +106,16 @@ export default function ReceiptPanel({ state, c, onChange, onClose }: any) {
       setBusy(false);
     }
   };
-  const field = (key: "amount" | "description" | "date", label: string) => (
+  const field = (key: "amount" | "description" | "date", label: string) =>
+    key === "date" ? (
+      <DateField label={label.replace(/\s*\(AAAA-MM-DD\)/, "")} value={form.date} onChange={(v) => setForm({ ...form, date: v })} />
+    ) : (
     <View style={{ gap: 6, marginVertical: 8 }}>
       {text(label, true)}
       <TextInput
         accessibilityLabel={label}
-        keyboardType={
-          key === "amount"
-            ? "decimal-pad"
-            : key === "date"
-              ? "numbers-and-punctuation"
-              : "default"
-        }
-        maxLength={key === "date" ? 10 : key === "amount" ? 16 : 100}
+        keyboardType={key === "amount" ? "decimal-pad" : "default"}
+        maxLength={key === "amount" ? 16 : 100}
         value={form[key]}
         onChangeText={(v) => setForm({ ...form, [key]: v })}
         style={{
@@ -132,7 +130,7 @@ export default function ReceiptPanel({ state, c, onChange, onClose }: any) {
         }}
       />
     </View>
-  );
+    );
   const choices = (
     key: "accountId" | "cardId" | "category" | "type",
     label: string,

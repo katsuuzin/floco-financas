@@ -21,7 +21,7 @@ test("CSV escapa fórmulas em todos os campos livres", () => {
 });
 test("CSV do histórico inclui preço unitário e total em reais", () => {
   const csv = purchasesToCsv({ shoppingPurchases: [purchase()] });
-  assert.ok(csv.includes("2024-02-29;Loja fictícia;compra-1;12,34;"));
+  assert.ok(csv.includes("29/02/2024;Loja fictícia;compra-1;12,34;"));
   assert.ok(csv.includes(";1,5;kg;8,23;12,34"));
 });
 test("Histórico versionado e ida e volta sem perda", () => {

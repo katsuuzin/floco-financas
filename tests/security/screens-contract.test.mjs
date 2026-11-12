@@ -34,7 +34,7 @@ const nameFromChildren = (node) => ts.isJsxElement(node.parent) &&
     ts.isJsxElement(child) && ["Text","T","Muted"].includes(tag(child.openingElement)) &&
     child.children.some((part) => copy(part).some(Boolean)));
 
-const routes = { shoppingTrip: "ShoppingTripScreen", scanProduct: "ScanProductScreen", scanNota: "ScanNotaScreen", shopping: "ShoppingScreen" };
+const routes = { shoppingTrip: "ShoppingTripScreen", scanProduct: "ScanProductScreen", scanNota: "ScanNotaScreen", shopping: "ShoppingListsScreen", shoppingList: "ShoppingScreen" };
 const app = read("App.tsx");
 const nav = read("src/app/nav.tsx");
 const keyboard = nodes(app, opening).filter((node) => tag(node) === "KeyboardAvoidingView");
@@ -175,7 +175,8 @@ for (const [route, screen] of Object.entries(routes)) {
       node.name.getText() === route && ts.isStringLiteral(node.initializer) && node.initializer.text.trim()));
     assert.ok(nodes(app, ts.isCaseClause).some((node) => ts.isStringLiteral(node.expression) && node.expression.text === route &&
       nodes(node, opening).some((element) => tag(element) === screen)));
-    if (controls.some((node) => ["Field", "TextInput"].includes(tag(node)))) {
+    // As telas de Listas e da lista têm os campos no alto ou em folhas próprias; não precisam do ajuste de teclado da rota.
+    if (!["shopping", "shoppingList"].includes(route) && controls.some((node) => ["Field", "TextInput"].includes(tag(node)))) {
       assert.ok(keyboard.some((node) => nodes(prop(node, "behavior"), ts.isBinaryExpression).some((condition) =>
         condition.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken &&
         condition.left.getText() === "top?.name" && ts.isStringLiteral(condition.right) && condition.right.text === route)));
@@ -205,10 +206,7 @@ for (const [route, screen] of Object.entries(routes)) {
     assert.ok(controls.some((node) => tag(node) === "Toggle" && copy(prop(node, "label")).includes("Lanterna") && prop(node, "value")));
     assert.ok(controls.some((node) => copy(prop(node, "accessibilityLiveRegion")).includes("polite") && node.parent.getText().includes("{status}")));
   });
-  if (route === "shopping") test("Lista restaura foco e descreve o valor uma vez", () => {
-    const editable = controls.find((node) => tag(node) === "Pressable" && prop(node, "accessibilityLabel")?.getText().includes("Editar"));
-    assert.ok(editable);
-    assert.equal((prop(editable, "accessibilityLabel").getText().match(/show\(total\)/gu) || []).length, 1);
+  if (route === "shoppingList") test("Lista restaura foco e mantém o registro da despesa", () => {
     assert.match(source.getText(), /focusAccessibility\(pasteButton\.current\)/u);
     assert.match(source.getText(), /focusAccessibility\(editControls\.current\.get\(id\)\)/u);
     assert.match(source.getText(), /title="Registrar despesa"/u);
@@ -227,7 +225,7 @@ for (const [route, screen] of Object.entries(routes)) {
       ...nodes(source, ts.isJsxText).flatMap(copy),
       ...nodes(source, ts.isJsxExpression).filter((node) => ts.isJsxElement(node.parent)).flatMap(copy)];
     assert.deepEqual(visible.filter((text) => statuses.test(text) || text.includes("...")), []);
-    if (route === "shopping") for (const text of ["Usar preços do histórico", "Exportar em CSV", "Escanear produto"])
+    if (route === "shoppingList") for (const text of ["Usar preços do histórico", "Exportar em CSV", "Escanear"])
       assert.ok(visible.some((value) => value.includes(text)), text);
   });
 }

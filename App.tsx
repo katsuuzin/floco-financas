@@ -15,6 +15,9 @@ import {
   Linking,
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { BlurTargetView } from "expo-blur";
+import { BlurTargetContext } from "./src/ui/Sheet";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
 import * as LocalAuthentication from "expo-local-authentication";
@@ -23,7 +26,20 @@ import { ThemeProvider, useTheme } from "./src/ui/theme";
 import { T, I, Button, IconButton, Muted, styles as k } from "./src/ui/kit";
 import type { Icon } from "./src/ui/kit";
 import MotionPressable from "./src/ui/motion";
-import { StoreProvider, useStore } from "./src/app/store";
+import { StoreProvider, useStore, type NoticeAction } from "./src/app/store";
+import Animated, { Easing as Ease, SlideInDown, withTiming } from "react-native-reanimated";
+
+// Entrar numa lista: desliza 40 dp da direita esmaecendo, 300 ms com desaceleração (A7).
+const listEnter = () => {
+  "worklet";
+  return {
+    initialValues: { opacity: 0, transform: [{ translateX: 40 }] },
+    animations: {
+      opacity: withTiming(1, { duration: 300 }),
+      transform: [{ translateX: withTiming(0, { duration: 300, easing: Ease.out(Ease.cubic) }) }],
+    },
+  };
+};
 import { NavProvider, useNav, Route, Tab, destination } from "./src/app/nav";
 import { monthKey, today } from "./src/finance.mjs";
 import HomeScreen from "./src/screens/HomeScreen";
@@ -52,7 +68,11 @@ import {
 } from "./src/screens/ReportScreens";
 import { RulesScreen, ReconcileScreen } from "./src/screens/ToolScreens";
 import TrashScreen from "./src/screens/TrashScreen";
-import ShoppingScreen, { ShoppingAddBar } from "./src/screens/ShoppingScreen";
+import ShoppingScreen from "./src/screens/ShoppingScreen";
+import PeopleScreen from "./src/screens/PeopleScreen";
+import DebtsScreen from "./src/screens/DebtsScreen";
+import UsageScreen from "./src/screens/UsageScreen";
+import ShoppingListsScreen from "./src/screens/ShoppingListsScreen";
 import ShoppingTripScreen from "./src/screens/ShoppingTripScreen";
 import ScanProductScreen from "./src/screens/ScanProductScreen";
 import ScanNotaScreen from "./src/screens/ScanNotaScreen";
@@ -81,7 +101,12 @@ export default function App() {
     SoraSemi: require("./assets/fonts/Sora_600SemiBold.ttf"),
     SoraBold: require("./assets/fonts/Sora_700Bold.ttf"),
   });
+  // Raiz que a folha desfoca por trás (expo-blur no Android).
+  const blurTarget = useRef<React.ComponentRef<typeof View>>(null);
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+    <BlurTargetContext.Provider value={blurTarget}>
+    <BlurTargetView ref={blurTarget} style={{ flex: 1 }}>
     <SafeAreaProvider>
       <StoreProvider>
         <Themed fonts={fonts}>
@@ -91,6 +116,9 @@ export default function App() {
         </Themed>
       </StoreProvider>
     </SafeAreaProvider>
+    </BlurTargetView>
+    </BlurTargetContext.Provider>
+    </GestureHandlerRootView>
   );
 }
 
@@ -288,7 +316,11 @@ const TITLES: Record<string, string> = {
   welcome: "Boas-vindas",
   reconcile: "Conferir fatura",
   trash: "Lixeira",
-  shopping: "Lista de compras",
+  shopping: "Listas",
+  people: "Entre pessoas",
+  debts: "Dívidas e contratos",
+  usage: "Uso dos botões",
+  shoppingList: "Lista de compras",
   shoppingTrip: "Modo compra",
   scanProduct: "Escanear produto",
   scanNota: "Ler nota fiscal",
@@ -325,7 +357,7 @@ function Shell({
   protectedApp: boolean;
 }) {
   const { c, dark } = useTheme();
-  const { state, perform, notice, setNotice, storageError } = useStore();
+  const { state, perform, notice, noticeAction, setNotice, storageError } = useStore();
   // Estado atual para os links dos widgets (o efeito é registrado uma vez).
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -400,7 +432,7 @@ function Shell({
         {top.name === "updates" && (
           <UpdatesPanel c={c} updates={updates} onBack={nav.back} />
         )}
-        <Snackbar notice={notice} onClose={() => setNotice("")} />
+        <Snackbar notice={notice} action={noticeAction} onClose={() => setNotice("")} />
       </SafeAreaView>
     );
   }
@@ -429,8 +461,8 @@ function Shell({
     >
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        // A barra de adicionar da lista fica fora da rolagem: sem isso o teclado a cobre no Android.
-        behavior={Platform.OS === "ios" || top?.name === "shopping" || top?.name === "shoppingTrip" || top?.name === "scanProduct" || top?.name === "scanNota" || (top?.name === "form" && top.kind === "expenseBatch") ? "padding" : undefined}
+        // Telas com campo ou barra fora da rolagem: sem isso o teclado os cobre no Android.
+        behavior={Platform.OS === "ios" || top?.name === "shoppingTrip" || top?.name === "scanProduct" || top?.name === "scanNota" || (top?.name === "form" && top.kind === "expenseBatch") ? "padding" : undefined}
       >
         {top?.name !== "form" && (
           <View style={[s.header, { backgroundColor: pageBg }]}>
@@ -495,7 +527,6 @@ function Shell({
           )}
           {content}
         </ScrollView>
-        {top?.name === "shopping" && <ShoppingAddBar autoFocus={top.add} />}
         {!top && (
           <View
             accessibilityRole="tablist"
@@ -537,7 +568,7 @@ function Shell({
           </View>
         )}
       </KeyboardAvoidingView>
-      <Snackbar notice={notice} onClose={() => setNotice("")} />
+      <Snackbar notice={notice} action={noticeAction} onClose={() => setNotice("")} />
       <AddSheet visible={adding} onClose={() => setAdding(false)} />
     </SafeAreaView>
   );
@@ -565,6 +596,12 @@ function renderRoute(r: Route) {
       return <SettingsScreen />;
     case "contracts":
       return <ContractsScreen type={r.type} />;
+    case "people":
+      return <PeopleScreen />;
+    case "debts":
+      return <DebtsScreen />;
+    case "usage":
+      return <UsageScreen />;
     case "recurrences":
       return <RecurrencesScreen />;
     case "installments":
@@ -592,9 +629,11 @@ function renderRoute(r: Route) {
     case "trash":
       return <TrashScreen />;
     case "shopping":
-      return <ShoppingScreen />;
+      return <ShoppingListsScreen />;
+    case "shoppingList":
+      return <Animated.View entering={listEnter}><ShoppingScreen add={r.add} /></Animated.View>;
     case "shoppingTrip":
-      return <ShoppingTripScreen />;
+      return <ShoppingTripScreen lists={r.lists} />;
     case "scanProduct":
       return <ScanProductScreen />;
     case "scanNota":
@@ -755,25 +794,42 @@ function AddSheet({
   );
 }
 
+// Aviso na base. Com ação (ex.: Desfazer), mostra o botão de 48 dp e fica mais tempo (store).
 function Snackbar({
   notice,
+  action,
   onClose,
 }: {
   notice: string;
+  action?: NoticeAction | null;
   onClose: () => void;
 }) {
   const { c } = useTheme();
   if (!notice) return null;
   return (
-    <Pressable
-      onPress={onClose}
+    <Animated.View
+      key={notice}
+      entering={SlideInDown.duration(150)}
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"
       style={[s.snackbar, { backgroundColor: c.text }]}
     >
-      <T style={{ color: c.bg, fontSize: 12, flex: 1 }}>{notice}</T>
-      <Feather name="x" size={18} color={c.bg} />
-    </Pressable>
+      <T style={{ color: c.bg, fontSize: 13, flex: 1 }}>{notice}</T>
+      {action && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${action.label}: ${notice}`}
+          onPress={() => { onClose(); action.onPress(); }}
+          style={{ minHeight: 48, minWidth: 48, paddingHorizontal: 14, borderRadius: 24, borderWidth: 1.5, borderColor: c.bg, alignItems: "center", justifyContent: "center" }}
+        >
+          <T style={{ color: c.bg, fontFamily: "SoraSemi", fontSize: 14 }}>{action.label}</T>
+        </Pressable>
+      )}
+      <Pressable accessibilityRole="button" accessibilityLabel="Fechar aviso" onPress={onClose} hitSlop={4}
+        style={{ width: 48, height: 48, alignItems: "center", justifyContent: "center", marginRight: -12 }}>
+        <Feather name="x" size={18} color={c.bg} />
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -818,7 +874,10 @@ const s = StyleSheet.create({
     left: 18,
     right: 18,
     bottom: 96,
-    padding: 16,
+    paddingVertical: 4,
+    paddingLeft: 16,
+    paddingRight: 12,
+    minHeight: 56,
     borderRadius: 12,
     flexDirection: "row",
     gap: 14,

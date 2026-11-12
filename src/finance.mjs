@@ -1,5 +1,5 @@
 // All monetary values are integer centavos. Dates are local ISO calendar dates.
-import { sanitizeShoppingItems, sanitizeShoppingLists, sanitizeShoppingTemplates, sanitizeShoppingStaples, sanitizePurchases, sanitizeProducts } from "./shoppingData.mjs";
+import { sanitizeShoppingItems, sanitizeShoppingLayout, sanitizeShoppingLists, sanitizeShoppingTemplates, sanitizeShoppingStaples, sanitizePurchases, sanitizeProducts } from "./shoppingData.mjs";
 export const uid = () =>
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 export const today = () => {
@@ -32,6 +32,7 @@ export function addMonths(date, count) {
   const result = new Date(y, m - 1 + count, Math.min(d, last), 12);
   return `${result.getFullYear()}-${String(result.getMonth() + 1).padStart(2, "0")}-${String(result.getDate()).padStart(2, "0")}`;
 }
+import { isAttachment } from "./attachments.mjs";
 import { migrateSubcategories, LEGACY_ROOTS, CATALOG } from "./categories.mjs";
 import { migratePotsFromGoals } from "./goalPots.mjs";
 import { ALLOWED_COLORS, ALLOWED_ICONS, defaultStyleFor } from "./categoryStyle.mjs";
@@ -58,14 +59,23 @@ export const emptyState = () => ({
   goals: [],
   recurrences: [],
   receivables: [],
+  payables: [],
   financings: [],
   customCategories: [],
   tags: [],
   shoppingItems: [],
   shoppingPurchases: [],
   shoppingProducts: [],
-  settings: { dark: false, biometric: false, hide: false },
+  settings: { dark: true, darkDefault: 1, biometric: false, hide: false },
 });
+
+// O tema escuro é o padrão do app. Quem já tinha dados passa para o escuro uma única vez
+// (marca darkDefault); depois disso a escolha manual em Configurações é respeitada.
+export function applyDarkDefault(state) {
+  const settings = state?.settings && typeof state.settings === "object" ? state.settings : {};
+  if (settings.darkDefault === 1) return state;
+  return { ...state, settings: { ...settings, dark: true, darkDefault: 1 } };
+}
 // Sinal do lançamento no saldo da conta de origem. Estorno de despesa devolve dinheiro.
 export const signedAmount = (t) =>
   t.type === "income" || (t.type === "expense" && t.refund) ? t.amount : -t.amount;
@@ -240,6 +250,10 @@ export function deleteTransaction(state, id) {
   if (target.loanSettlement)
     throw Error(
       "Desfaça este recebimento em Quem me deve para manter o histórico da dívida correto.",
+    );
+  if (target.payableId)
+    throw Error(
+      "Desfaça este pagamento em Quem eu devo para manter o histórico da dívida correto.",
     );
   const removed = state.transactions.filter((t) =>
     target.groupId ? t.groupId === target.groupId : t.id === id,
@@ -537,6 +551,9 @@ export function validateBackup(value) {
   if (lists) value.shoppingLists = lists;
   else delete value.shoppingLists;
   if (!lists?.some((list) => list.id === value.shoppingListId && !list.archived)) delete value.shoppingListId;
+  const layout = lists ? sanitizeShoppingLayout(value.shoppingListLayout, lists) : undefined;
+  if (layout === undefined) delete value.shoppingListLayout;
+  else value.shoppingListLayout = layout;
   const templates = sanitizeShoppingTemplates(value.shoppingListTemplates);
   if (templates === undefined) delete value.shoppingListTemplates;
   else value.shoppingListTemplates = templates;
@@ -556,6 +573,7 @@ export function validateBackup(value) {
   for (const key of [
     "recurrences",
     "receivables",
+    "payables",
     "financings",
     "customCategories",
     "tags",
@@ -813,6 +831,51 @@ export function validateBackup(value) {
   }
   if (value.transactions.some((t) => t.loanSettlement && !linked.has(t.id)))
     throw Error("Recebimento sem histórico da dívida.");
+  const attachmentsOk = (row) => row.attachments === undefined ||
+    (Array.isArray(row.attachments) && row.attachments.length <= 10 && row.attachments.every(isAttachment));
+  if (!value.receivables.every(attachmentsOk)) throw Error("Anexo inválido em Quem me deve.");
+  const paidLinks = new Set();
+  for (const d of value.payables) {
+    if (
+      !positive(d.amount) ||
+      typeof d.person !== "string" ||
+      !d.person.trim() ||
+      typeof d.description !== "string" ||
+      !isDate(d.date) ||
+      (d.dueDate && (!isDate(d.dueDate) || d.dueDate < d.date)) ||
+      !Array.isArray(d.payments) ||
+      !attachmentsOk(d)
+    )
+      throw Error("Dívida a pagar inválida.");
+    const ids = new Set();
+    let paid = 0;
+    for (const p of d.payments) {
+      const t = value.transactions.find((t) => t.id === p.transactionId);
+      if (
+        typeof p.id !== "string" ||
+        ids.has(p.id) ||
+        paidLinks.has(p.transactionId) ||
+        !positive(p.amount) ||
+        !isDate(p.date) ||
+        p.date < d.date ||
+        !account(p.accountId) ||
+        !t ||
+        t.payableId !== d.id ||
+        t.amount !== p.amount ||
+        t.accountId !== p.accountId ||
+        t.date !== p.date ||
+        t.type !== "expense" ||
+        !t.confirmed
+      )
+        throw Error("Pagamento de dívida inválido.");
+      ids.add(p.id);
+      paidLinks.add(p.transactionId);
+      paid += p.amount;
+    }
+    if (paid > d.amount) throw Error("Pagamentos acima da dívida.");
+  }
+  if (value.transactions.some((t) => t.payableId && !paidLinks.has(t.id)))
+    throw Error("Pagamento sem histórico da dívida.");
   if (value.categoryLooks && typeof value.categoryLooks === "object" && !Array.isArray(value.categoryLooks)) {
     value.categoryLooks = Object.fromEntries(Object.entries(value.categoryLooks).filter(([name]) =>
       !["__proto__", "constructor", "prototype"].includes(name)).map(([name, style]) => {

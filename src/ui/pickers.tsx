@@ -1,7 +1,7 @@
 // Linhas compactas com seta que abrem uma lista (estilo "folha de confirmação") e o seletor
 // de Categoria › Subcategoria.
 import React, { useMemo, useRef, useState } from "react";
-import { View, Modal, Pressable, ScrollView, TextInput, StyleSheet } from "react-native";
+import { View, Pressable, ScrollView, TextInput, StyleSheet } from "react-native";
 import { focusAccessibility, T, Muted, I, type ViewControl, styles as k } from "./kit";
 import type { Icon } from "./kit";
 import { useTheme } from "./theme";
@@ -9,22 +9,9 @@ import { categoryTree, categoryLabel } from "../categories.mjs";
 import { categoryStyleOf } from "./CategoryIcon";
 import CategoryIcon from "./CategoryIcon";
 
-export function SheetModal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  const { c } = useTheme();
-  const heading = useRef<ViewControl>(null);
-  return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose} onShow={() => focusAccessibility(heading.current)}>
-      <Pressable style={[s.backdrop, { backgroundColor: c.scrim }]} onPress={onClose} accessibilityRole="button" accessibilityLabel="Fechar" />
-      <View accessibilityViewIsModal style={[s.sheet, { backgroundColor: c.bg }]}>
-        <View style={[s.handle, { backgroundColor: c.line }]} />
-        <View ref={heading} accessible accessibilityRole="header" accessibilityLabel={title}>
-          <T style={{ fontFamily: "SoraSemi", fontSize: 17, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 }}>{title}</T>
-        </View>
-        {children}
-      </View>
-    </Modal>
-  );
-}
+// A folha passou para Sheet.tsx (movimento, desfoque e X de 48 dp); o nome continua exportado daqui.
+import { SheetModal } from "./Sheet";
+export { SheetModal };
 
 // Uma linha do cartão de campos: ícone, rótulo pequeno + valor, algo à direita e chevron.
 export function PickerRow({

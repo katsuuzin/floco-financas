@@ -1,3 +1,4 @@
+import { brDate } from "./dates.mjs";
 import { isChave } from "./nfce.mjs";
 import { itemsOf, lineTotal } from "./shopping.mjs";
 import { MAX_NAME, MAX_PURCHASES, MAX_PURCHASE_ITEMS, PURCHASE_SOURCES } from "./shoppingData.mjs";
@@ -40,7 +41,7 @@ export function purchasesToCsv(state) {
   for (const purchase of purchasesOf(state)) {
     for (const item of purchase.items) {
       rows.push([
-        purchase.date, purchase.marketName, purchase.id, reais(purchase.totalCents),
+        brDate(purchase.date), purchase.marketName, purchase.id, reais(purchase.totalCents),
         item.name, decimal(item.qty), item.unit, reais(item.unitPriceCents), reais(item.totalCents),
       ]);
     }

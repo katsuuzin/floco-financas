@@ -1,5 +1,5 @@
 import { safeCentsFromBr } from "./hardened.mjs";
-import { itemsOf, lineTotal, purchaseDraft } from "./shopping.mjs";
+import { currentItemsOf as itemsOf, lineTotal, purchaseDraft } from "./shopping.mjs";
 import { sortByAisles } from "./shoppingAisles.mjs";
 import { budgetStatus } from "./shoppingBudget.mjs";
 import { wouldDuplicate } from "./shoppingReconcile.mjs";
@@ -45,9 +45,15 @@ export function tripViewModel(state = {}, { session, limitCents, now } = {}) {
       totalCents === null ? ", sem preço" : ", valor oculto") : describeItem({ ...item, inCart });
     return { ...item, inCart, totalCents, totalText: totalCents === null ? "" : display(totalCents), quantityText, spoken };
   };
-  const groups = sortByAisles(pendingByCategory(state)).map((group) => ({
-    ...group, items: group.items.map((item) => row(item, false)),
+  const allGroups = sortByAisles(pendingByCategory(state)).map((group) => ({
+    ...group, items: group.items.map((item) => ({ ...row(item, false), category: group.category })),
   }));
+  // "Faltou" vai para uma seção própria no fim ("Em falta"); o resto segue agrupado por categoria.
+  const missingRows = allGroups.flatMap((group) => group.items.filter((item) => item.status === "missing"));
+  const groups = allGroups.map((group) => {
+    const items = group.items.filter((item) => item.status !== "missing");
+    return { ...group, items, count: items.length };
+  }).filter((group) => group.items.length);
   const inCart = itemsOf(state).filter((item) => item.inCart).map((item) => row(item, true));
   const cart = { cents: sum.cartCents, text: display(sum.cartCents), unpriced: sum.cartUnpriced };
   const progress = { items: sum.inCartCount, total: sum.total, pending: sum.pendingCount,
@@ -57,7 +63,7 @@ export function tripViewModel(state = {}, { session, limitCents, now } = {}) {
     "Falta pegar cerca de " + display(sum.pendingEstimateCents) + missing + ". Total estimado " + display(sum.grandEstimateCents) + "." :
     sum.pendingUnpriced ? (sum.pendingUnpriced === 1 ? "1 item pendente sem preço." : sum.pendingUnpriced + " itens pendentes sem preço.") : "";
   const spoken = {
-    lines: [...groups.flatMap((group) => group.items), ...inCart].map(({ id, spoken }) => ({ id, text: spoken })),
+    lines: [...groups.flatMap((group) => group.items), ...missingRows, ...inCart].map(({ id, spoken }) => ({ id, text: spoken })),
     header: [describeProgress(hidden ? { ...sum, cartCents: undefined } : sum) + ".",
       sum.cartUnpriced ? sum.cartUnpriced + " no carrinho sem preço." : "", "Tempo " + elapsed.text + ".",
       limit ? budget.message : ""].filter(Boolean).join(" "),
@@ -67,7 +73,7 @@ export function tripViewModel(state = {}, { session, limitCents, now } = {}) {
   const date = validNow ? new Date(now).toISOString().slice(0, 10) : "";
   return { cart, progress, elapsed, budget: { ...budget, color: budget.level, limitCents: limit,
     visible: limit > 0, text: limit ? "Limite " + display(limit) + " · " + budget.message : "",
-    action: limit ? "Alterar limite" : "Definir limite de gasto" }, groups, inCart,
+    action: limit ? "Alterar limite" : "Definir limite de gasto" }, groups, missing: missingRows, inCart,
     estimate: { pendingCents: sum.pendingEstimateCents, grandCents: sum.grandEstimateCents,
       unpriced: sum.pendingUnpriced, text: pendingText }, canFinish: finish.ok, empty: sum.total === 0, spoken,
     finish, duplicateWarning: finish.ok && !!date && wouldDuplicate(state, { ...finish.expense, date }) };

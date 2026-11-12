@@ -1,4 +1,5 @@
 import { renameLook } from "./looks.mjs";
+import { ATTACHMENT_LISTS, MAX_ATTACHMENTS, isAttachment } from "./attachments.mjs";
 import { categoryNames as allCategoryNames, subsOf } from "./categories.mjs";
 export { categoryNames } from "./categories.mjs";
 import {
@@ -19,6 +20,7 @@ import {
 export const extraLists = [
   "recurrences",
   "receivables",
+  "payables",
   "financings",
   "customCategories",
   "tags",
@@ -387,6 +389,104 @@ export function undoDebtPayment(s, id, paymentId) {
     transactions: s.transactions.filter((t) => t.id !== p.transactionId),
   };
 }
+// ---- Quem eu devo (1.12): o espelho de "Quem me deve" ----
+// Cada dívida tem credor (`person`), motivo, valor, data, vencimento opcional, pagamentos e anexos. Pagar cria uma despesa
+// confirmada na conta escolhida, ligada à dívida por `payableId`; desfazer o pagamento apaga essa despesa.
+export const payableBalance = (p) => p.amount - p.payments.reduce((n, x) => n + x.amount, 0);
+export function addPayable(s, input) {
+  if (
+    !input.person?.trim() ||
+    !input.description?.trim() ||
+    !amountOK(input.amount) ||
+    !isDate(input.date) ||
+    (input.dueDate && (!isDate(input.dueDate) || input.dueDate < input.date))
+  )
+    fail("Confira credor, motivo, valor e datas.");
+  return {
+    ...s,
+    payables: [
+      ...(s.payables || []),
+      {
+        id: uid(),
+        person: input.person.trim(),
+        description: input.description.trim(),
+        amount: input.amount,
+        date: input.date,
+        dueDate: input.dueDate || "",
+        payments: [],
+      },
+    ],
+  };
+}
+export function payDebt(s, id, amount, accountId, date = today()) {
+  const p = (s.payables || []).find((x) => x.id === id);
+  if (
+    !p ||
+    !amountOK(amount) ||
+    amount > payableBalance(p) ||
+    !isDate(date) ||
+    date < p.date ||
+    !s.accounts.some((a) => a.id === accountId)
+  )
+    fail("Confira conta, data e valor. O pagamento não pode superar o saldo da dívida.");
+  const transactionId = uid(),
+    payment = { id: uid(), transactionId, accountId, amount, date };
+  return {
+    ...s,
+    payables: s.payables.map((x) => (x.id === id ? { ...x, payments: [...x.payments, payment] } : x)),
+    transactions: [
+      ...s.transactions,
+      {
+        id: transactionId,
+        type: "expense",
+        amount,
+        date,
+        accountId,
+        description: `Pagamento · ${p.person} · ${p.description}`,
+        category: "Outros",
+        confirmed: true,
+        payableId: id,
+      },
+    ],
+  };
+}
+export function undoPayablePayment(s, id, paymentId) {
+  const p = (s.payables || []).find((x) => x.id === id),
+    payment = p?.payments.find((x) => x.id === paymentId);
+  if (!payment) fail("Pagamento não encontrado.");
+  return {
+    ...s,
+    payables: s.payables.map((x) => (x.id === id ? { ...x, payments: x.payments.filter((y) => y.id !== paymentId) } : x)),
+    transactions: s.transactions.filter((t) => t.id !== payment.transactionId),
+  };
+}
+
+// ---- Anexos (print ou documento) de uma dívida, a pagar ou a receber ----
+// O arquivo fica no aparelho (pasta "attachments") e não entra no backup; aqui só vai o registro.
+export { ATTACHMENT_LISTS, MAX_ATTACHMENTS, isAttachment };
+export function addAttachment(s, list, id, attachment) {
+  if (!ATTACHMENT_LISTS.includes(list)) fail("Cadastro inválido.");
+  const row = (s[list] || []).find((x) => x.id === id);
+  if (!row) fail("Dívida não encontrada.");
+  if (!isAttachment(attachment)) fail("Anexo inválido.");
+  if ((row.attachments || []).length >= MAX_ATTACHMENTS) fail(`Use até ${MAX_ATTACHMENTS} anexos por dívida.`);
+  return { ...s, [list]: s[list].map((x) => (x.id === id ? { ...x, attachments: [...(x.attachments || []), attachment] } : x)) };
+}
+export function removeAttachment(s, list, id, attachmentId) {
+  if (!ATTACHMENT_LISTS.includes(list)) fail("Cadastro inválido.");
+  const row = (s[list] || []).find((x) => x.id === id);
+  if (!row || !(row.attachments || []).some((a) => a.id === attachmentId)) fail("Anexo não encontrado.");
+  return {
+    ...s,
+    [list]: s[list].map((x) => {
+      if (x.id !== id) return x;
+      const { attachments, ...rest } = x;
+      const left = attachments.filter((a) => a.id !== attachmentId);
+      return left.length ? { ...rest, attachments: left } : rest;
+    }),
+  };
+}
+
 export function projection(
   s,
   through,

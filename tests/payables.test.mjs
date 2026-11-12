@@ -1,0 +1,64 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { emptyState, balance, validateBackup, deleteTransaction } from "../src/finance.mjs";
+import { addPayable, payDebt, undoPayablePayment, payableBalance, addReceivable, addAttachment, removeAttachment } from "../src/planning.mjs";
+import { trashTransaction } from "../src/trash.mjs";
+
+const base = () => ({ ...emptyState(), accounts: [{ id: "a", name: "Conta", initial: 100000 }] });
+const debt = () => addPayable(base(), { person: "Carlos", description: "Empréstimo", amount: 30000, date: "2026-11-01", dueDate: "2026-12-01" });
+const att = (n = 1) => ({ id: "x" + n, name: "Print da conversa", file: `x${n}-print.jpg`, mime: "image/jpeg", size: 1234 });
+
+test("Quem eu devo: pagar cria despesa na conta, reduz o saldo da dívida e desfazer devolve", () => {
+  let s = debt();
+  const id = s.payables[0].id;
+  assert.equal(payableBalance(s.payables[0]), 30000);
+  s = payDebt(s, id, 10000, "a", "2026-11-05");
+  assert.equal(balance(s, "a"), 90000);
+  assert.equal(payableBalance(s.payables[0]), 20000);
+  assert.equal(s.transactions[0].type, "expense");
+  assert.throws(() => payDebt(s, id, 20001, "a", "2026-11-05"));
+  assert.throws(() => payDebt(s, id, 100, "a", "2026-10-01"));
+  assert.throws(() => deleteTransaction(s, s.transactions[0].id));
+  assert.throws(() => trashTransaction(s, s.transactions[0].id));
+  s = validateBackup(JSON.parse(JSON.stringify(s)));
+  s = undoPayablePayment(s, id, s.payables[0].payments[0].id);
+  assert.equal(balance(s, "a"), 100000);
+  assert.equal(s.transactions.length, 0);
+});
+test("Quem eu devo: dados inválidos são recusados e o backup confere o histórico", () => {
+  assert.throws(() => addPayable(base(), { person: "", description: "x", amount: 100, date: "2026-11-01" }));
+  assert.throws(() => addPayable(base(), { person: "A", description: "x", amount: 0, date: "2026-11-01" }));
+  assert.throws(() => addPayable(base(), { person: "A", description: "x", amount: 100, date: "2026-11-02", dueDate: "2026-11-01" }));
+  let s = debt();
+  s = payDebt(s, s.payables[0].id, 5000, "a", "2026-11-05");
+  const broken = structuredClone(s);
+  broken.payables[0].payments[0].amount = 6000;
+  assert.throws(() => validateBackup(broken));
+  const orphan = structuredClone(s);
+  orphan.payables[0].payments = [];
+  assert.throws(() => validateBackup(orphan));
+  const old = { ...base() };
+  delete old.payables;
+  assert.deepEqual(validateBackup(old).payables, []);
+});
+test("Anexos de dívida: limite, validação e remoção; backup antigo sem anexos continua válido", () => {
+  let s = debt();
+  const id = s.payables[0].id;
+  s = addAttachment(s, "payables", id, att(1));
+  assert.equal(s.payables[0].attachments.length, 1);
+  assert.throws(() => addAttachment(s, "payables", id, { ...att(2), file: "../x.jpg" }));
+  assert.throws(() => addAttachment(s, "payables", id, { ...att(2), name: "" }));
+  assert.throws(() => addAttachment(s, "outra", id, att(2)));
+  for (let n = 2; n <= 10; n++) s = addAttachment(s, "payables", id, att(n));
+  assert.throws(() => addAttachment(s, "payables", id, att(11)));
+  assert.doesNotThrow(() => validateBackup(JSON.parse(JSON.stringify(s))));
+  const bad = structuredClone(s);
+  bad.payables[0].attachments[0].file = "../fora.jpg";
+  assert.throws(() => validateBackup(bad));
+  s = removeAttachment(s, "payables", id, "x1");
+  assert.equal(s.payables[0].attachments.length, 9);
+  let r = addReceivable(base(), { person: "Ana", description: "Rateio", amount: 5000, date: "2026-11-01" });
+  r = addAttachment(r, "receivables", r.receivables[0].id, att(1));
+  r = removeAttachment(r, "receivables", r.receivables[0].id, "x1");
+  assert.equal("attachments" in r.receivables[0], false);
+});

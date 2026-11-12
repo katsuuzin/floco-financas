@@ -17,11 +17,10 @@ const groups: [string, Item[]][] = [
         route: { name: "cards" },
       },
       {
-        label: "Categorias",
+        label: "Categorias e tags",
         icon: "layers",
         route: { name: "tool", id: "categories" },
       },
-      { label: "Tags", icon: "tag", route: { name: "tool", id: "tags" } },
     ],
   ],
   [
@@ -42,24 +41,16 @@ const groups: [string, Item[]][] = [
     [
       { label: "Recorrências", icon: "repeat", route: { name: "recurrences" } },
       {
-        label: "Parcelamentos",
+        label: "Dívidas e contratos",
         icon: "calendar",
-        route: { name: "installments" },
+        detail: "Parcelamentos, financiamentos e empréstimos",
+        route: { name: "debts" },
       },
       {
-        label: "Financiamentos",
-        icon: "home",
-        route: { name: "contracts", type: "financing" },
-      },
-      {
-        label: "Empréstimos",
-        icon: "dollar-sign",
-        route: { name: "contracts", type: "loan" },
-      },
-      {
-        label: "Quem me deve",
+        label: "Entre pessoas",
         icon: "users",
-        route: { name: "tool", id: "receivables" },
+        detail: "Quem me deve e quem eu devo",
+        route: { name: "people" },
       },
     ],
   ],
@@ -67,26 +58,16 @@ const groups: [string, Item[]][] = [
     "Analisar",
     [
       {
-        label: "Relatório personalizado",
-        icon: "sliders",
-        route: { name: "tool", id: "reports" },
-      },
-      {
-        label: "Relatórios avançados",
+        label: "Relatórios",
         icon: "bar-chart-2",
         route: { name: "reports" },
-        detail: "Fluxo de caixa, comparações, PDF",
+        detail: "Personalizado, fluxo de caixa, comparações, PDF",
       },
     ],
   ],
   [
     "Ferramentas",
     [
-      {
-        label: "Importar comprovante",
-        icon: "camera",
-        route: { name: "receipt" },
-      },
       {
         label: "Importar e exportar",
         icon: "file-text",
@@ -136,12 +117,6 @@ export default function MoreScreen() {
             onPress={() => nav.setTab("analysis")}
           />
         )}
-        <Row
-          icon="settings"
-          label="Configurações"
-          detail="Aparência, segurança, backup e dados"
-          onPress={() => nav.push({ name: "settings" })}
-        />
       </Group>
       {groups.map(([title, items]) => (
         <Group key={title} title={title}>

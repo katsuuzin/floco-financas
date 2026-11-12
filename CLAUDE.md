@@ -21,6 +21,7 @@ px tsc --noEmit
 
 ## Notas do build e do Android (aprendidas)
 - O NDK/CMake falha no link (símbolos do libc++) se o SDK está num caminho com espaço. O build-android.ps1 já mapeia o SDK para uma letra livre (R: a W:) com subst e desfaz no fim. Não precisa fazer nada à mão.
+- A cópia de build fica em C:\fw (padrão do build-android.ps1). Em pasta longa (ex.: C:\Users\Kat\AndroidBuild\floco-work) o CMake do react-native-reanimated passa de 260 caracteres e o ninja falha no mkdir. A pasta antiga AndroidBuild\floco-work não é mais usada.
 - O voltar do Android depende de android:enableOnBackInvokedCallback="false" no AndroidManifest.xml. Com "true", o React Native só trata o voltar em aparelhos Android 16+; do 13 ao 15 o app sairia. Um prebuild reverteria isso (mais um motivo para nunca rodar).
 - Teclado e telas com barra fixa: o app usa edge-to-edge e o Android não redimensiona a tela; use KeyboardAvoidingView (como a rota shopping em App.tsx).
 

@@ -1,4 +1,5 @@
 import { visibleAccounts } from "./accountOrder.mjs";
+import { DateField } from "./ui/kit";
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -136,7 +137,10 @@ export default function NotificationsPanel({
       </View>
     </View>
   );
-  const field = (key: string, label: string) => (
+  const field = (key: string, label: string) =>
+    key === "date" ? (
+      <DateField label={label.replace(/\s*\(AAAA-MM-DD\)/, "")} value={form.date} onChange={(v) => setForm({ ...form, date: v })} />
+    ) : (
     <View style={{ marginVertical: 8 }}>
       {text(label, true)}
       <TextInput
@@ -155,7 +159,7 @@ export default function NotificationsPanel({
         }}
       />
     </View>
-  );
+    );
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <View style={{ padding: 16, borderBottomWidth: 1, borderColor: c.line }}>

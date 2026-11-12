@@ -7,28 +7,46 @@ import { uid, parseMoney, money, today } from "./finance.mjs";
 import { applyDeal, validateDeal } from "./shoppingDeals.mjs";
 import { markStaple, staplesToRestock } from "./shoppingStaples.mjs";
 import { productKey } from "./shoppingPurchases.mjs";
-import { createList, flattenLists, fromTemplate, migrateToLists, renameList } from "./shoppingLists.mjs";
-import { MAIN_LIST, addCents, MAX_ITEMS, MAX_NAME, SHOPPING_CATEGORIES, sanitizeShoppingItems, sanitizeItemDeal } from "./shoppingData.mjs";
+import { createList, flattenLists, fromTemplate, migrateToLists, renameList, visibleLayout } from "./shoppingLists.mjs";
+import { MAIN_LIST, addCents, ITEM_STATUSES, MAX_DETAILS, MAX_ITEMS, MAX_NAME, SHOPPING_CATEGORIES, sanitizeShoppingItems, sanitizeItemDeal } from "./shoppingData.mjs";
 
-export { MAIN_LIST, MAX_ITEMS, MAX_NAME, SHOPPING_CATEGORIES, sanitizeShoppingItems };
+export { ITEM_STATUSES, MAIN_LIST, MAX_ITEMS, MAX_NAME, SHOPPING_CATEGORIES, sanitizeShoppingItems };
+// Títulos dos grupos especiais da lista (não são categorias).
+export const LATER_GROUP = "Para outra compra";
+export const CART_GROUP = "No carrinho";
 
 // Palavra-chave → categoria (dicionário próprio do Floco).
+// A ordem importa: a primeira que casar vence (ex.: "doce de leite" é doce, "papel higiênico" é higiene).
 const KEYWORDS = [
-  [/\b(alface|tomates?|cebolas?|batatas?|cenouras?|alho|piment[aã]o|abobrinha|br[oó]colis|couve|banana|ma[cç][aã]s?|laranjas?|lim[aã]o|morango|mam[aã]o|abacate|cheiro-verde)\b/, "Hortifrúti"],
-  [/\b(carne|frango|picanha|alcatra|ac[eé]m|lingui[cç]a|bacon|peixe|til[aá]pia|costela|patinho|moída)\b/, "Carnes e peixes"],
-  [/\b(leite|iogurte|manteiga|queijo|presunto|requeij[aã]o|creme de leite|mortadela)\b/, "Frios e laticínios"],
+  [/\b(fraldas?|len[cç]os? umedecidos?|papinhas?|mamadeiras?|chupetas?|pomada para assadura)\b/, "Bebê"],
+  [/\b(rem[eé]dios?|dipirona|paracetamol|ibuprofeno|curativos?|band-?aid|vitaminas?|protetor solar|term[oô]metro|soro fisiol[oó]gico|[aá]lcool em gel)\b/, "Farmácia"],
+  [/\b(doce de leite|leite condensado|chocolates?|biscoitos?|bolachas?|salgadinhos?|balas?|chicletes?|pipoca|amendoim|wafer|bombons?|gelatina)\b/, "Doces e lanches"],
+  [/\b(caf[eé]|cereal|cereais|achocolatado|granola|aveia|ch[aá])\b/, "Matinais"],
+  [/\b(cervejas?|vinhos?|cacha[cç]a|vodka|whisky|u[ií]sque|gin|espumante|licor)\b/, "Bebidas alcoólicas"],
+  [/\b(farinha|fub[aá]|polvilho|amido de milho)\b/, "Mercearia"],
+  [/\b(banana|ma[cç][aã]s?|laranjas?|lim[aã]o|lim[oõ]es|morangos?|mam[aã]o|abacate|uvas?|mangas?|melancia|mel[aã]o|abacaxi|peras?|kiwi|goiaba|maracuj[aá]|tangerina|mexerica)\b/, "Frutas"],
+  [/\b(alface|tomates?|cebolas?|batatas?|cenouras?|alho|piment[aã]o|abobrinha|br[oó]colis|couve|cheiro-verde|pepino|beterraba|ab[oó]bora|mandioca|r[uú]cula|espinafre|chuchu|quiabo)\b/, "Hortifrúti"],
+  [/\b(carne|frango|picanha|alcatra|ac[eé]m|lingui[cç]a|bacon|peixe|til[aá]pia|costela|patinho|moída|salm[aã]o|sardinha|camar[aã]o)\b/, "Carnes e peixes"],
+  [/\b(leite|iogurte|manteiga|queijo|presunto|requeij[aã]o|creme de leite|mortadela|margarina|peito de peru)\b/, "Frios e laticínios"],
   [/\b(p[aã]o|p[aã]es|bolo|torrada|bisnaguinha)\b/, "Padaria"],
-  [/\b(arroz|feij[aã]o|macarr[aã]o|farinha|a[cç][uú]car|sal|caf[eé]|[oó]leo|azeite|molho|ovos?|aveia|tempero)\b/, "Mercearia"],
-  [/\b(cerveja|vinho|refrigerante|suco|[aá]gua|ch[aá])\b/, "Bebidas"],
+  [/\b(arroz|feij[aã]o|macarr[aã]o|farinha|a[cç][uú]car|sal|[oó]leo|azeite|molho|ovos?|tempero|milho|ervilha|atum|extrato de tomate)\b/, "Mercearia"],
+  [/\b(refrigerante|suco|[aá]gua|energ[eé]tico|isot[oô]nico)\b/, "Bebidas"],
   [/\b(congelad[oa]s?|pizza|lasanha|nuggets|hamb[uú]rguer|sorvete|polpa)\b/, "Congelados"],
-  [/\b(detergente|sab[aã]o em p[oó]|amaciante|desinfetante|esponja|alvejante|[aá]gua sanit[aá]ria)\b/, "Limpeza"],
-  [/\b(papel higi[eê]nico|sabonete|shampoo|condicionador|creme dental|escova de dente|desodorante|fio dental|absorvente)\b/, "Higiene"],
-  [/\b(ra[cç][aã]o|areia|petisco)\b/, "Pet"],
+  [/\b(papel higi[eê]nico|sabonete|shampoo|xampu|condicionador|creme dental|pasta de dente|escova de dente|desodorante|fio dental|absorvente|cotonete|aparelho de barbear)\b/, "Higiene"],
+  [/\b(l[aâ]mpadas?|pilhas?|velas?|papel alum[ií]nio|filme pl[aá]stico|sacos? de lixo|f[oó]sforos?|guardanapos?|copos? descart[aá]veis|pratos? descart[aá]veis|isqueiro)\b/, "Casa e utilidades"],
+  [/\b(detergente|sab[aã]o em p[oó]|sab[aã]o l[ií]quido|amaciante|desinfetante|esponja|alvejante|[aá]gua sanit[aá]ria|multiuso|lustra-m[oó]veis|papel toalha)\b/, "Limpeza"],
+  [/\b(ra[cç][aã]o|areia|petisco|sach[eê] para (gato|cachorro))\b/, "Pet"],
 ];
 
+// `\b` do JavaScript não vê letra acentuada como letra ("café" nunca casava). Por isso texto e regras
+// são comparados sem acento.
+const plain = (value) => value.normalize("NFD").replace(/\p{M}/gu, "");
+const PLAIN_KEYWORDS = KEYWORDS.map(([re, cat]) => [new RegExp(plain(re.source), re.flags), cat]);
+
+/** @returns {string} */
 export function categorize(name) {
-  const text = String(name || "").toLowerCase();
-  for (const [re, cat] of KEYWORDS) if (re.test(text)) return cat;
+  const text = plain(String(name || "").toLowerCase());
+  for (const [re, cat] of PLAIN_KEYWORDS) if (/** @type {RegExp} */ (re).test(text)) return String(cat);
   return "Outros";
 }
 
@@ -87,6 +105,20 @@ export function activeShoppingState(state) {
   return selected.length === items.length ? state : { ...state, shoppingItems: selected };
 }
 
+// Itens de várias listas juntos (Modo compra com mais de uma lista). Sem `listIds`, vale a lista ativa.
+export function tripScopeState(state, listIds) {
+  const ids = Array.isArray(listIds) ? listIds.filter((id) => typeof id === "string") : [];
+  if (!ids.length) return activeShoppingState(state);
+  const wanted = new Set(ids);
+  return { ...state, shoppingItems: itemsOf(state).filter((item) => wanted.has(item.listId ?? MAIN_LIST)) };
+}
+
+// Foto do item: só o nome do arquivo (a imagem fica no aparelho e não entra no backup). null tira a foto.
+export function setItemPhoto(state, id, name) {
+  if (name !== null && !(typeof name === "string" && /^[A-Za-z0-9_-]{1,100}\.jpg$/u.test(name))) throw Error("Foto inválida.");
+  return mapItem(state, id, ({ photo, ...item }) => name ? { ...item, photo: name } : item);
+}
+
 export function editActiveShoppingItems(state, change) {
   const scope = activeShoppingState(state);
   const id = activeShoppingList(state);
@@ -113,7 +145,8 @@ export function createShoppingList(state, name, template) {
   return { ...next, shoppingListId: id, shoppingItems: [...itemsOf(state), ...result.items] };
 }
 
-export function addShoppingItem(state, text, { id = uid(), now = Date.now() } = {}) {
+// `category`: escolha manual na barra de adicionar; sem ela (ou inválida), a categoria é adivinhada pelo nome.
+export function addShoppingItem(state, text, { id = uid(), now = Date.now(), category = /** @type {string | undefined} */ (undefined) } = {}) {
   const items = itemsOf(state);
   if (items.length >= MAX_ITEMS) throw Error("A lista chegou ao limite de itens.");
   const { qty, unit, name } = parseItemText(text);
@@ -124,7 +157,7 @@ export function addShoppingItem(state, text, { id = uid(), now = Date.now() } = 
     qty,
     unit,
     priceCents: null,
-    category: categorize(name),
+    category: SHOPPING_CATEGORIES.includes(category) ? category : categorize(name),
     inCart: false,
     createdAt: now,
   };
@@ -137,7 +170,19 @@ const mapItem = (state, id, fn) => {
   return { ...state, shoppingItems: items.map((i) => (i.id === id ? fn(i) : i)) };
 };
 
-export const toggleCart = (state, id) => mapItem(state, id, (i) => ({ ...i, inCart: !i.inCart }));
+// Entrar no carrinho grava `cartAt` (o mais recente fica no topo) e limpa Faltou/Depois.
+export const toggleCart = (state, id, now = Date.now()) => mapItem(state, id, ({ status, cartAt, ...i }) =>
+  i.inCart ? { ...i, inCart: false } : { ...i, inCart: true, cartAt: now });
+
+// Estado do item: "missing" (faltou no mercado), "later" (fica para outra compra) ou null (normal).
+// Com estado, o item sai do carrinho.
+export function setItemStatus(state, id, status) {
+  if (status !== null && !ITEM_STATUSES.includes(status)) throw Error("Estado de item inválido.");
+  return mapItem(state, id, ({ status: old, cartAt, ...i }) => status ? { ...i, inCart: false, status } : { ...i });
+}
+
+// Itens que contam para a compra atual (os de "Depois" ficam de fora).
+export const currentItemsOf = (state) => itemsOf(state).filter((i) => i.status !== "later");
 
 // text vazio limpa o preço; senão usa o mesmo formato de valores do Floco ("12,90").
 export function setItemPrice(state, id, text) {
@@ -200,9 +245,21 @@ export function restockStaples(state, date = today()) {
     ({ ...entry, id: uid(), priceCents: null, createdAt: Date.now() }))] };
 }
 
-export function configureShoppingItem(state, id, { text, price, category, everyDays, deal }) {
+function withExtras(entry, { details, pricePer }) {
+  const { details: oldDetails, pricePer: oldPer, ...base } = entry;
+  const text = details === undefined ? oldDetails : typeof details === "string" ? details.trim() : "";
+  if (text && text.length > MAX_DETAILS) throw Error(`Use até ${MAX_DETAILS} caracteres nos detalhes.`);
+  const per = pricePer === undefined ? oldPer : pricePer;
+  if (per != null && per !== "kg") throw Error("Forma de preço inválida.");
+  if (per === "kg" && base.unit !== "g" && base.unit !== "kg") throw Error("Preço por quilo vale só para itens em g ou kg.");
+  return { ...base, ...(text ? { details: text } : {}), ...(per === "kg" ? { pricePer: "kg" } : {}) };
+}
+
+// `details` e `pricePer` são opcionais: `undefined` mantém o que o item já tem.
+export function configureShoppingItem(state, id, { text, price, category, everyDays, deal, details = /** @type {string | undefined} */ (undefined), pricePer = /** @type {"kg" | null | undefined} */ (undefined) }) {
   const old = itemsOf(state).find((item) => item.id === id);
   let next = setItemCategory(setItemPrice(renameItem(state, id, text), id, price), id, category);
+  if (details !== undefined || pricePer !== undefined) next = mapItem(next, id, (entry) => withExtras(entry, { details, pricePer }));
   const item = itemsOf(next).find((entry) => entry.id === id);
   const promotion = deal ? sanitizeItemDeal(deal) : undefined;
   if (deal && !promotion) throw Error(validateDeal(deal).reason || "Confira a promoção.");
@@ -226,13 +283,18 @@ export function configureShoppingItem(state, id, { text, price, category, everyD
     { ...entry, lastRestockedAt: record.lastRestockedAt } : entry) };
 }
 
+// Por quilo (`pricePer: "kg"`, só em g ou kg): total = preço do quilo × peso. Sem o campo, vale o de antes.
+const kilos = (item) => item.unit === "g" ? item.qty / 1000 : item.qty;
 export const lineTotal = (item) =>
   item.priceCents == null ? null : item.deal ? applyDeal(item, item.deal).totalCents :
+    item.pricePer === "kg" && (item.unit === "g" || item.unit === "kg") ?
+      Math.min(Number.MAX_SAFE_INTEGER, Math.round(item.priceCents * kilos(item))) :
     item.unit ? item.priceCents : Math.min(Number.MAX_SAFE_INTEGER, item.priceCents * item.qty);
 
 // Resumo do bloco da Início: só os pendentes entram no total estimado.
 export function shoppingSummary(state) {
-  const items = itemsOf(activeShoppingState(state));
+  const all = itemsOf(activeShoppingState(state));
+  const items = all.filter((i) => i.status !== "later");
   const pending = items.filter((i) => !i.inCart);
   let estimatedCents = 0;
   let unpriced = 0;
@@ -245,6 +307,8 @@ export function shoppingSummary(state) {
     total: items.length,
     pending: pending.length,
     inCart: items.length - pending.length,
+    later: all.length - items.length,
+    missing: pending.filter((i) => i.status === "missing").length,
     estimatedCents,
     unpriced,
     preview: pending.slice(0, 3),
@@ -253,15 +317,20 @@ export function shoppingSummary(state) {
 
 // Itens agrupados por categoria (pendentes primeiro, no carrinho no fim).
 export function groupByCategory(state) {
+  // Pendentes por categoria, depois "Para outra compra", depois "No carrinho" (o mais recente no topo).
+  const rank = (c) => c === CART_GROUP ? 2 : c === LATER_GROUP ? 1 : 0;
   const order = (c) => SHOPPING_CATEGORIES.indexOf(c);
   const groups = new Map();
   for (const i of itemsOf(state)) {
-    const key = i.inCart ? "No carrinho" : i.category;
+    const key = i.inCart ? CART_GROUP : i.status === "later" ? LATER_GROUP : i.category;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(i);
   }
+  const cart = groups.get(CART_GROUP);
+  if (cart) groups.set(CART_GROUP, cart.map((item, index) => ({ item, index }))
+    .sort((a, b) => (b.item.cartAt || 0) - (a.item.cartAt || 0) || a.index - b.index).map(({ item }) => item));
   return [...groups.entries()]
-    .sort(([a], [b]) => (a === "No carrinho") - (b === "No carrinho") || order(a) - order(b))
+    .sort(([a], [b]) => rank(a) - rank(b) || order(a) - order(b))
     .map(([category, items]) => ({ category, items }));
 }
 
@@ -269,7 +338,7 @@ const qtyLabel = (i) => (i.unit ? `${i.qty} ${i.unit} de ` : i.qty > 1 ? `${i.qt
 
 // Texto para compartilhar (só pendentes).
 export function shareText(state) {
-  const pending = groupByCategory(state).filter((g) => g.category !== "No carrinho");
+  const pending = groupByCategory(state).filter((g) => g.category !== CART_GROUP && g.category !== LATER_GROUP);
   if (!pending.length) return "Lista de compras vazia.";
   const lines = ["Lista de compras"];
   for (const g of pending) {
@@ -291,6 +360,9 @@ export function keepShoppingOnRestore(backup, current) {
     if (backup.shoppingLists === undefined && current.shoppingLists !== undefined) next.shoppingLists = current.shoppingLists;
     if (backup.shoppingListId === undefined && current.shoppingListId !== undefined) next.shoppingListId = current.shoppingListId;
   }
+  // Ordem e divisores só seguem a lista atual quando o backup não traz listas próprias.
+  if (backup.shoppingLists === undefined && backup.shoppingListLayout === undefined && current.shoppingListLayout !== undefined &&
+    next.shoppingLists === current.shoppingLists) next.shoppingListLayout = current.shoppingListLayout;
   if (backup.shoppingListTemplates === undefined && current.shoppingListTemplates !== undefined)
     next.shoppingListTemplates = current.shoppingListTemplates;
   if (backup.shoppingPurchases === undefined) next.shoppingPurchases = current.shoppingPurchases || [];
@@ -332,4 +404,16 @@ export function purchaseDraft(state) {
     amountText: totalCents > 0 ? (totalCents / 100).toFixed(2).replace(".", ",") : "",
     description: "Compra de mercado",
   };
+}
+
+// Visão geral (1.12): uma entrada por linha da tela, na ordem do layout. Cartões trazem o resumo de cada lista.
+export function listOverview(state) {
+  const lists = new Map(shoppingListsOf(state).map((list) => [list.id, list]));
+  return visibleLayout(state).map((row) => {
+    if (row.kind === "divider") return row;
+    const list = lists.get(row.id);
+    const sum = shoppingSummary({ ...state, shoppingLists: state.shoppingLists?.length ? state.shoppingLists : [list], shoppingListId: list.id });
+    return { kind: "list", id: list.id, name: list.name, color: list.color ?? null,
+      total: sum.total, pending: sum.pending, inCart: sum.inCart, later: sum.later, estimatedCents: sum.estimatedCents };
+  });
 }

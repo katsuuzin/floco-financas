@@ -31,14 +31,14 @@ function readLocal(text: string): { items: Item[]; notice: string } {
 }
 const PAGE_SIZE = 20;
 
-export default function ShoppingPastePanel({ onClose }: { onClose: () => void }) {
+export default function ShoppingPastePanel({ onClose, initialText = "" }: { onClose: () => void; initialText?: string }) {
   const { state, perform } = useStore();
   const nav = useNav();
   const cfg = shoppingAIConfig(state.settings.ai);
   const provider = cfg?.provider;
   const providerLabel = provider ? PROVIDERS[provider].label : "";
   const [hasKey, setHasKey] = useState(false);
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialText);
   const [recipeMode, setRecipeMode] = useState(false);
   const [servings, setServings] = useState("1");
   const [target, setTarget] = useState("1");

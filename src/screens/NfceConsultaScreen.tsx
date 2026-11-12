@@ -222,7 +222,7 @@ export default function NfceConsultaScreen({ info }: { info: any }) {
             <Button title={picks.length === 1 ? "Marcar 1 item como comprado" : `Marcar ${picks.length} itens como comprados`} icon="check" disabled={picks.length === 0} onPress={() => void applyMatches()} />
           )}
           <Button title="Registrar despesa" icon="dollar-sign" secondary={!!conf && conf.matches.length > 0} onPress={toExpense} />
-          <Button title="Concluir" secondary onPress={() => nav.replace({ name: "shopping" })} />
+          <Button title="Concluir" secondary onPress={() => nav.replace({ name: "shoppingList" })} />
         </View>
       </>
     );
