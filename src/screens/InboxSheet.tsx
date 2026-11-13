@@ -100,7 +100,7 @@ export default function InboxSheet({ row, editDate = false, onClose, onDone }: {
         onClose={requestClose}
         headerAction={f.kind === "denied" ? undefined : (
           <RowActions title="Pendência" actions={[
-            { label: items.length ? `Editar itens (${items.length})` : "Dividir em itens", icon: "list", onPress: () => setSplitOpen(true) },
+            ...(income ? [] : [{ label: items.length ? `Editar itens (${items.length})` : "Dividir em itens", icon: "list" as any, onPress: () => setSplitOpen(true) }]),
             ...(items.length ? [{ label: "Voltar a um lançamento só", icon: "rotate-ccw" as any, onPress: () => setItems([]) }] : []),
             { label: "Descartar pendência", icon: "trash-2", danger: true, onPress: () => setDropAsk(true) },
           ]} />

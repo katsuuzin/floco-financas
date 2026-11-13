@@ -469,6 +469,13 @@ function Shell({
   const headerAction = useHeaderActionValue();
   const reduceMotion = useReducedMotion();
   const [navHeight, setNavHeight] = useState(70);
+  // Com o teclado aberto, a barra inferior sai da frente e a tela encolhe até o topo do teclado.
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardDidShow", () => setKeyboardOpen(true));
+    const hide = Keyboard.addListener("keyboardDidHide", () => setKeyboardOpen(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   const firstRun =
     !state.settings.onboarded &&
@@ -494,8 +501,8 @@ function Shell({
     >
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        // Telas com campo ou barra fora da rolagem: sem isso o teclado os cobre no Android.
-        behavior={Platform.OS === "ios" || top?.name === "shoppingTrip" || top?.name === "scanProduct" || top?.name === "scanNota" || top?.name === "imports" || top?.name === "receipt" || top?.name === "security" || top?.name === "tool" || top?.name === "notifications" || top?.name === "form" ? "padding" : undefined}
+        // Android com borda a borda não redimensiona a janela: a tela sempre encolhe até o topo do teclado.
+        behavior="padding"
       >
         {top?.name !== "form" && (
           <View style={[s.header, { backgroundColor: pageBg }]}>
@@ -580,7 +587,7 @@ function Shell({
           ) : content}
         </ScrollView>
         )}
-        {!top && (
+        {!top && !keyboardOpen && (
           <View
             accessibilityRole="tablist"
             onLayout={(e) => setNavHeight(e.nativeEvent.layout.height)}
@@ -622,7 +629,7 @@ function Shell({
           </View>
         )}
       </KeyboardAvoidingView>
-      <Snackbar notice={notice} action={noticeAction} onClose={() => setNotice("")} hasNav={!top} navHeight={navHeight} />
+      <Snackbar notice={notice} action={noticeAction} onClose={() => setNotice("")} hasNav={!top && !keyboardOpen} navHeight={navHeight} />
       <AddSheet visible={adding} onClose={() => setAdding(false)} />
     </SafeAreaView>
   );
@@ -725,6 +732,20 @@ function renderRoute(r: Route, { state, c, onChange, onPinChange, updates, stora
   return null;
 }
 
+const SHORT_TAB: Record<string, string> = {
+  "Lista de compras": "Compras",
+  Financiamentos: "Financ.",
+  Parcelamentos: "Parcelas",
+  Recorrências: "Recorrentes",
+  Empréstimos: "Empréstimos",
+  "Fluxo de caixa": "Fluxo",
+  "Cartões de crédito": "Cartões",
+};
+function shortTabLabel(label: string) {
+  if (label.includes("›")) return label.split("›").pop()!.trim();
+  return SHORT_TAB[label] || label;
+}
+
 function TabButton({
   item,
   onPress,
@@ -740,9 +761,9 @@ function TabButton({
   useEffect(() => {
     grow.value = reduce ? (on ? 1 : 0) : withTiming(on ? 1 : 0, { duration: 160 });
   }, [on, reduce, grow]);
-  const barStyle = useAnimatedStyle(() => ({ transform: [{ scaleX: grow.value }] }));
-  // Rótulo curto na barra ("Entre pessoas › Me devem" vira "Me devem"); o falado continua completo.
-  const shown = item.label.includes("›") ? item.label.split("›").pop()!.trim() : item.label === "Lista de compras" ? "Compras" : item.label;
+  const barStyle = useAnimatedStyle(() => ({ opacity: grow.value, transform: [{ scaleX: 0.6 + 0.4 * grow.value }] }));
+  // Rótulo curto na barra; o falado (accessibilityLabel) continua completo.
+  const shown = shortTabLabel(item.label);
   return (
     <MotionPressable
       kind="chip"
@@ -753,21 +774,20 @@ function TabButton({
       onPress={onPress || (() => nav.setTab(item.key))}
       style={s.tab}
     >
-      <Animated.View
-        style={[s.bar, { backgroundColor: c.primary }, barStyle]}
-      />
       <View style={s.indicator}>
+        <Animated.View style={[s.pill, { backgroundColor: c.soft }, barStyle]} />
         <I name={item.icon} color={on ? c.primary : c.muted} />
       </View>
       <T
-        maxFontSizeMultiplier={1.2}
+        maxFontSizeMultiplier={1.15}
         numberOfLines={1}
         adjustsFontSizeToFit
-        minimumFontScale={0.75}
+        minimumFontScale={0.8}
         style={{
           width: "100%",
+          paddingHorizontal: 4,
           textAlign: "center",
-          fontSize: 12,
+          fontSize: 11,
           color: on ? c.primary : c.muted,
           fontFamily: on ? "SoraSemi" : "Sora",
         }}
@@ -932,17 +952,17 @@ const s = StyleSheet.create({
     minHeight: 60,
     gap: 2,
   },
-  indicator: { paddingHorizontal: 16, paddingVertical: 4, borderRadius: 16 },
+  indicator: { paddingHorizontal: 16, paddingVertical: 4, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  pill: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, borderRadius: 16 },
   add: {
     width: 58,
     height: 58,
     borderRadius: 29,
     alignItems: "center",
     justifyContent: "center",
-    marginHorizontal: 6,
+    marginHorizontal: 8,
     elevation: 4,
   },
-  bar: { width: 22, height: 3, borderRadius: 2, marginBottom: 4 },
   snackbar: {
     position: "absolute",
     left: 16,

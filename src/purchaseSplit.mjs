@@ -33,7 +33,8 @@ export const sumItems = (items) => items.reduce((n, it) => n + itemCents(it), 0)
 
 // Linha digitada → item em centavos. Lança Error com mensagem para a tela.
 export function parseItem(input) {
-  const name = String(input.name || "").trim().slice(0, 80);
+  const typed = String(input.name || "").trim().slice(0, 80);
+  const name = typed.charAt(0).toLocaleUpperCase("pt-BR") + typed.slice(1);
   if (!name) throw Error("Dê um nome ao item.");
   const qty = input.qty === "" || input.qty == null ? 1 : Number(input.qty);
   if (!Number.isInteger(qty) || qty < 1 || qty > 999) throw Error("A quantidade deve ser de 1 a 999.");

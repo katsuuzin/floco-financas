@@ -40,7 +40,7 @@ export const DESTINATIONS = [
   ["projections", "Projeções", "trending-up"],
   ["recurrences", "Recorrências", "repeat"],
   ["installments", "Parcelamentos", "calendar"],
-  ["financings", "Financiamentos", "home"],
+  ["financings", "Financiamentos", "key"],
   ["loans", "Empréstimos", "dollar-sign"],
   ["receivables", "Entre pessoas › Me devem", "users"],
   ["payables", "Entre pessoas › Eu devo", "user-minus"],

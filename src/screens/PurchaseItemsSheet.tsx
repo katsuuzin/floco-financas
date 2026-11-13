@@ -36,6 +36,7 @@ export default function PurchaseItemsSheet({ state, total, fallback, items, onSa
   const fits = list.length > 0 && diff === 0;
   const guess = name.trim() ? guessItemCategory(state, name, fallback) : null;
 
+  const step = (d: number) => setQty(String(Math.min(999, Math.max(1, (Number(qty) || 1) + d))));
   const add = () => {
     try {
       const g = guessItemCategory(state, name, fallback);
@@ -68,19 +69,19 @@ export default function PurchaseItemsSheet({ state, total, fallback, items, onSa
         }
       >
         <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }} keyboardShouldPersistTaps="handled">
-          <View style={[k.row, { gap: 8, alignItems: "flex-end" }]}>
-            <View style={{ flex: 1 }}>
-              <TextInput accessibilityLabel="Nome do item" value={name} onChangeText={setName} placeholder="Item (ex.: gasolina)" placeholderTextColor={c.muted} style={field} />
+          <TextInput accessibilityLabel="Nome do item" value={name} onChangeText={setName} placeholder="Item (ex.: gasolina)" placeholderTextColor={c.muted} returnKeyType="next" style={field} />
+          <View style={[k.row, { gap: 6 }]}>
+            <View style={[k.row, { gap: 0, borderWidth: 1, borderColor: c.line, borderRadius: 24 }]} accessibilityRole="adjustable" accessibilityLabel="Quantidade" accessibilityValue={{ text: String(Number(qty) || 1) }}
+              accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
+              onAccessibilityAction={(e) => step(e.nativeEvent.actionName === "increment" ? 1 : -1)}>
+              <IconButton name="minus" label="Menos uma unidade" disabled={(Number(qty) || 1) <= 1} onPress={() => step(-1)} />
+              <TextInput accessibilityLabel="Quantidade (digite ou use mais e menos)" value={qty} onChangeText={(v) => setQty(v.replace(/\D/g, "").slice(0, 3))} onBlur={() => setQty(String(Math.max(1, Number(qty) || 1)))} keyboardType="number-pad" selectTextOnFocus style={{ width: 40, minHeight: 48, textAlign: "center", color: c.text, fontFamily: "SoraSemi", fontSize: 15 }} />
+              <IconButton name="plus" label="Mais uma unidade" disabled={(Number(qty) || 1) >= 999} onPress={() => step(1)} />
             </View>
-            <View style={{ width: 44 }}>
-              <TextInput accessibilityLabel="Quantidade" value={qty} onChangeText={(v) => setQty(v.replace(/\D/g, "").slice(0, 3))} keyboardType="number-pad" style={[field, { textAlign: "center" }]} />
-            </View>
-            <View style={{ width: 96 }}>
-              <TextInput accessibilityLabel="Valor de cada unidade em reais" value={normalizeMoneyText(unit)} onChangeText={(v) => setUnit(maskMoney(v, normalizeMoneyText(unit)).text)} keyboardType="number-pad" placeholder="0,00" placeholderTextColor={c.muted} style={[field, { textAlign: "right" }]} />
-            </View>
-            <IconButton name="plus" label="Adicionar item" onPress={add} />
+            <TextInput accessibilityLabel="Valor de cada unidade em reais" value={normalizeMoneyText(unit)} onChangeText={(v) => setUnit(maskMoney(v, normalizeMoneyText(unit)).text)} keyboardType="number-pad" placeholder="Valor (un.) 0,00" placeholderTextColor={c.muted} style={[field, { flex: 1, textAlign: "right" }]} />
+            <IconButton name="plus-circle" label="Adicionar item" onPress={add} />
           </View>
-          {guess && <Muted accessibilityLiveRegion="polite">Categoria: {categoryLabel(guess.category, guess.subcategory)}{guess.guessed ? "" : " (a da compra)"}</Muted>}
+          <Muted accessibilityLiveRegion="polite" style={{ minHeight: 20 }}>{guess ? `Categoria: ${categoryLabel(guess.category, guess.subcategory)}${guess.guessed ? "" : " (a da compra)"}` : " "}</Muted>
           {!!error && <T accessibilityRole="alert" accessibilityLiveRegion="assertive" style={{ color: c.red }}>{error}</T>}
           {list.length === 0 && <Muted>Adicione o que você comprou. Cada item vira um lançamento na sua categoria; o total da compra não muda.</Muted>}
           {list.length > 0 && (
@@ -91,8 +92,8 @@ export default function PurchaseItemsSheet({ state, total, fallback, items, onSa
                     onPress={() => setPick(it.id)} style={[k.row, { flex: 1, paddingVertical: 8 }]}>
                     <CategoryIcon look={lookOf(state, it.category || "Outros")} size={34} />
                     <View style={{ flex: 1, gap: 1 }}>
-                      <T numberOfLines={1} style={{ fontFamily: "SoraSemi", fontSize: 14 }}>{it.name}{it.qty > 1 ? `  ·  ${it.qty} × ${reais(it.unit)}` : ""}</T>
-                      <Muted numberOfLines={1}>{categoryLabel(it.category, it.subcategory)}</Muted>
+                      <T numberOfLines={1} style={{ fontFamily: "SoraSemi", fontSize: 14 }}>{it.name}</T>
+                      <Muted numberOfLines={1}>{it.qty > 1 ? `${it.qty} × ${reais(it.unit)} · ` : ""}{categoryLabel(it.category, it.subcategory)}</Muted>
                     </View>
                     <T style={{ fontFamily: "SoraSemi", fontVariant: ["tabular-nums"] }}>{reais(itemCents(it))}</T>
                   </MotionPressable>

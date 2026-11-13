@@ -1,8 +1,8 @@
 // Folha que sobe de baixo (kit do Floco, 1.12). Movimento próprio, medido na auditoria (A6) e recriado aqui:
 // abre em 380 ms com desaceleração forte, fecha em 200 ms acelerando para baixo; o fundo escurece e desfoca.
 // Com "remover animações" ligado: só esmaece (150 ms) e não desfoca.
-import React, { createContext, useCallback, useContext, useEffect, useRef } from "react";
-import { Modal, Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { Dimensions, Keyboard, Modal, Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { GestureDetector, GestureHandlerRootView, usePanGesture } from "react-native-gesture-handler";
@@ -19,6 +19,22 @@ const FADE = { duration: 150 };
 const DRAG_CLOSE = 120; // dp arrastados para baixo que fecham a folha
 const FLING_CLOSE = 900; // velocidade (dp/s) que fecha mesmo com pouco arraste
 
+// Altura do teclado na tela. O Android não redimensiona a janela (edge-to-edge), então a folha sobe sozinha.
+function useKeyboardHeight() {
+  const [h, setH] = useState(0);
+  useEffect(() => {
+    // Distância do topo do teclado até o fim da tela (a altura informada pode deixar de fora a barra de gestos).
+    const show = Keyboard.addListener("keyboardDidShow", (e) => {
+      const { screenY, height } = e.endCoordinates || ({} as any);
+      const gap = screenY ? Dimensions.get("screen").height - screenY : 0;
+      setH(Math.max(height || 0, gap));
+    });
+    const hide = Keyboard.addListener("keyboardDidHide", () => setH(0));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+  return h;
+}
+
 export function SheetModal({ title, onClose, children, footer, headerAction }: {
   title: string;
   onClose: () => void;
@@ -30,7 +46,8 @@ export function SheetModal({ title, onClose, children, footer, headerAction }: {
   const reduce = useReducedMotion();
   const target = useContext(BlurTargetContext);
   const { height } = useWindowDimensions();
-  const { bottom } = useSafeAreaInsets();
+  const { bottom, top } = useSafeAreaInsets();
+  const keyboard = useKeyboardHeight();
   const heading = useRef<ViewControl>(null);
   const offset = useSharedValue(reduce ? 0 : height);
   const shade = useSharedValue(0);
@@ -94,7 +111,7 @@ export function SheetModal({ title, onClose, children, footer, headerAction }: {
           <View style={[StyleSheet.absoluteFill, { backgroundColor: c.scrim }]} />
         </Animated.View>
         <Pressable style={s.fill} onPress={close} accessibilityRole="button" accessibilityLabel="Fechar" />
-        <Animated.View accessibilityViewIsModal style={[s.sheet, { backgroundColor: c.bg }, sheetStyle]}>
+        <Animated.View accessibilityViewIsModal style={[s.sheet, { backgroundColor: c.bg }, keyboard ? { marginBottom: keyboard, maxHeight: height - keyboard - top - 8 } : null, sheetStyle]}>
           <GestureDetector gesture={drag}>
             <View>
               <View style={[s.handle, { backgroundColor: c.line }]} />
@@ -108,8 +125,8 @@ export function SheetModal({ title, onClose, children, footer, headerAction }: {
             </View>
           </GestureDetector>
           <View style={{ flexShrink: 1 }}>{children}</View>
-          {footer ? <View style={[s.footer, { borderTopColor: c.line, paddingBottom: 16 + bottom }]}>{footer}</View>
-            : <View style={{ height: bottom }} />}
+          {footer ? <View style={[s.footer, { borderTopColor: c.line, paddingBottom: 16 + (keyboard ? 0 : bottom) }]}>{footer}</View>
+            : <View style={{ height: keyboard ? 0 : bottom }} />}
         </Animated.View>
       </GestureHandlerRootView>
     </Modal>
