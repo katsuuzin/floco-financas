@@ -203,3 +203,42 @@ const row = StyleSheet.create({
   icon: { width: 38, height: 38, borderRadius: 12, justifyContent: "center", alignItems: "center" },
   badge: { borderRadius: 8, paddingHorizontal: 7, paddingVertical: 1 },
 });
+
+// Compra dividida em itens: uma linha só (título, "N itens", total) que se expande para os itens.
+export function PurchaseGroupRow({ g, last = false }: { g: any; last?: boolean }) {
+  const { c } = useTheme();
+  const { state, show } = useStore();
+  const [open, setOpen] = useState(false);
+  const d = displayOf(state);
+  const first = g.items[0];
+  const account = state.accounts.find((a: any) => a.id === first.accountId);
+  const card = state.cards.find((a: any) => a.id === first.cardId);
+  const meta = [d.showTime && g.time ? g.time : "", `${g.items.length} ${g.items.length === 1 ? "item" : "itens"}`, card?.name || account?.name].filter(Boolean).join(" · ");
+  return (
+    <View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={`${g.title}, compra com ${g.items.length} ${g.items.length === 1 ? "item" : "itens"}, saída de ${show(g.amount)}. ${open ? "Recolher" : "Ver itens"}`}
+        onPress={() => setOpen(!open)}
+        android_ripple={{ color: c.soft }}
+        style={[row.tx, (!last || open) && k.hairline, { borderBottomColor: c.line }]}
+      >
+        <View style={[row.icon, { backgroundColor: c.bg }]} importantForAccessibility="no">
+          <I name="shopping-bag" size={18} color={c.primary} />
+        </View>
+        <View style={{ flex: 1, gap: 2 }}>
+          <T numberOfLines={1} style={{ fontFamily: "SoraSemi", fontSize: 14 }}>{g.title}</T>
+          <Muted numberOfLines={1}>{meta}</Muted>
+        </View>
+        <T {...fitAmount} style={{ fontFamily: "SoraSemi", fontSize: 14, fontVariant: ["tabular-nums"], color: c.text }}>−{show(g.amount)}</T>
+        <I name={open ? "chevron-up" : "chevron-down"} size={18} color={c.muted} />
+      </Pressable>
+      {open && g.items.map((t: any, i: number) => (
+        <View key={t.id} style={{ paddingLeft: 16, backgroundColor: c.bg + "66" }}>
+          <TransactionRow t={t} last={last && i === g.items.length - 1} />
+        </View>
+      ))}
+    </View>
+  );
+}

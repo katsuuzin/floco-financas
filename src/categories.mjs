@@ -6,7 +6,7 @@
 const RAW = [
   ["Moradia", "expense", ["Aluguel", "Condomínio", "Energia / Água / Gás", "Móveis / Eletrodomésticos", "Outros"]],
   ["Alimentação", "expense", ["Supermercado", "Restaurante", "Delivery", "Outros"]],
-  ["Transporte", "expense", ["Combustível", "Uber / 99", "Transporte Público", "Estacionamento / Pedágio", "Outros"]],
+  ["Transporte", "expense", ["Combustível", "Manutenção", "Uber / 99", "Transporte Público", "Estacionamento / Pedágio", "Outros"]],
   ["Saúde", "expense", ["Plano de Saúde", "Medicamentos", "Consultas / Exames", "Outros"]],
   ["Educação", "expense", ["Escola / Faculdade", "Cursos Online", "Livros", "Outros"]],
   ["Lazer", "expense", ["Viagens", "Cinema / Eventos", "Hobbies", "Outros"]],

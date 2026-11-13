@@ -11,7 +11,8 @@ import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
 import { monthKey, money, today, includedAccounts, signedAmount } from "../finance.mjs";
 import { displayOf } from "./PersonalizeScreens";
-import TransactionRow from "./TransactionRow";
+import TransactionRow, { PurchaseGroupRow } from "./TransactionRow";
+import { collapsePurchases } from "../purchaseSplit.mjs";
 import MonthBar from "./MonthBar";
 import CategoryIcon, { categoryStyleOf, tagStyleOf } from "../ui/CategoryIcon";
 
@@ -252,7 +253,7 @@ export default function TransactionsScreen({ storageError }: { storageError: str
   const calendarOnly = cal && !pickedDay;
   const sections: { key: string; date?: string; data: any[] }[] = calendarOnly || !found.length ? []
     : byAmount ? [{ key: "valor", data: found }]
-    : days.map(([date, data]) => ({ key: date, date, data }));
+    : days.map(([date, data]) => ({ key: date, date, data: collapsePurchases(data) }));
 
   return (
     <SectionList
@@ -294,7 +295,7 @@ export default function TransactionsScreen({ storageError }: { storageError: str
             borderBottomLeftRadius: last ? 22 : 0, borderBottomRightRadius: last ? 22 : 0,
             marginBottom: last ? 4 : 0,
           }}>
-            <TransactionRow t={item} withDate={byAmount} last={last} />
+            {item.group ? <PurchaseGroupRow g={item} last={last} /> : <TransactionRow t={item} withDate={byAmount} last={last} />}
           </View>
         );
       }}

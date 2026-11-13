@@ -10,6 +10,9 @@ import MotionPressable from "../ui/motion";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { draftFromNotification, importNotification, KIND_LABEL, KIND_DETAIL } from "../notification-import.mjs";
+import { importNotificationAsItems, sumItems } from "../purchaseSplit.mjs";
+import { parseMoney } from "../finance.mjs";
+import PurchaseItemsSheet from "./PurchaseItemsSheet";
 import { lookOf } from "../looks.mjs";
 import BankBadge from "../ui/BankBadge";
 import CategoryIcon from "../ui/CategoryIcon";
@@ -40,6 +43,8 @@ export default function InboxSheet({ row, editDate = false, onClose, onDone }: {
   const [discard, setDiscard] = useState(false);
   const [dropAsk, setDropAsk] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [items, setItems] = useState<any[]>([]);
+  const [splitOpen, setSplitOpen] = useState(false);
   const [error, setError] = useState("");
   const [picker, setPicker] = useState<"" | "kind" | "target" | "category" | "tags">("");
   useEffect(() => {
@@ -51,6 +56,8 @@ export default function InboxSheet({ row, editDate = false, onClose, onDone }: {
     setDiscard(false);
     setDropAsk(false);
     setBusy(false);
+    setItems([]);
+    setSplitOpen(false);
   }, [row?.id]);
   if (!row || !f) return null;
   const requestClose = () => {
@@ -65,8 +72,15 @@ export default function InboxSheet({ row, editDate = false, onClose, onDone }: {
   const confirm = async () => {
     if (busy) return;
     setError("");
+    const draft = { ...f, cardId: f.kind === "card" ? f.cardId : "" };
+    if (items.length && f.kind === "card" && Number(f.installments) > 1) { setError("Dividir em itens vale só para compra à vista. Volte a um lançamento só ou use 1 parcela."); return; }
+    if (items.length) {
+      let cents = 0;
+      try { cents = parseMoney(draft.amount); } catch { /* a validação abaixo mostra a mensagem */ }
+      if (sumItems(items) !== cents) { setError("O valor da compra mudou. Abra “Itens da compra” e confira a soma."); return; }
+    }
     setBusy(true);
-    const ok = await perform((s: any) => importNotification(s, row, { ...f, cardId: f.kind === "card" ? f.cardId : "" }), "Lançamento registrado");
+    const ok = await perform((s: any) => items.length ? importNotificationAsItems(s, row, draft, items) : importNotification(s, row, draft), items.length ? `${items.length} ${items.length === 1 ? "item registrado" : "itens registrados"}` : "Lançamento registrado");
     setBusy(false);
     if (ok) onDone(row.id);
   };
@@ -85,7 +99,11 @@ export default function InboxSheet({ row, editDate = false, onClose, onDone }: {
         title="Revisar pendência"
         onClose={requestClose}
         headerAction={f.kind === "denied" ? undefined : (
-          <RowActions title="Pendência" actions={[{ label: "Descartar pendência", icon: "trash-2", danger: true, onPress: () => setDropAsk(true) }]} />
+          <RowActions title="Pendência" actions={[
+            { label: items.length ? `Editar itens (${items.length})` : "Dividir em itens", icon: "list", onPress: () => setSplitOpen(true) },
+            ...(items.length ? [{ label: "Voltar a um lançamento só", icon: "rotate-ccw" as any, onPress: () => setItems([]) }] : []),
+            { label: "Descartar pendência", icon: "trash-2", danger: true, onPress: () => setDropAsk(true) },
+          ]} />
         )}
         footer={f.kind === "denied" ? (
           <Button title="Descartar aviso" icon="x" onPress={() => onDone(row.id)} />
@@ -118,6 +136,14 @@ export default function InboxSheet({ row, editDate = false, onClose, onDone }: {
             <View importantForAccessibility="no"><I name="edit-2" size={18} /></View>
           </View>
           {f.kind === "denied" && <Muted>O banco recusou esta compra: nada foi cobrado. Descarte o aviso ou, se ele estiver errado, escolha o tipo certo.</Muted>}
+          {items.length > 0 && (
+            <MotionPressable kind="row" accessibilityRole="button" accessibilityLabel={`Compra dividida em ${items.length} ${items.length === 1 ? "item" : "itens"}. Editar itens`} onPress={() => setSplitOpen(true)}
+              style={[k.row, { gap: 8, paddingHorizontal: 14, minHeight: 48, borderRadius: 14, backgroundColor: c.soft }]}>
+              <I name="list" size={16} color={c.primary} />
+              <T style={{ flex: 1, color: c.primary, fontSize: 13 }}>Dividida em {items.length} {items.length === 1 ? "item" : "itens"}, cada um na sua categoria</T>
+              <T style={{ color: c.primary, fontFamily: "SoraSemi", fontSize: 13 }}>Editar</T>
+            </MotionPressable>
+          )}
           <View style={{ borderWidth: 1, borderColor: c.line, borderRadius: 18, overflow: "hidden" }}>
             <PickerRow icon={KIND_ICON[f.kind]} tint={color} label="Tipo · lido do banco" value={KIND_DETAIL[f.kind as "card"]} onPress={() => setPicker("kind")} />
             <View style={[k.row, s.fieldRow, line]}>
@@ -194,6 +220,17 @@ export default function InboxSheet({ row, editDate = false, onClose, onDone }: {
           {!!error && <T accessibilityRole="alert" accessibilityLiveRegion="assertive" style={{ color: c.red }}>{error}</T>}
         </ScrollView>
       </SheetModal>
+      {splitOpen && (
+        <PurchaseItemsSheet
+          state={state}
+          total={(() => { try { return parseMoney(normalizeMoneyText(f.amount)); } catch { return 0; } })()}
+          fallback={{ category: f.category || "Outros", subcategory: f.subcategory || "" }}
+          items={items}
+          onSave={(list) => { setItems(list); setSplitOpen(false); }}
+          onFixTotal={(cents) => set("amount", (cents / 100).toFixed(2).replace(".", ","))}
+          onClose={() => setSplitOpen(false)}
+        />
+      )}
       {dropAsk && (
         <ConfirmSheet
           title="Descartar esta pendência?"
