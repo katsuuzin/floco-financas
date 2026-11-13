@@ -3,6 +3,7 @@ import { visibleAccounts } from "../accountOrder.mjs";
 import { View, Pressable } from "react-native";
 import { T, Muted, I, Box, Group, Row, Section, Button, Empty, IconButton, Progress, fitAmount, styles as k } from "../ui/kit";
 import { RowActions, SheetModal } from "../ui/Sheet";
+import MotionPressable from "../ui/motion";
 import { entityColors, useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav, destination } from "../app/nav";
@@ -156,13 +157,14 @@ function Shortcuts() {
   const nav = useNav();
   const ids: string[] = layoutOf(state).shortcuts;
   return (
-    <View style={[k.chips, { marginTop: 12 }]}>
+    <View style={[k.chips, { marginTop: 8, marginBottom: 8 }]}>
       {ids.map((id) => {
         const d = DESTINATIONS.find(([x]) => x === id);
         if (!d) return null;
         return (
-          <Pressable
+          <MotionPressable
             key={id}
+            kind="chip"
             accessibilityRole="button"
             accessibilityLabel={d[1]}
             onPress={() => {
@@ -170,21 +172,20 @@ function Shortcuts() {
               if (to.tab) nav.setTab(to.tab);
               else if (to.route) nav.push(to.route);
             }}
-            style={({ pressed }) => ({
+            style={{
               flexGrow: 1,
               flexBasis: "22%",
               minHeight: 72,
-              borderRadius: 14,
+              borderRadius: 18,
               alignItems: "center",
               justifyContent: "center",
               gap: 6,
               backgroundColor: c.surface,
-              opacity: pressed ? 0.7 : 1,
-            })}
+            }}
           >
             <I name={d[2] as any} color={c.primary} />
             <T style={{ fontSize: 12, textAlign: "center" }}>{d[1]}</T>
-          </Pressable>
+          </MotionPressable>
         );
       })}
     </View>
@@ -205,8 +206,8 @@ function FirstSteps() {
   };
   return (
     <>
-      <Section title="Vamos começar" action="Ocultar" onPress={() => perform((s: any) => ({ ...s, settings: { ...s.settings, firstStepsHidden: true } }), "Primeiros passos ocultos. Reabra em Configurações › Manutenção.")} />
-      <Box>
+      <Section title="Vamos começar" actionLabel="Ocultar primeiros passos" action="Ocultar" onPress={() => perform((s: any) => ({ ...s, settings: { ...s.settings, firstStepsHidden: true } }), "Primeiros passos ocultos. Reabra em Configurações › Manutenção.")} />
+      <Box style={homeBox}>
         <Muted>
           {f.done} de {f.steps.length} concluídos
         </Muted>
@@ -214,8 +215,9 @@ function FirstSteps() {
           <Progress value={f.done} max={f.steps.length} />
         </View>
         {f.steps.filter((step: any) => !step.done).map((step: any) => (
-          <Pressable
+          <MotionPressable
             key={step.id}
+            kind="row"
             accessibilityRole="button"
             accessibilityState={{ checked: step.done }}
             disabled={step.done}
@@ -225,7 +227,7 @@ function FirstSteps() {
             <I name={step.done ? "check-circle" : "circle"} color={step.done ? c.green : c.muted} />
             <T style={{ flex: 1, textDecorationLine: step.done ? "line-through" : "none", opacity: step.done ? 0.6 : 1 }}>{step.label}</T>
             {!step.done && <I name="chevron-right" size={18} />}
-          </Pressable>
+          </MotionPressable>
         ))}
         {!state.cards.length && !state.settings.noCard && (
           <Button title="Não uso cartão de crédito" secondary onPress={() => perform((s: any) => ({ ...s, settings: { ...s.settings, noCard: true } }), "Anotado")} />
@@ -253,7 +255,8 @@ const INBOX_ICON: Record<string, any> = {
 // "SMS · NUBANK" → "Nubank" (o rótulo curto deixa mais espaço ao nome da compra).
 const bankName = (b: string) => String(b).replace(/^SMS · /, "").toLowerCase().replace(/(^|\s)\S/g, (m) => m.toUpperCase());
 
-const bankSetupLink = { minHeight: 48, justifyContent: "center", paddingHorizontal: 8 } as const;
+const homeBox = { padding: 16 } as const; // recuo único de 16 dp nos cartões da Início
+const bankSetupLink = { minHeight: 48, justifyContent: "center", paddingHorizontal: 0, minWidth: 48 } as const;
 
 function PendingInbox() {
   const { c } = useTheme();
@@ -263,6 +266,8 @@ function PendingInbox() {
   const [help, setHelp] = React.useState(false);
   const [open, setOpen] = React.useState<any>(null);
   const [showDuplicates, setShowDuplicates] = React.useState(false);
+  const [showAll, setShowAll] = React.useState(false);
+  const [enabling, setEnabling] = React.useState(false);
   const viewingDuplicates = showDuplicates && inbox.hiddenRows.length > 0;
   const displayed = viewingDuplicates ? inbox.hiddenRows : inbox.rows;
   const st = inbox.status;
@@ -274,29 +279,40 @@ function PendingInbox() {
       void inbox.native.openSettings().catch(() => softFail("Não foi possível abrir o acesso às notificações."));
     };
     const enable = () => {
-      void inbox.native.setEnabled(true).then(inbox.refresh).catch(() => softFail("Não foi possível ligar a leitura das notificações."));
+      if (enabling) return;
+      setEnabling(true);
+      void inbox.native.setEnabled(true).then(inbox.refresh).catch(() => softFail("Não foi possível ligar a leitura das notificações.")).finally(() => setEnabling(false));
     };
     return (
-      <Box style={{ gap: 6 }}>
+      <Box style={{ gap: 6, marginTop: 8, padding: 16, paddingBottom: 8 }}>
         <T accessibilityRole="header" style={{ fontFamily: "SoraSemi" }}>Leitura automática</T>
         <Muted>{st.available ? "Revise as compras e Pix detectados pelo Floco." : "Atualize o Floco para ler notificações."}</Muted>
         {st.available && (
-          <Button title="Ligar leitura das notificações" onPress={st.permission ? enable : openSettings} />
+          <Button
+            title={enabling ? "Ligando…" : "Ligar leitura das notificações"}
+            disabled={enabling}
+            accessibilityLiveRegion="polite"
+            onPress={st.permission ? enable : openSettings}
+          />
         )}
-        <View style={[k.row, { flexWrap: "wrap", justifyContent: "space-between" }]}>
+        <View style={[k.row, { flexWrap: "wrap", justifyContent: "space-between", marginHorizontal: -8 }]}>
           {st.available && !st.permission && (
-            <Pressable accessibilityRole="button" onPress={() => setHelp(true)} style={bankSetupLink}>
+            <MotionPressable kind="row" accessibilityRole="button" accessibilityLabel="Como ligar a leitura das notificações" onPress={() => setHelp(true)} style={bankSetupLink}>
               <T style={{ color: c.primary }}>Como ligar</T>
-            </Pressable>
+            </MotionPressable>
           )}
-          <Pressable accessibilityRole="button" onPress={() => {
+          <MotionPressable kind="row" accessibilityRole="button" accessibilityLabel="Ocultar aviso por 7 dias" onPress={() => {
+            const previous = state.settings.bankSetupHiddenUntil;
             void perform((s: any) => ({
               ...s,
               settings: { ...s.settings, bankSetupHiddenUntil: Date.now() + 7 * 86_400_000 },
-            }), "Aviso oculto por 7 dias");
+            }), "Aviso oculto por 7 dias. Reative em Mais › Notificações", {
+              undoable: true,
+              undo: (s: any) => ({ ...s, settings: { ...s.settings, bankSetupHiddenUntil: previous } }),
+            });
           }} style={bankSetupLink}>
             <T style={{ color: c.muted }}>Agora não</T>
-          </Pressable>
+          </MotionPressable>
         </View>
         {help && (
           <SheetModal title="Como ligar" onClose={() => setHelp(false)}>
@@ -316,22 +332,25 @@ function PendingInbox() {
   }
   return (
     <>
-      <Section title={`Pendentes (${inbox.rows.length})`} action="Ajustes" onPress={() => nav.push({ name: "notifications" })} />
+      <Section title={`Pendentes (${inbox.rows.length})`} actionLabel="Ajustes dos pendentes" action="Ajustes" onPress={() => nav.push({ name: "notifications" })} />
       {inbox.hiddenRows.length > 0 && (
-        <>
-          <T accessibilityLiveRegion="polite">{inbox.hiddenRows.length} {inbox.hiddenRows.length === 1 ? "duplicada ignorada" : "duplicadas ignoradas"}</T>
-          <Button title={viewingDuplicates ? "Ver pendentes" : "Ver duplicadas"} secondary onPress={() => setShowDuplicates(!viewingDuplicates)} />
-        </>
+        <View style={[k.row, { justifyContent: "space-between" }]}>
+          <T accessibilityLiveRegion="polite" style={{ flex: 1 }}>{inbox.hiddenRows.length} {inbox.hiddenRows.length === 1 ? "duplicada ignorada" : "duplicadas ignoradas"}</T>
+          <MotionPressable kind="row" accessibilityRole="button" onPress={() => setShowDuplicates(!viewingDuplicates)} style={bankSetupLink}>
+            <T style={{ color: c.primary }}>{viewingDuplicates ? "Ver pendentes" : "Ver duplicadas"}</T>
+          </MotionPressable>
+        </View>
       )}
       {displayed.length ? (
-        <Box style={{ padding: 0, overflow: "hidden" }}>
-          {(viewingDuplicates ? displayed : displayed.slice(0, 12)).map((row: any, i: number, all: any[]) => {
+        <>
+        <Box style={{ padding: 0, overflow: "hidden", marginBottom: !viewingDuplicates && displayed.length > 12 ? 0 : undefined }}>
+          {(viewingDuplicates || showAll ? displayed : displayed.slice(0, 12)).map((row: any, i: number, all: any[]) => {
             const sug = suggestNotification(row);
             const income = sug.type === "income";
             const tone = income ? c.green : c.red;
             const amountLabel = sug.amount ? state.settings.hide ? "R$ ••••" : `R$ ${sug.amount}` : "sem valor";
             return (
-              <View key={row.id} style={[k.row, i < all.length - 1 && k.hairline, { borderBottomColor: c.line, paddingLeft: 14, paddingRight: 4, minHeight: 72 }]}>
+              <View key={row.id} style={[k.row, i < all.length - 1 && k.hairline, { borderBottomColor: c.line, paddingLeft: 16, paddingRight: 4, minHeight: 72 }]}>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`${sug.kindLabel}: ${sug.description}, ${amountLabel}. Revisar e confirmar`}
@@ -358,8 +377,14 @@ function PendingInbox() {
             );
           })}
         </Box>
+        {!viewingDuplicates && displayed.length > 12 && (
+          <MotionPressable kind="row" accessibilityRole="button" onPress={() => setShowAll(!showAll)} style={[bankSetupLink, { alignSelf: "center", marginBottom: 12 }]}>
+            <T style={{ color: c.primary }}>{showAll ? "Ver menos" : `Ver mais ${displayed.length - 12}`}</T>
+          </MotionPressable>
+        )}
+        </>
       ) : (
-        <Box>
+        <Box style={homeBox}>
           <Muted>
             Nenhuma notificação pendente.
             {st.lastSeen?.time
@@ -399,7 +424,7 @@ function AccountsSummary() {
   const money2 = (n: number, hidden = false) => (n < 0 ? "−" : "") + show(Math.abs(n), hidden);
   return (
     <>
-      <Section title="Contas" action="Ver tudo" onPress={() => nav.push({ name: "accounts" })} />
+      <Section title="Contas" actionLabel="Ver tudo, Contas" action="Ver tudo" onPress={() => nav.push({ name: "accounts" })} />
       <Box style={{ padding: 0, overflow: "hidden" }}>
         {accounts.map((a: any) => {
           const hidden = accountBalanceHidden(state, a.id);
@@ -412,7 +437,7 @@ function AccountsSummary() {
               accessibilityRole="button"
               onPress={() => nav.push({ name: "form", kind: "account", initial: { ...a, initial: (a.initial / 100).toFixed(2).replace(".", ",") } })}
               android_ripple={{ color: c.soft }}
-              style={[k.row, k.hairline, { borderBottomColor: c.line, paddingHorizontal: 14, paddingVertical: 12 }]}
+              style={[k.row, k.hairline, { borderBottomColor: c.line, paddingHorizontal: 16, paddingVertical: 12 }]}
             >
               <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: entity.backgroundColor, alignItems: "center", justifyContent: "center" }}>
                 <T style={{ color: entity.color, fontFamily: "SoraBold" }}>{a.name.slice(0, 1).toUpperCase()}</T>
@@ -428,7 +453,7 @@ function AccountsSummary() {
             </Pressable>
           );
         })}
-        <View style={[k.row, { paddingHorizontal: 14, paddingVertical: 12 }]}>
+        <View style={[k.row, { paddingHorizontal: 16, paddingVertical: 12 }]}>
           <View style={{ flex: 1 }}>
             <T style={{ fontFamily: "SoraSemi" }}>Total</T>
           </View>
@@ -455,7 +480,7 @@ function CardsSummary() {
   const totalNext = cards.reduce((n: number, x: any) => n + invoice(state, x.id, next).due, 0);
   return (
     <>
-      <Section title="Cartões" action="Ver tudo" onPress={() => nav.push({ name: "cards" })} />
+      <Section title="Cartões" actionLabel="Ver tudo, Cartões" action="Ver tudo" onPress={() => nav.push({ name: "cards" })} />
       <Box style={{ padding: 0, overflow: "hidden" }}>
         {cards.map((x: any) => {
           const bill = invoice(state, x.id, month);
@@ -467,7 +492,7 @@ function CardsSummary() {
               accessibilityRole="button"
               onPress={() => nav.push({ name: "cards", cardId: x.id })}
               android_ripple={{ color: c.soft }}
-              style={[k.row, k.hairline, { borderBottomColor: c.line, paddingHorizontal: 14, paddingVertical: 12 }]}
+              style={[k.row, k.hairline, { borderBottomColor: c.line, paddingHorizontal: 16, paddingVertical: 12 }]}
             >
               <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: entity.backgroundColor, alignItems: "center", justifyContent: "center" }}>
                 <I name="credit-card" size={18} color={entity.color} />
@@ -480,7 +505,7 @@ function CardsSummary() {
             </Pressable>
           );
         })}
-        <View style={[k.row, { paddingHorizontal: 14, paddingVertical: 12 }]}>
+        <View style={[k.row, { paddingHorizontal: 16, paddingVertical: 12 }]}>
           <View style={{ flex: 1 }}>
             <T style={{ fontFamily: "SoraSemi" }}>Total</T>
             <Muted>Próxima</Muted>
@@ -517,8 +542,8 @@ export default function HomeScreen() {
       if (!items.length) return null;
       return (
         <>
-          <Section title="Atrasadas" />
-          <Group>
+          <Section title="Atrasadas" fixedHeight />
+          <Group flush>
             {items.map((item: any) => (
               <Row key={item.key} icon="alert-circle" danger label={item.label}
                 detail={`${overdueLabel(item.days)} · ${show(item.amount)}`}
@@ -542,8 +567,8 @@ export default function HomeScreen() {
     pending: () =>
       (summary.pay > 0 || summary.receive > 0 || bills > 0) && (
         <>
-          <Section title="Pendências do mês" />
-          <Box>
+          <Section title="Pendências do mês" fixedHeight />
+          <Box style={homeBox}>
             <View style={k.row}>
               <View style={k.flex}>
                 <Muted>A pagar</Muted>
@@ -565,8 +590,8 @@ export default function HomeScreen() {
       const list = monthInsights(state, month).slice(0, 3);
       return (
         <>
-          <Section title="Destaques" action="Assistente" onPress={() => nav.push({ name: "assistant" })} />
-          <Box>{list.length ? list.map((i: any, n: number) => <Muted key={n}>• {i.text}</Muted>) : <Muted>Nada fora do comum neste mês.</Muted>}</Box>
+          <Section title="Destaques" actionLabel="Abrir assistente" action="Assistente" onPress={() => nav.push({ name: "assistant" })} />
+          <Box style={homeBox}>{list.length ? list.map((i: any, n: number) => <Muted key={n}>• {i.text}</Muted>) : <Muted>Nada fora do comum neste mês.</Muted>}</Box>
         </>
       );
     },
@@ -575,8 +600,8 @@ export default function HomeScreen() {
     budgets: () =>
       state.budgets.length > 0 && (
         <>
-          <Section title="Orçamentos" action="Ver tudo" onPress={() => nav.push({ name: "budgets" })} />
-          <Box>
+          <Section title="Orçamentos" actionLabel="Ver tudo, Orçamentos" action="Ver tudo" onPress={() => nav.push({ name: "budgets" })} />
+          <Box style={homeBox}>
             {state.budgets.slice(0, 4).map((raw: any) => {
               const b = normalizeBudget(raw);
               const u = budgetUsage(state, b, ref);
@@ -598,8 +623,8 @@ export default function HomeScreen() {
     goals: () =>
       state.goals.length > 0 && (
         <>
-          <Section title="Metas" action="Ver tudo" onPress={() => nav.push({ name: "goals" })} />
-          <Box>
+          <Section title="Metas" actionLabel="Ver tudo, Metas" action="Ver tudo" onPress={() => nav.push({ name: "goals" })} />
+          <Box style={homeBox}>
             {state.goals.slice(0, 4).map((g: any) => (
               <View key={g.id} style={{ marginBottom: 10, gap: 4 }}>
                 <View style={[k.row, { justifyContent: "space-between" }]}>
@@ -619,8 +644,8 @@ export default function HomeScreen() {
       return (
         open.length > 0 && (
           <>
-            <Section title="Quem me deve" action="Ver tudo" onPress={() => nav.push({ name: "people", tab: "receivables" })} />
-            <Box>
+            <Section title="Quem me deve" actionLabel="Ver tudo, Quem me deve" action="Ver tudo" onPress={() => nav.push({ name: "people", tab: "receivables" })} />
+            <Box style={homeBox}>
               {open.slice(0, 4).map((r: any) => (
                 <View key={r.id} style={[k.row, { justifyContent: "space-between", marginBottom: 6 }]}>
                   <T style={{ flex: 1, fontSize: 13 }}>{r.person}</T>
@@ -637,8 +662,8 @@ export default function HomeScreen() {
       return (
         plan.remaining > 0 && (
           <>
-            <Section title="Parcelamentos" action="Ver tudo" onPress={() => nav.push({ name: "debts", tab: "installments" })} />
-            <Box>
+            <Section title="Parcelamentos" actionLabel="Ver tudo, Parcelamentos" action="Ver tudo" onPress={() => nav.push({ name: "debts", tab: "installments" })} />
+            <Box style={homeBox}>
               <Muted>Falta pagar {show(plan.remaining)} em parcelas.</Muted>
               {plan.rows.map((r: any) => (
                 <Muted key={r.month}>
@@ -655,8 +680,8 @@ export default function HomeScreen() {
       return (
         (state.recurrences || []).length > 0 && (
           <>
-            <Section title="Recorrências" action="Ver tudo" onPress={() => nav.push({ name: "recurrences" })} />
-            <Box>
+            <Section title="Recorrências" actionLabel="Ver tudo, Recorrências" action="Ver tudo" onPress={() => nav.push({ name: "recurrences" })} />
+            <Box style={homeBox}>
               <Muted>
                 Despesas fixas {show(t.expense.month)}/mês · receitas {show(t.income.month)}/mês
               </Muted>
@@ -669,7 +694,7 @@ export default function HomeScreen() {
       if (!restockCandidates(state, today(), { limit: 1 }).length) return null;
       return (
         <>
-          <Section title="Já deve estar acabando" action="Histórico" onPress={() => nav.push({ name: "purchases" })} />
+          <Section title="Já deve estar acabando" actionLabel="Histórico de compras" action="Histórico" onPress={() => nav.push({ name: "purchases" })} />
           <View style={{ marginBottom: 12 }}>
             <RestockList limit={3} />
           </View>
@@ -700,14 +725,14 @@ export default function HomeScreen() {
       const more = sum.pending - sum.preview.length;
       return (
         <>
-          <Section title="Lista de compras" action="Ver tudo" onPress={open} />
+          <Section title="Lista de compras" actionLabel="Ver tudo, Lista de compras" action="Ver tudo" onPress={open} />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Lista de compras. ${title}.${hasEstimate ? ` Estimado ${show(sum.estimatedCents)}.` : ""}${detail ? ` ${detail}` : ""}`}
             accessibilityHint="Abre a lista de compras"
             onPress={open}
             android_ripple={{ color: c.soft }}
-            style={{ borderRadius: 18, backgroundColor: c.surface, padding: 16, gap: 4, minHeight: 72, marginBottom: 12 }}
+            style={{ borderRadius: 22, backgroundColor: c.surface, padding: 16, gap: 4, minHeight: 72, marginBottom: 12 }}
           >
             <View style={[k.row, { justifyContent: "space-between", alignItems: "flex-start" }]}>
               <View style={{ flex: 1, gap: 2 }}>
@@ -743,7 +768,7 @@ export default function HomeScreen() {
     },
     recent: () => (
       <>
-        <Section title="Despesas recentes" action="Ver tudo" onPress={() => nav.setTab("transactions")} />
+        <Section title="Despesas recentes" actionLabel="Ver tudo, Despesas recentes" action="Ver tudo" onPress={() => nav.setTab("transactions")} />
         {recent.length ? (
           <Box style={{ padding: 0, overflow: "hidden" }}>
             {recent.slice(0, 5).map((t: any, i: number, all: any[]) => (
@@ -751,7 +776,7 @@ export default function HomeScreen() {
             ))}
           </Box>
         ) : (
-          <Box>
+          <Box style={homeBox}>
             <Muted>Nenhum lançamento neste mês.</Muted>
           </Box>
         )}
@@ -764,19 +789,21 @@ export default function HomeScreen() {
       <View style={{ borderRadius: 16, padding: 24, marginTop: 4, backgroundColor: c.accent }}>
         <View style={[k.row, { justifyContent: "space-between" }]}>
           <T style={{ color: c.heroText, fontFamily: "SoraSemi" }}>Saldo total</T>
-          <IconButton
-            name={state.settings.hide ? "eye-off" : "eye"}
-            label="Ocultar ou mostrar valores"
-            color={c.heroText}
-            onPress={() =>
-              perform(
-                (s: any) => ({ ...s, settings: { ...s.settings, hide: !s.settings.hide } }),
-                state.settings.hide ? "Valores visíveis" : "Valores ocultos",
-              )
-            }
-          />
+          <View style={{ marginRight: -12 }}>
+            <IconButton
+              name={state.settings.hide ? "eye-off" : "eye"}
+              label={state.settings.hide ? "Valores ocultos. Mostrar" : "Valores visíveis. Ocultar"}
+              color={c.heroText}
+              onPress={() =>
+                perform(
+                  (s: any) => ({ ...s, settings: { ...s.settings, hide: !s.settings.hide } }),
+                  state.settings.hide ? "Valores visíveis" : "Valores ocultos",
+                )
+              }
+            />
+          </View>
         </View>
-        <T {...fitAmount} style={[k.balanceValue, { color: c.heroText, marginTop: 0 }]}>{show(totalBalance(state))}</T>
+        <T {...fitAmount} accessibilityLabel={state.settings.hide ? "Saldo total oculto" : undefined} style={[k.balanceValue, { color: c.heroText, marginTop: 0 }]}>{show(totalBalance(state))}</T>
         <T style={{ color: c.heroText, fontSize: 12, marginTop: 4 }}>Saldo atual das contas incluídas</T>
       </View>
       <View style={{ flexDirection: "row", gap: 12, marginTop: 12 }}>
@@ -785,14 +812,14 @@ export default function HomeScreen() {
             <I name="arrow-down-left" color={c.green} />
             <Muted>Receitas</Muted>
           </View>
-          <T {...fitAmount} style={{ fontFamily: "SoraSemi", fontSize: 17, color: c.green, marginTop: 8 }}>{show(summary.income)}</T>
+          <T {...fitAmount} accessibilityLabel={state.settings.hide ? "Receitas ocultas" : undefined} style={{ fontFamily: "SoraSemi", fontSize: 17, color: c.green, marginTop: 8 }}>{show(summary.income)}</T>
         </Box>
         <Box style={{ flex: 1, marginBottom: 0 }}>
           <View style={[k.row, { flexWrap: "wrap", gap: 4 }]}>
             <I name="arrow-up-right" color={c.red} />
             <Muted>Despesas</Muted>
           </View>
-          <T {...fitAmount} style={{ fontFamily: "SoraSemi", fontSize: 17, marginTop: 8 }}>{show(summary.expense)}</T>
+          <T {...fitAmount} accessibilityLabel={state.settings.hide ? "Despesas ocultas" : undefined} style={{ fontFamily: "SoraSemi", fontSize: 17, marginTop: 8 }}>{show(summary.expense)}</T>
         </Box>
       </View>
       <View style={{ height: 4 }} />
@@ -801,10 +828,10 @@ export default function HomeScreen() {
         .map((b: any) => (
           <React.Fragment key={b.id}>{blocks[b.id]()}</React.Fragment>
         ))}
-      <Pressable accessibilityRole="button" onPress={() => nav.push({ name: "layout" })} style={[k.row, { justifyContent: "center", minHeight: 48, marginTop: 8 }]}>
+      <MotionPressable kind="row" accessibilityRole="button" onPress={() => nav.push({ name: "layout" })} style={[k.row, { justifyContent: "center", minHeight: 48, marginTop: 8 }]}>
         <I name="sliders" size={16} color={c.primary} />
         <T style={{ color: c.primary, fontSize: 13 }}>Personalizar início</T>
-      </Pressable>
+      </MotionPressable>
       {!state.accounts.length && (
         <Button
           title="Explorar com dados de demonstração"

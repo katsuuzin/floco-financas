@@ -5,6 +5,7 @@ import { View, Pressable, ScrollView, TextInput, StyleSheet } from "react-native
 import { focusAccessibility, T, Muted, I, type ViewControl, styles as k } from "./kit";
 import type { Icon } from "./kit";
 import { useTheme } from "./theme";
+import MotionPressable from "./motion";
 import { categoryTree, categoryLabel } from "../categories.mjs";
 import { categoryStyleOf } from "./CategoryIcon";
 import CategoryIcon from "./CategoryIcon";
@@ -57,7 +58,8 @@ export function PickerRow({
   );
   const style = [k.row, s.row, !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.line }];
   return onPress ? (
-    <Pressable
+    <MotionPressable
+      kind="row"
       accessibilityRole="button"
       accessibilityLabel={`${label || placeholder || ""}: ${value || "não definido"}`}
       accessibilityHint={accessibilityHint || "Abre as opções"}
@@ -66,7 +68,7 @@ export function PickerRow({
       style={style}
     >
       {body}
-    </Pressable>
+    </MotionPressable>
   ) : (
     <View style={style}>{body}</View>
   );

@@ -70,7 +70,7 @@ type Nav = {
   registerBackGuard: (guard: () => boolean) => () => void;
   reset: () => void;
   month: string;
-  setMonth: (m: string) => void;
+  setMonth: (m: string | ((prev: string) => string)) => void;
 };
 const NavContext = createContext<Nav | null>(null);
 

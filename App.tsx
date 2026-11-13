@@ -13,8 +13,10 @@ import {
   Platform,
   StyleSheet,
   Linking,
+  Keyboard,
+  Animated as RNAnimated,
 } from "react-native";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { BlurTargetView } from "expo-blur";
 import { BlurTargetContext, SheetModal } from "./src/ui/Sheet";
@@ -25,9 +27,9 @@ import Feather from "@expo/vector-icons/Feather";
 import { ThemeProvider, useTheme } from "./src/ui/theme";
 import { T, I, Button, IconButton, Muted, styles as k } from "./src/ui/kit";
 import type { Icon } from "./src/ui/kit";
-import MotionPressable from "./src/ui/motion";
+import MotionPressable, { useShake, useReduceMotion } from "./src/ui/motion";
 import { StoreProvider, useStore, type NoticeAction } from "./src/app/store";
-import Animated, { Easing as Ease, FadeIn, SlideInDown, useReducedMotion, withTiming, useSharedValue, useAnimatedStyle } from "react-native-reanimated";
+import Animated, { Easing as Ease, FadeIn, FadeInDown, FadeOutDown, ZoomIn, SlideInDown, useReducedMotion, withTiming, useSharedValue, useAnimatedStyle } from "react-native-reanimated";
 
 // Entrar numa lista: desliza 40 dp da direita esmaecendo, 300 ms com desaceleração (A7).
 const listEnter = () => {
@@ -211,11 +213,29 @@ function Lock({
   onUnlock: () => void;
 }) {
   const { c } = useTheme();
+  const reduce = useReduceMotion();
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [tries, setTries] = useState(0);
+  const [mode, setMode] = useState<"pin" | "system" | null>(null);
+  const busy = mode !== null;
+  // Foco do campo: a borda muda de cor em 120 ms (sem animação com "remover animações").
+  const focus = useRef(new RNAnimated.Value(0)).current;
+  const fade = useRef(new RNAnimated.Value(0)).current;
+  const shake = useShake(error && tries ? String(tries) : "");
+  const setFocus = (on: boolean) =>
+    RNAnimated.timing(focus, { toValue: on ? 1 : 0, duration: reduce ? 0 : 120, useNativeDriver: false }).start();
+  useEffect(() => {
+    fade.setValue(error && !reduce ? 0 : 1);
+    if (error && !reduce) RNAnimated.timing(fade, { toValue: 1, duration: 150, useNativeDriver: true }).start();
+  }, [error, reduce, fade]);
+  const fail = (msg: string) => {
+    setError(msg);
+    setTries((n) => n + 1);
+  };
   const system = async () => {
-    setBusy(true);
+    Keyboard.dismiss();
+    setMode("system");
     try {
       const r = await LocalAuthentication.authenticateAsync({
         promptMessage: "Desbloquear suas finanças",
@@ -223,70 +243,103 @@ function Lock({
         disableDeviceFallback: false,
       });
       if (r.success) onUnlock();
-      else setError("Desbloqueio cancelado. Tente novamente.");
+      else fail("Desbloqueio cancelado. Tente novamente.");
     } catch {
-      setError("Não foi possível autenticar. Confira o bloqueio do aparelho.");
+      fail("Não foi possível autenticar. Confira o bloqueio do aparelho.");
     } finally {
-      setBusy(false);
+      setMode(null);
     }
   };
-  return (
-    <SafeAreaView style={[k.center, { backgroundColor: c.bg }]}>
-      <I name="lock" size={42} color={c.primary} />
-      <T style={k.pageTitle}>Suas finanças protegidas</T>
-      <Muted style={{ textAlign: "center" }}>
-        Use o PIN do Floco ou o bloqueio do Android para entrar.
-      </Muted>
-      {pinEnabled && (
-        <View style={{ alignSelf: "stretch", gap: 12 }}>
-          <TextInput
-            accessibilityLabel="PIN do Floco"
-            secureTextEntry
-            keyboardType="number-pad"
-            maxLength={12}
-            value={pin}
-            onChangeText={setPin}
-            style={[
-              k.input,
-              {
-                borderColor: c.line,
-                color: c.text,
-                backgroundColor: c.surface,
-              },
-            ]}
-          />
-          <Button
-            title="Entrar com PIN"
-            disabled={busy || !pin}
-            onPress={async () => {
-              setBusy(true);
-              try {
-                const ok = await NativeModules.FlocoFinanceTools.verifyPin(pin);
-                setPin("");
-                if (ok) {
-                  setError("");
-                  onUnlock();
-                } else setError("PIN incorreto.");
-              } catch (e: any) {
-                setError(e.message);
-              } finally {
-                setBusy(false);
-              }
-            }}
-          />
-        </View>
+  const enterWithPin = async () => {
+    if (busy || !pin) return;
+    setMode("pin");
+    try {
+      const ok = await NativeModules.FlocoFinanceTools.verifyPin(pin);
+      setPin("");
+      if (ok) {
+        setError("");
+        onUnlock();
+      } else fail("PIN incorreto.");
+    } catch (e: any) {
+      fail(e.message);
+    } finally {
+      setMode(null);
+    }
+  };
+  // Linha de erro com altura reservada: não empurra a tela e fica acima do teclado.
+  const errorLine = (
+    <View style={{ minHeight: 22 }} accessibilityLiveRegion="assertive">
+      {!!error && (
+        <RNAnimated.View style={{ opacity: fade }}>
+          <T style={{ color: c.red, textAlign: "center" }}>{error}</T>
+        </RNAnimated.View>
       )}
-      <Button
-        title={busy ? "Autenticando…" : "Usar bloqueio do Android"}
-        disabled={busy}
-        onPress={system}
-        icon="unlock"
-        secondary={pinEnabled}
-      />
-      {!!error && <T style={{ color: c.red }}>{error}</T>}
+    </View>
+  );
+  return (
+    <SafeAreaView style={[k.flex, { backgroundColor: c.bg }]}>
+      <KeyboardAvoidingView style={k.flex} behavior="padding">
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ flexGrow: 1, alignItems: "center", justifyContent: "center", padding: 28, gap: 24 }}
+        >
+          <I name="lock" size={42} color={c.primary} />
+          <T style={k.pageTitle}>Suas finanças protegidas</T>
+          <Muted style={{ textAlign: "center" }}>
+            Use o PIN do Floco ou o bloqueio do Android para entrar.
+          </Muted>
+          {pinEnabled && (
+            <View style={{ alignSelf: "stretch", gap: 8 }}>
+              <Muted style={{ fontFamily: "SoraSemi" }}>PIN do Floco</Muted>
+              <RNAnimated.View style={{ transform: [{ translateX: shake }] }}>
+                <AnimatedInput
+                  accessibilityLabel="PIN do Floco"
+                  secureTextEntry
+                  keyboardType="number-pad"
+                  returnKeyType="done"
+                  submitBehavior="submit"
+                  importantForAutofill="no"
+                  maxLength={12}
+                  value={pin}
+                  onChangeText={setPin}
+                  onSubmitEditing={enterWithPin}
+                  onFocus={() => setFocus(true)}
+                  onBlur={() => setFocus(false)}
+                  style={[
+                    k.input,
+                    {
+                      borderColor: error ? c.red : focus.interpolate({ inputRange: [0, 1], outputRange: [c.line, c.primary] }),
+                      color: c.text,
+                      backgroundColor: c.surface,
+                    },
+                  ]}
+                />
+              </RNAnimated.View>
+              {errorLine}
+              <Button
+                title={mode === "pin" ? "Verificando…" : "Entrar com PIN"}
+                disabled={busy || !pin}
+                onPress={enterWithPin}
+              />
+            </View>
+          )}
+          <View style={{ alignSelf: "stretch" }}>
+            <Button
+              title={mode === "system" ? "Autenticando…" : "Usar bloqueio do Android"}
+              disabled={busy}
+              onPress={system}
+              icon="unlock"
+              secondary={pinEnabled}
+            />
+          </View>
+          {!pinEnabled && errorLine}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
+
+const AnimatedInput = RNAnimated.createAnimatedComponent(TextInput);
 
 const TABS: { key: Tab; label: string; icon: Icon }[] = [
   { key: "home", label: "Início", icon: "home" },
@@ -415,6 +468,7 @@ function Shell({
   const pageScroll = React.useRef<React.ComponentRef<typeof ScrollView>>(null);
   const headerAction = useHeaderActionValue();
   const reduceMotion = useReducedMotion();
+  const [navHeight, setNavHeight] = useState(70);
 
   const firstRun =
     !state.settings.onboarded &&
@@ -470,6 +524,7 @@ function Shell({
             {!!top && !!headerAction && (
               <IconButton name="plus" label={headerAction.label} onPress={headerAction.onPress} />
             )}
+            {!!top && !headerAction && <View style={{ width: 48 }} />}
             {!top && (
               <View>
                 <IconButton
@@ -478,25 +533,27 @@ function Shell({
                   onPress={() => nav.push({ name: "settings" })}
                 />
                 {!!updates.release && nav.tab !== "home" && (
-                  <View pointerEvents="none" style={{ position: "absolute", top: 8, right: 8, width: 10, height: 10, borderRadius: 5, backgroundColor: c.red, borderWidth: 2, borderColor: pageBg }} />
+                  <Animated.View pointerEvents="none" entering={reduceMotion ? undefined : ZoomIn.duration(160)} style={{ position: "absolute", top: 8, right: 8, width: 10, height: 10, borderRadius: 5, backgroundColor: c.red, borderWidth: 2, borderColor: pageBg }} />
                 )}
               </View>
             )}
           </View>
         )}
         {!!updates.release && !top && nav.tab === "home" && (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => nav.push({ name: "updates" })}
-            style={({ pressed }) => [
-              s.banner,
-              { backgroundColor: c.soft, opacity: pressed ? 0.75 : 1 },
-            ]}
-          >
-            <T style={{ fontFamily: "SoraSemi" }}>
-              Nova versão {updates.release.version} disponível · Atualizar
-            </T>
-          </Pressable>
+          <Animated.View entering={reduceMotion ? undefined : FadeIn.duration(200)}>
+            <MotionPressable
+              kind="row"
+              accessibilityRole="button"
+              accessibilityLabel={`Nova versão ${updates.release.version} disponível`}
+              accessibilityHint="Abre a tela de atualizações"
+              onPress={() => nav.push({ name: "updates" })}
+              style={[s.banner, { backgroundColor: c.soft }]}
+            >
+              <T numberOfLines={2} style={{ fontFamily: "SoraSemi" }}>
+                Nova versão {updates.release.version} disponível · Ver atualização
+              </T>
+            </MotionPressable>
+          </Animated.View>
         )}
         {!top && nav.tab === "transactions" ? (
           <TransactionsScreen storageError={storageError} />
@@ -526,6 +583,7 @@ function Shell({
         {!top && (
           <View
             accessibilityRole="tablist"
+            onLayout={(e) => setNavHeight(e.nativeEvent.layout.height)}
             style={[
               s.bottomNav,
               { backgroundColor: c.surface, borderTopColor: c.line },
@@ -564,7 +622,7 @@ function Shell({
           </View>
         )}
       </KeyboardAvoidingView>
-      <Snackbar notice={notice} action={noticeAction} onClose={() => setNotice("")} />
+      <Snackbar notice={notice} action={noticeAction} onClose={() => setNotice("")} hasNav={!top} navHeight={navHeight} />
       <AddSheet visible={adding} onClose={() => setAdding(false)} />
     </SafeAreaView>
   );
@@ -778,14 +836,22 @@ function AddSheet({
     <SheetModal title="Adicionar" onClose={onClose}>
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
         <View style={s.sheetGrid}>
-          {options.filter((option) => !option.hidden).map((option) => (
-            <MotionPressable key={option.label} kind="row" accessibilityRole="button" accessibilityLabel={option.label}
-              onPress={() => go(option.initial)}
-              style={[s.sheetItem, { backgroundColor: c.soft }]}>
-              <I name={option.icon} size={26} color={option.color} />
-              <T style={{ fontFamily: "SoraSemi", fontSize: 13, textAlign: "center" }}>{option.label}</T>
-            </MotionPressable>
-          ))}
+          {(() => {
+            const list = options.filter((option) => !option.hidden);
+            return list.map((option, i) => {
+              // Número ímpar de ações: a última ocupa a linha toda, com ícone ao lado do rótulo.
+              const wide = list.length % 2 === 1 && i === list.length - 1;
+              return (
+                <MotionPressable key={option.label} kind="row" accessibilityRole="button" accessibilityLabel={option.label}
+                  accessibilityHint={`Abre o formulário: ${option.label.toLowerCase()}`}
+                  onPress={() => go(option.initial)}
+                  style={[s.sheetItem, { backgroundColor: c.soft }, wide && { flexBasis: "100%", flexDirection: "row", minHeight: 72 }]}>
+                  <I name={option.icon} size={26} color={option.color} />
+                  <T numberOfLines={2} maxFontSizeMultiplier={1.3} style={{ fontFamily: "SoraSemi", fontSize: 13, textAlign: "center" }}>{option.label}</T>
+                </MotionPressable>
+              );
+            });
+          })()}
         </View>
         {!hasAccount && <Muted>Cadastre uma conta para começar a lançar.</Muted>}
       </ScrollView>
@@ -797,36 +863,46 @@ function Snackbar({
   notice,
   action,
   onClose,
+  hasNav,
+  navHeight,
 }: {
   notice: string;
   action?: NoticeAction | null;
   onClose: () => void;
+  hasNav: boolean;
+  navHeight: number;
 }) {
   const { c } = useTheme();
+  const reduceMotion = useReducedMotion();
+  const insets = useSafeAreaInsets();
+  // 12 dp acima da barra inferior (altura medida) ou 16 dp da base quando não há barra.
+  const bottom = insets.bottom + (hasNav ? navHeight + 12 : 16);
   if (!notice) return null;
   return (
     <Animated.View
       key={notice}
-      entering={SlideInDown.duration(150)}
+      entering={reduceMotion ? undefined : FadeInDown.duration(180)}
+      exiting={reduceMotion ? undefined : FadeOutDown.duration(120)}
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"
-      style={[s.snackbar, { backgroundColor: c.text }]}
+      style={[s.snackbar, { backgroundColor: c.text, bottom }]}
     >
       <T style={{ color: c.bg, fontSize: 13, flex: 1 }}>{notice}</T>
       {action && (
-        <Pressable
+        <MotionPressable
+          kind="chip"
           accessibilityRole="button"
           accessibilityLabel={`${action.label}: ${notice}`}
           onPress={() => { onClose(); action.onPress(); }}
           style={{ minHeight: 48, minWidth: 48, paddingHorizontal: 14, borderRadius: 24, borderWidth: 1.5, borderColor: c.bg, alignItems: "center", justifyContent: "center" }}
         >
           <T style={{ color: c.bg, fontFamily: "SoraSemi", fontSize: 14 }}>{action.label}</T>
-        </Pressable>
+        </MotionPressable>
       )}
-      <Pressable accessibilityRole="button" accessibilityLabel="Fechar aviso" onPress={onClose} hitSlop={4}
+      <MotionPressable kind="icon" accessibilityRole="button" accessibilityLabel="Fechar aviso" onPress={onClose} hitSlop={4}
         style={{ width: 48, height: 48, alignItems: "center", justifyContent: "center", marginRight: -12 }}>
         <Feather name="x" size={18} color={c.bg} />
-      </Pressable>
+      </MotionPressable>
     </Animated.View>
   );
 }
@@ -840,8 +916,8 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
-  logo: { width: 36, height: 36, borderRadius: 10, marginLeft: 4 },
-  banner: { padding: 14, marginHorizontal: 20, marginTop: 8, borderRadius: 14 },
+  logo: { width: 36, height: 36, borderRadius: 10, marginLeft: 6 },
+  banner: { padding: 14, minHeight: 56, justifyContent: "center", marginHorizontal: 16, marginTop: 8, borderRadius: 14 },
   bottomNav: {
     flexDirection: "row",
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -869,9 +945,8 @@ const s = StyleSheet.create({
   bar: { width: 22, height: 3, borderRadius: 2, marginBottom: 4 },
   snackbar: {
     position: "absolute",
-    left: 18,
-    right: 18,
-    bottom: 96,
+    left: 16,
+    right: 16,
     paddingVertical: 4,
     paddingLeft: 16,
     paddingRight: 12,

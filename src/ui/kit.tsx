@@ -169,15 +169,19 @@ export function Section({
   action,
   onPress,
   icon,
+  actionLabel,
+  fixedHeight = false,
 }: {
   title: string;
   action?: string;
   onPress?: () => void;
   icon?: React.ReactNode; // ícone decorativo antes do título (o título continua sendo o texto lido)
+  actionLabel?: string; // rótulo falado da ação (ex.: "Ver tudo, Contas"); por padrão, o texto visível
+  fixedHeight?: boolean; // mantém 48 dp mesmo sem ação, para o título ficar na mesma posição com ou sem "Ver tudo"
 }) {
   const { c } = useTheme();
   return (
-    <View style={styles.section}>
+    <View style={[styles.section, fixedHeight && { minHeight: touch.min }]}>
       {icon ? (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 1 }}>
           {icon}
@@ -191,15 +195,17 @@ export function Section({
         </T>
       )}
       {action && onPress && (
-        <Pressable
+        <MotionPressable
+          kind="chip"
           accessibilityRole="button"
+          accessibilityLabel={actionLabel || action}
           onPress={onPress}
           style={styles.smallAction}
         >
           <T style={{ color: c.primary, fontSize: 13, fontFamily: "SoraSemi" }}>
             {action}
           </T>
-        </Pressable>
+        </MotionPressable>
       )}
     </View>
   );
@@ -842,14 +848,16 @@ export function AmountField({
 export function Group({
   title,
   children,
+  flush = false,
 }: {
   title?: string;
   children: React.ReactNode;
+  flush?: boolean; // logo abaixo de um Section: sem margem acima e com 12 dp abaixo, como o Box
 }) {
   const { c } = useTheme();
   const items = React.Children.toArray(children).filter(Boolean);
   return (
-    <View style={{ marginTop: space.lg }}>
+    <View style={flush ? { marginBottom: space.md } : { marginTop: space.lg }}>
       {!!title && (
         <Muted
           accessibilityRole="header"

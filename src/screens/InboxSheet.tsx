@@ -1,11 +1,12 @@
 // Confirmação de uma notificação bancária: revisar e registrar em um toque.
 // Linhas compactas com seta que abrem listas (tipo, conta ou cartão, categoria, tags).
 import React, { useEffect, useRef, useState } from "react";
-import { View, Modal, Keyboard, Pressable, ScrollView, TextInput, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Keyboard, ScrollView, TextInput, StyleSheet } from "react-native";
 import { T, Muted, I, Button, IconButton, styles as k } from "../ui/kit";
 import { DateField } from "../ui/DateTime";
 import { maskMoney, normalizeMoneyText } from "../moneyInput.mjs";
-import { DiscardDraftSheet } from "../ui/Sheet";
+import { DiscardDraftSheet, SheetModal, ConfirmSheet, RowActions } from "../ui/Sheet";
+import MotionPressable from "../ui/motion";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { draftFromNotification, importNotification, KIND_LABEL, KIND_DETAIL } from "../notification-import.mjs";
@@ -37,6 +38,8 @@ export default function InboxSheet({ row, editDate = false, onClose, onDone }: {
   const [f, setF] = useState<any>(null);
   const baseline = useRef("");
   const [discard, setDiscard] = useState(false);
+  const [dropAsk, setDropAsk] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [picker, setPicker] = useState<"" | "kind" | "target" | "category" | "tags">("");
   useEffect(() => {
@@ -46,6 +49,8 @@ export default function InboxSheet({ row, editDate = false, onClose, onDone }: {
     baseline.current = JSON.stringify(draft);
     setF(draft);
     setDiscard(false);
+    setDropAsk(false);
+    setBusy(false);
   }, [row?.id]);
   if (!row || !f) return null;
   const requestClose = () => {
@@ -58,8 +63,11 @@ export default function InboxSheet({ row, editDate = false, onClose, onDone }: {
   const when = new Date(row.postedAt);
   const stamp = `${String(row.bank).replace(/^SMS · /, "SMS ")} · ${when.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} · ${f.time}`;
   const confirm = async () => {
+    if (busy) return;
     setError("");
+    setBusy(true);
     const ok = await perform((s: any) => importNotification(s, row, { ...f, cardId: f.kind === "card" ? f.cardId : "" }), "Lançamento registrado");
+    setBusy(false);
     if (ok) onDone(row.id);
   };
   const cards = state.cards.filter((x: any) => !x.archived);
@@ -70,11 +78,21 @@ export default function InboxSheet({ row, editDate = false, onClose, onDone }: {
   const tagNames = (f.tags || []).map((id: string) => state.tags?.find((t: any) => t.id === id)?.name).filter(Boolean);
   const line = { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.line };
   if (discard) return <DiscardDraftSheet onDiscard={onClose} onContinue={() => setDiscard(false)} />;
+  const confirmTitle = isCard ? "Confirmar compra" : income ? "Confirmar entrada" : "Confirmar saída";
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={requestClose}>
-      <Pressable style={[s.backdrop, { backgroundColor: c.scrim }]} onPress={requestClose} accessibilityLabel="Fechar" />
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[s.sheet, { backgroundColor: c.bg }]}>
-        <View style={[s.handle, { backgroundColor: c.line }]} />
+    <>
+      <SheetModal
+        title="Revisar pendência"
+        onClose={requestClose}
+        headerAction={f.kind === "denied" ? undefined : (
+          <RowActions title="Pendência" actions={[{ label: "Descartar pendência", icon: "trash-2", danger: true, onPress: () => setDropAsk(true) }]} />
+        )}
+        footer={f.kind === "denied" ? (
+          <Button title="Descartar aviso" icon="x" onPress={() => onDone(row.id)} />
+        ) : (
+          <Button title={busy ? "Registrando…" : confirmTitle} icon={busy ? undefined : "check"} disabled={busy} accessibilityLiveRegion="polite" onPress={confirm} />
+        )}
+      >
         <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }} keyboardShouldPersistTaps="handled">
           <View style={[k.row, { justifyContent: "space-between", gap: 8 }]}>
             <View style={[s.badge, { backgroundColor: c.soft, flexShrink: 0 }]}>
@@ -95,9 +113,9 @@ export default function InboxSheet({ row, editDate = false, onClose, onDone }: {
               value={normalizeMoneyText(f.amount)}
               onChangeText={(v) => set("amount", maskMoney(v, normalizeMoneyText(f.amount)).text)}
               keyboardType="number-pad"
-              style={{ flex: 1, fontSize: 32, fontFamily: "SoraBold", color, paddingVertical: 2 }}
+              style={{ flex: 1, minHeight: 48, fontSize: 32, fontFamily: "SoraBold", color, paddingVertical: 2 }}
             />
-            <I name="edit-2" size={18} />
+            <View importantForAccessibility="no"><I name="edit-2" size={18} /></View>
           </View>
           {f.kind === "denied" && <Muted>O banco recusou esta compra: nada foi cobrado. Descarte o aviso ou, se ele estiver errado, escolha o tipo certo.</Muted>}
           <View style={{ borderWidth: 1, borderColor: c.line, borderRadius: 18, overflow: "hidden" }}>
@@ -133,9 +151,9 @@ export default function InboxSheet({ row, editDate = false, onClose, onDone }: {
                   <T style={{ fontFamily: "SoraSemi" }}>{Number(f.installments) > 1 ? `${f.installments}x` : "À vista"}</T>
                 </View>
                 <View style={[k.row, { gap: 4 }]}>
-                  <IconButton name="minus" label="Menos parcelas" onPress={() => set("installments", String(Math.max(1, Number(f.installments) - 1)))} />
+                  <IconButton name="minus" label="Menos parcelas" disabled={Number(f.installments) <= 1} onPress={() => set("installments", String(Math.max(1, Number(f.installments) - 1)))} />
                   <T style={{ minWidth: 24, textAlign: "center" }}>{f.installments}</T>
-                  <IconButton name="plus" label="Mais parcelas" onPress={() => set("installments", String(Math.min(48, Number(f.installments) + 1)))} />
+                  <IconButton name="plus" label="Mais parcelas" disabled={Number(f.installments) >= 48} onPress={() => set("installments", String(Math.min(48, Number(f.installments) + 1)))} />
                 </View>
               </View>
             )}
@@ -150,9 +168,9 @@ export default function InboxSheet({ row, editDate = false, onClose, onDone }: {
               <View style={[k.row, { paddingHorizontal: 14, minHeight: 48, gap: 8, backgroundColor: c.soft }]}>
                 <I name="zap" size={15} color={c.primary} />
                 <T style={{ flex: 1, color: c.primary, fontSize: 13 }}>Sugestão do app para esta loja</T>
-                <Pressable accessibilityRole="button" accessibilityLabel="Trocar a categoria sugerida" onPress={() => setPicker("category")} style={{ minHeight: 48, justifyContent: "center", paddingHorizontal: 6 }}>
+                <MotionPressable kind="row" accessibilityRole="button" accessibilityLabel="Trocar a categoria sugerida" onPress={() => setPicker("category")} style={{ minHeight: 48, justifyContent: "center", paddingHorizontal: 6 }}>
                   <T style={{ color: c.primary, fontFamily: "SoraSemi", fontSize: 13 }}>Trocar</T>
-                </Pressable>
+                </MotionPressable>
               </View>
             )}
             <PickerRow icon="hash" value={tagNames.length ? tagNames.map((n: string) => "#" + n).join("  ") : ""} placeholder="Adicionar tags" onPress={() => setPicker("tags")} />
@@ -173,20 +191,21 @@ export default function InboxSheet({ row, editDate = false, onClose, onDone }: {
             </View>
           </View>
           {editDate && <DateField label="Data" value={f.date} onChange={(value) => set("date", value)} />}
-          {!!error && <T style={{ color: c.red }}>{error}</T>}
+          {!!error && <T accessibilityRole="alert" accessibilityLiveRegion="assertive" style={{ color: c.red }}>{error}</T>}
         </ScrollView>
-        <View style={[k.row, s.footer, { borderTopColor: c.line }]}>
-          <Pressable accessibilityRole="button" onPress={() => onDone(row.id)} style={{ flex: 1, minHeight: 52, justifyContent: "center", alignItems: "center" }}>
-            <T style={{ color: c.primary, fontFamily: "SoraSemi" }}>Descartar</T>
-          </Pressable>
-          <View style={{ flex: 1.6 }}>
-            {f.kind === "denied" ? (
-              <Button title="Descartar aviso" icon="x" onPress={() => onDone(row.id)} />
-            ) : (
-              <Button title={isCard ? "Confirmar compra" : income ? "Confirmar entrada" : "Confirmar saída"} icon="check" onPress={confirm} />
-            )}
-          </View>
-        </View>
+      </SheetModal>
+      {dropAsk && (
+        <ConfirmSheet
+          title="Descartar esta pendência?"
+          changes={["O aviso sai da fila de pendentes."]}
+          keeps={["Nenhum lançamento é criado.", "Saldos e contas não mudam."]}
+          action="Descartar"
+          cancelLabel="Voltar"
+          preferCancel
+          onConfirm={() => onDone(row.id)}
+          onClose={() => setDropAsk(false)}
+        />
+      )}
         {picker === "kind" && (
           <ListSheet
             title="Tipo · lido do banco"
@@ -239,17 +258,12 @@ export default function InboxSheet({ row, editDate = false, onClose, onDone }: {
             onClose={() => setPicker("")}
           />
         )}
-      </KeyboardAvoidingView>
-    </Modal>
+    </>
   );
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1 },
-  sheet: { maxHeight: "92%", borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: "hidden" },
-  handle: { width: 44, height: 5, borderRadius: 3, alignSelf: "center", marginTop: 8 },
   badge: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  footer: { padding: 12, gap: 8, borderTopWidth: StyleSheet.hairlineWidth },
   fieldRow: { gap: 12, minHeight: 60, paddingHorizontal: 14, paddingVertical: 4 },
   rowIcon: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" },
 });

@@ -19,11 +19,12 @@ const FADE = { duration: 150 };
 const DRAG_CLOSE = 120; // dp arrastados para baixo que fecham a folha
 const FLING_CLOSE = 900; // velocidade (dp/s) que fecha mesmo com pouco arraste
 
-export function SheetModal({ title, onClose, children, footer }: {
+export function SheetModal({ title, onClose, children, footer, headerAction }: {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  headerAction?: React.ReactNode; // botão extra (48 dp) ao lado do X, ex.: menu "⋯"
 }) {
   const { c, dark } = useTheme();
   const reduce = useReducedMotion();
@@ -101,6 +102,7 @@ export function SheetModal({ title, onClose, children, footer }: {
                 <View ref={heading} accessible accessibilityRole="header" accessibilityLabel={title} style={{ flex: 1 }}>
                   <T style={s.title} maxFontSizeMultiplier={1.6}>{title}</T>
                 </View>
+                {headerAction}
                 <IconButton name="x" label="Fechar" color={c.text} onPress={close} />
               </View>
             </View>
