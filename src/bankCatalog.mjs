@@ -38,7 +38,7 @@ export const BANK_APPS = [
   ["br.com.caju.app", "Caju (benefício)", "caju"],
 ];
 
-export const DEFAULT_NOTIFY = { banks: ["com.nu.production", "br.com.intermedium"], ignored: [], sms: false, ignoreDenied: true };
+export const DEFAULT_NOTIFY = { banks: ["com.nu.production", "br.com.intermedium"], ignored: [], sms: false, ignoreDenied: true, alert: true };
 
 export function notifySettings(state) {
   return { ...DEFAULT_NOTIFY, ...(state.settings?.notify || {}) };

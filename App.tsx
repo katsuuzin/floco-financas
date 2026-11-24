@@ -90,6 +90,7 @@ import {
 } from "./src/screens/PersonalizeScreens";
 import { layoutOf, DESTINATIONS } from "./src/layout.mjs";
 import { reschedule, updateWidgets } from "./src/app/notify";
+import { requestOpenPending } from "./src/app/pendingOpen";
 import PlanningPanel from "./src/PlanningPanel";
 import ImportsPanel from "./src/ImportsPanel";
 import ReceiptPanel from "./src/ReceiptPanel";
@@ -453,6 +454,12 @@ function Shell({
                   ? { type: "expense", cardId: card.id }
                   : { type: "expense" },
         });
+      } else if (m[1] === "pendencia") {
+        // Toque no aviso do Floco: vai para a Início e abre "Revisar pendência" daquele lançamento.
+        let id = "";
+        try { id = decodeURIComponent(m[2] || ""); } catch { /* id inválido: só abre a Início */ }
+        requestOpenPending(id);
+        nav.reset();
       } else if (m[1] === "bills") nav.push({ name: "reminders" });
       else if (m[1] === "cards") nav.push({ name: "cards" });
       else if (m[1] === "budgets") nav.push({ name: "budgets" });

@@ -8,6 +8,8 @@ import { entityColors, useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav, destination } from "../app/nav";
 import { useBankInbox } from "../app/inbox";
+import { onOpenPending, takeWantedPending } from "../app/pendingOpen";
+import { permission as notifyPermission } from "../app/notify";
 import InboxSheet from "./InboxSheet";
 import BankBadge from "../ui/BankBadge";
 import { bankLook } from "../bankCatalog.mjs";
@@ -268,6 +270,25 @@ function PendingInbox() {
   const [showDuplicates, setShowDuplicates] = React.useState(false);
   const [showAll, setShowAll] = React.useState(false);
   const [enabling, setEnabling] = React.useState(false);
+  // Toque no aviso do Floco (floco://pendencia/<id>): abre "Revisar pendência" daquele lançamento.
+  const [want, setWant] = React.useState<string | null>(() => takeWantedPending());
+  React.useEffect(() => onOpenPending((id) => { takeWantedPending(); setWant(id); }), []);
+  React.useEffect(() => {
+    if (!want) return;
+    const row = [...inbox.rows, ...inbox.hiddenRows].find((r: any) => r.id === want);
+    if (row) { setOpen(row); setWant(null); return; }
+    // Já registrada ou descartada: não fica esperando para sempre.
+    const t = setTimeout(() => setWant(null), 8000);
+    return () => clearTimeout(t);
+  }, [want, inbox.rows, inbox.hiddenRows]);
+  // O aviso do Floco precisa da permissão de notificações do Android 13+ (pede uma vez ao abrir).
+  const askedAlerts = React.useRef(false);
+  React.useEffect(() => {
+    const ready = inbox.status?.available && inbox.status.permission && inbox.status.enabled;
+    if (!ready || askedAlerts.current) return;
+    askedAlerts.current = true;
+    void notifyPermission(true).catch(() => {});
+  }, [inbox.status]);
   const viewingDuplicates = showDuplicates && inbox.hiddenRows.length > 0;
   const displayed = viewingDuplicates ? inbox.hiddenRows : inbox.rows;
   const st = inbox.status;

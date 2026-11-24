@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { BANK_APPS, nativeConfig, notifySettings } from "../bankCatalog.mjs";
+import { permission as notifyPermission } from "../app/notify";
 import { suggestNotification } from "../notification-import.mjs";
 import { useBankInbox } from "../app/inbox";
 import { useStore } from "../app/store";
@@ -103,6 +104,13 @@ export default function NotificationsScreen() {
       <Box style={{ gap: 12 }}>
         <Toggle label="Ler SMS de compra dos bancos" value={!!notify.sms} onChange={(sms) => void setNotify({ sms })}
           hint="Lê os avisos do app de mensagens enviados pelos bancos selecionados." />
+        <Toggle label="Avisar quando o banco notificar" value={notify.alert !== false}
+          onChange={(alert) => {
+            void setNotify({ alert });
+            void native?.setAlert?.(alert).catch(() => setError("Não foi possível salvar o aviso."));
+            if (alert) void notifyPermission(true).catch(() => {});
+          }}
+          hint="O Floco mostra o próprio aviso (ex.: Pix recebido - Inter, R$ 470,00). Toque nele para confirmar a entrada ou saída." />
         <Toggle label="Não registrar compras negadas" value={notify.ignoreDenied !== false} onChange={(ignoreDenied) => void setNotify({ ignoreDenied })}
           hint="Avisos de compras recusadas saem da fila automaticamente." />
         <Field label="Palavras ignoradas" hint="Separe as palavras por vírgula." value={ignored}
