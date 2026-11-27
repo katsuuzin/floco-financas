@@ -183,6 +183,52 @@ export function donutSlices(state, month, { kind = "expense", hidden = [], byInv
   };
 }
 
+// Lançamentos que formam o valor de uma categoria na rosca, com a mesma regra de contagem de
+// donutSlices (a soma bate com o valor da categoria). `sub`: null = todas, "" = sem subcategoria.
+// `sort`: "value" (maior primeiro) ou "date" (mais recente primeiro).
+export function categoryTransactions(state, month, name, { kind = "expense", byInvoice = false, sub = null, sort = "value", query = "" } = {}) {
+  const norm = (x) => String(x || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const q = norm(query).trim();
+  const rows = [];
+  for (const t of state.transactions) {
+    const inMonth = byInvoice && t.cardId ? t.invoiceMonth === month : monthKey(t.date) === month;
+    if (!t.confirmed || !inMonth || !real(t)) continue;
+    if ((kind === "income") !== (t.type === "income")) continue;
+    if ((t.category || "Outros") !== name) continue;
+    if (sub !== null && (t.subcategory || "") !== sub) continue;
+    if (q && !norm(t.description).includes(q)) continue;
+    rows.push({ id: t.id, description: t.description, amount: analysisAmount(t), date: t.date, time: t.time || "", category: t.category || "Outros", subcategory: t.subcategory || "", type: t.type, accountId: t.accountId || "", cardId: t.cardId || "", purchaseTitle: t.purchaseTitle || "" });
+  }
+  const byDate = (a, b) => (b.date + b.time).localeCompare(a.date + a.time) || String(b.id).localeCompare(String(a.id));
+  rows.sort(sort === "date" ? byDate : (a, b) => b.amount - a.amount || byDate(a, b));
+  return { total: rows.reduce((a, r) => a + r.amount, 0), rows };
+}
+
+// Total por comerciante no mês. Itens de uma nota fiscal dividida entram pelo nome do mercado
+// (purchaseTitle), não item a item; o resto agrupa pela descrição, sem acento nem maiúsculas.
+export function merchantTotals(state, month, kind = "expense") {
+  const norm = (x) => String(x || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/s+/g, " ").trim();
+  const map = new Map();
+  for (const t of state.transactions) {
+    if (!t.confirmed || monthKey(t.date) !== month || !real(t)) continue;
+    if ((kind === "income") !== (t.type === "income")) continue;
+    const name = t.purchaseTitle || t.description;
+    const key = norm(name);
+    if (!key) continue;
+    const g = map.get(key) || { name, cents: 0, count: 0 };
+    g.cents += analysisAmount(t);
+    g.count += t.purchaseId ? 0 : 1;
+    if (t.purchaseId) g.purchases = (g.purchases || new Set()).add(t.purchaseId);
+    map.set(key, g);
+  }
+  const rows = [...map.values()]
+    .map((g) => ({ name: g.name, cents: g.cents, count: g.count + (g.purchases ? g.purchases.size : 0) }))
+    .filter((r) => r.cents > 0)
+    .sort((a, b) => b.cents - a.cents || a.name.localeCompare(b.name, "pt-BR"));
+  const total = rows.reduce((a, r) => a + r.cents, 0);
+  return { total, rows: rows.map((r) => ({ ...r, fraction: total ? r.cents / total : 0 })) };
+}
+
 // Ângulos dos arcos (radianos, começando no topo, sentido horário) com folga entre fatias.
 // Uma fatia sozinha fecha o anel. Fatias pequenas demais para a folga ficam como ponto.
 export function donutArcs(fractions, gap = 0.06) {

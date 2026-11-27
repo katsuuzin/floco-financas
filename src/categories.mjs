@@ -46,12 +46,16 @@ const sameName = (a, b) => lc(a) === lc(b);
 
 // Categorias ou subcategorias personalizadas (cadastro antigo: `parent` marca a subcategoria).
 const customs = (s) => s.customCategories || [];
-const usedRoots = (s) => {
+// Categorias em uso. Com `type` ("expense" | "income"), só as usadas por itens daquele tipo, para o
+// seletor de receita não mostrar Moradia só porque há uma despesa nela (e o contrário).
+const usedRoots = (s, type) => {
   const used = new Set();
   const add = (v) => v && used.add(v);
-  for (const t of s.transactions || []) add(t.category);
-  for (const b of s.budgets || []) for (const c of b.categories?.length ? b.categories : [b.category]) add(c);
-  for (const r of [...(s.recurrences || []), ...(s.financings || []), ...(s.rules || [])]) add(r.category);
+  const fits = (x) => !type || (x.type === "income" ? "income" : "expense") === type;
+  for (const t of s.transactions || []) if (fits(t)) add(t.category);
+  for (const b of s.budgets || []) if (fits(b)) for (const c of b.categories?.length ? b.categories : [b.category]) add(c);
+  for (const r of [...(s.recurrences || []), ...(s.rules || [])]) if (fits(r)) add(r.category);
+  for (const f of s.financings || []) if (!type || type === "expense") add(f.category);
   return used;
 };
 
@@ -80,11 +84,12 @@ export function subsOf(s, category) {
 // criou ou já usa aparece sempre.
 export function categoryTree(s, type) {
   const own = new Set(customs(s).filter((c) => !c.parent).map((c) => c.name));
-  const keep = new Set([...own, ...usedRoots(s)]);
+  const keep = new Set([...own, ...usedRoots(s, type)]);
   return rootNames(s)
     .filter((n) => {
       const c = CATALOG.find((x) => x.name === n);
-      return !type || !c || c.types.includes(type) || keep.has(n);
+      // Fora do catálogo (nomes antigos ou criados pelo usuário) só aparece se for do usuário ou estiver em uso naquele tipo.
+      return !type || (c ? c.types.includes(type) || keep.has(n) : keep.has(n));
     })
     .map((name) => ({ name, subs: subsOf(s, name) }));
 }

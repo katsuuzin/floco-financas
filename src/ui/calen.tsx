@@ -152,7 +152,7 @@ export function CBar({ value, max, color, height = 6 }: { value: number; max: nu
 export function CButton({ title, onPress, icon }: { title: string; onPress: () => void; icon?: any }) {
   const { k } = useCalen();
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={{ minHeight: 48, borderRadius: 16, backgroundColor: k.primary, flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center", paddingHorizontal: 18 }}>
+    <Pressable accessibilityRole="button" accessibilityLabel={title} onPress={onPress} style={{ minHeight: 48, borderRadius: 16, backgroundColor: k.primary, flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center", paddingHorizontal: 18 }}>
       {!!icon && <Feather name={icon} size={17} color={k.onPrimary} />}
       <CText semi style={{ color: k.onPrimary }}>
         {title}

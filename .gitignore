@@ -13,7 +13,7 @@ analysis/*.log
 analysis/*.xml
 analysis/gradle-threads.txt
 android-bundle-check/
-analysis/
+/analysis/
 android/build/
 android/app/.cxx/
 rea/

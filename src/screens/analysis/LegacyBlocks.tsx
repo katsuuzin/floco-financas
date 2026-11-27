@@ -139,6 +139,13 @@ export default function LegacyBlocks() {
                 <View key={r.m} style={{ flex: 1, height: Math.max(2, (Math.abs(r.value) / peak) * 100), borderRadius: 3, backgroundColor: r.value < 0 ? c.red : c.primary }} />
               ))}
             </View>
+            <View style={{ flexDirection: "row", gap: 4, marginTop: 6 }} importantForAccessibility="no-hide-descendants">
+              {rows.map((r) => (
+                <Muted key={r.m} style={{ flex: 1, fontSize: 10, textAlign: "center" }}>
+                  {short(r.m)}
+                </Muted>
+              ))}
+            </View>
             <Muted style={{ marginTop: 8 }}>
               {short(rows[0].m)}: {show(first)} → {short(rows[rows.length - 1].m)}: {show(last)}
             </Muted>

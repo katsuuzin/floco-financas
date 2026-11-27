@@ -217,7 +217,8 @@ export function monthInsights(state, month, ref = today()) {
   // 4. Seu mês com um lugar: descrição com 3+ compras no mês.
   const byName = new Map();
   for (const t of state.transactions)
-    if (t.confirmed && t.type === "expense" && real(t) && monthKey(t.date) === month) {
+    // Itens de uma nota fiscal dividida (purchaseId) são uma compra só, não várias do mesmo nome.
+    if (t.confirmed && t.type === "expense" && real(t) && !t.purchaseId && monthKey(t.date) === month) {
       const k = normName(t.description);
       if (!k) continue;
       const g = byName.get(k) || { name: t.description, sum: 0, n: 0, from: t.date, to: t.date };

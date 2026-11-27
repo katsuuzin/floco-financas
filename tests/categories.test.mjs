@@ -131,3 +131,22 @@ test("arte das categorias: cada categoria do catálogo tem ícone e cor do Calen
   assert.equal(lookOf({ categoryLooks: { Moradia: { icon: "tag" } } }, "Moradia").image, "");
   assert.equal(lookOf({}, "Mercado").image, "grocery");
 });
+
+test("seletor: categoria usada só por despesas não aparece na lista de receitas, e vice-versa", () => {
+  let s = { transactions: [{ id: "1", type: "expense", category: "Moradia" }, { id: "2", type: "income", category: "Salário" }], budgets: [], recurrences: [], financings: [], rules: [], customCategories: [] };
+  const inc = categoryTree(s, "income").map((c) => c.name);
+  assert.ok(inc.includes("Salário"));
+  assert.equal(inc.includes("Moradia"), false);
+  const exp = categoryTree(s, "expense").map((c) => c.name);
+  assert.ok(exp.includes("Moradia"));
+  assert.equal(exp.includes("Salário"), false);
+  s = { ...s, customCategories: [{ name: "Meu bico", type: "income" }] };
+  assert.ok(categoryTree(s, "income").map((c) => c.name).includes("Meu bico"), "categoria criada pelo usuário continua aparecendo");
+});
+
+test("seletor: nome antigo fora do catálogo só aparece no tipo em que está em uso", () => {
+  const s = { transactions: [{ id: "1", type: "expense", category: "Mercado" }], budgets: [], recurrences: [], financings: [], rules: [], customCategories: [] };
+  assert.ok(categoryTree(s, "expense").map((c) => c.name).includes("Mercado"));
+  assert.equal(categoryTree(s, "income").map((c) => c.name).includes("Mercado"), false);
+  assert.ok(categoryTree(s).map((c) => c.name).includes("Mercado"), "sem tipo, nada muda");
+});
