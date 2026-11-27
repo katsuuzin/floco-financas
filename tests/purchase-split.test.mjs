@@ -14,6 +14,19 @@ const items = [
   parseItem({ name: "Óleo 15w40 Ipiranga", qty: 2, unit: "37,50" }),
 ];
 
+test("itens da nota viram itens da divisão e a soma fecha", async () => {
+  const { notaItemsToSplit, sumItems } = await import("../src/purchaseSplit.mjs");
+  const out = notaItemsToSplit(base(), [
+    { name: "Lenço Lysoform", qty: 1, unit: "", unitPriceCents: 2799, totalCents: 2799 },
+    { name: "Sabão", qty: 2, unit: "", unitPriceCents: 1585, totalCents: 3170 },
+    { name: "Banana", qty: 0.5, unit: "kg", unitPriceCents: 1000, totalCents: 500 },
+  ]);
+  assert.equal(sumItems(out), 2799 + 3170 + 500);
+  assert.equal(out[1].qty, 2);
+  assert.equal(out[2].qty, 1);
+  assert.match(out[2].name, /0,5 kg/);
+});
+
 test("palavra do produto vence a marca da regra", () => {
   const s = base();
   s.rules = DEFAULT_RULES.map(([pattern, category, subcategory], i) => ({ id: "r" + i, pattern, category, subcategory, type: "expense", priority: 10 }));

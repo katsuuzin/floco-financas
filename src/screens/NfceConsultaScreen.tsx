@@ -16,7 +16,7 @@ const TIMEOUT_MS = 45000;
 const MAX_RAW = MAX_HTML_CHARS + 10_000;
 
 // Roda dentro da página da SEFAZ: espera a tabela de itens e devolve o HTML ao app (como um leitor de tela faria).
-const PAGE_SCRIPT = `
+export const PAGE_SCRIPT = `
 (function () {
   var tries = 0;
   var timer = setInterval(function () {

@@ -11,11 +11,13 @@ import { CategorySheet } from "../ui/pickers";
 import { lookOf } from "../looks.mjs";
 import { categoryLabel } from "../categories.mjs";
 import { maskMoney, normalizeMoneyText } from "../moneyInput.mjs";
-import { guessItemCategory, parseItem, itemCents, sumItems } from "../purchaseSplit.mjs";
+import { guessItemCategory, parseItem, itemCents, sumItems, notaItemsToSplit } from "../purchaseSplit.mjs";
+import NotaImportSheet from "./NotaImportSheet";
 
 const reais = (cents: number) => `R$ ${(cents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export default function PurchaseItemsSheet({ state, total, fallback, items, onSave, onFixTotal, onClose }: {
+export default function PurchaseItemsSheet({ state, total, fallback, items, onSave, onFixTotal, onNota, onClose }: {
+  onNota?: (nota: any, info: any) => void;
   state: any;
   total: number; // centavos da compra
   fallback: { category: string; subcategory: string };
@@ -31,6 +33,8 @@ export default function PurchaseItemsSheet({ state, total, fallback, items, onSa
   const [unit, setUnit] = useState("");
   const [error, setError] = useState("");
   const [pick, setPick] = useState<string>("");
+  const [scan, setScan] = useState(false);
+  const [notaMsg, setNotaMsg] = useState("");
   const sum = sumItems(list);
   const diff = total - sum;
   const fits = list.length > 0 && diff === 0;
@@ -69,6 +73,8 @@ export default function PurchaseItemsSheet({ state, total, fallback, items, onSa
         }
       >
         <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }} keyboardShouldPersistTaps="handled">
+          <Button secondary icon="camera" title="Ler QR da nota fiscal" onPress={() => setScan(true)} />
+          {!!notaMsg && <Muted accessibilityLiveRegion="polite">{notaMsg}</Muted>}
           <TextInput accessibilityLabel="Nome do item" value={name} onChangeText={setName} placeholder="Item (ex.: gasolina)" placeholderTextColor={c.muted} returnKeyType="next" style={field} />
           <View style={[k.row, { gap: 6 }]}>
             <View style={[k.row, { gap: 0, borderWidth: 1, borderColor: c.line, borderRadius: 24 }]} accessibilityRole="adjustable" accessibilityLabel="Quantidade" accessibilityValue={{ text: String(Number(qty) || 1) }}
@@ -104,6 +110,18 @@ export default function PurchaseItemsSheet({ state, total, fallback, items, onSa
           )}
         </ScrollView>
       </SheetModal>
+      {scan && (
+        <NotaImportSheet
+          onClose={() => setScan(false)}
+          onParsed={(nota, info) => {
+            const add = notaItemsToSplit(state, nota.items, fallback);
+            setList((x) => [...x, ...add]);
+            onNota?.(nota, info);
+            setNotaMsg(`${add.length} itens lidos da nota de ${nota.marketName || "mercado"}.${nota.totalCents !== total ? ` A nota fechou em ${reais(nota.totalCents)}.` : ""}`);
+            setScan(false);
+          }}
+        />
+      )}
       {picked && (
         <CategorySheet
           state={state}

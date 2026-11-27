@@ -41,6 +41,25 @@ export function parseItem(input) {
   return { id: input.id || uid(), name, qty, unit: parseMoney(input.unit), category: input.category || "Outros", subcategory: input.subcategory || "" };
 }
 
+// Itens lidos da nota fiscal → itens da divisão. Quantidade inteira com preço exato fica como "qtd × unitário";
+// peso/fração (0,5 kg) vira 1 linha com o total e a quantidade no nome. A soma dos itens é sempre a da nota.
+export function notaItemsToSplit(s, notaItems, fallback = { category: "Outros", subcategory: "" }) {
+  return notaItems.map((n) => {
+    const exact = Number.isInteger(n.qty) && n.qty >= 1 && n.qty <= 999 && n.unitPriceCents * n.qty === n.totalCents;
+    const qtyText = `${String(n.qty).replace(".", ",")}${n.unit ? " " + n.unit : "×"}`;
+    const name = exact || n.qty === 1 ? n.name : `${n.name} (${qtyText})`;
+    const g = guessItemCategory(s, n.name, fallback);
+    return {
+      id: uid(),
+      name: name.slice(0, 80),
+      qty: exact ? n.qty : 1,
+      unit: exact ? n.unitPriceCents : n.totalCents,
+      category: g.category,
+      subcategory: g.subcategory,
+    };
+  });
+}
+
 // Registra a compra como itens. `input` é o rascunho da pendência (já com conta, data e hora).
 export function importNotificationAsItems(s, row, input, items) {
   if (s.transactions.some((t) => t.notificationId === row.id)) return s;

@@ -13,6 +13,8 @@ import { draftFromNotification, importNotification, KIND_LABEL, KIND_DETAIL } fr
 import { importNotificationAsItems, sumItems } from "../purchaseSplit.mjs";
 import { parseMoney } from "../finance.mjs";
 import PurchaseItemsSheet from "./PurchaseItemsSheet";
+import { purchasesOf, recordPurchase } from "../shoppingPurchases.mjs";
+import { nfceToPurchase } from "../nfceParse.mjs";
 import { lookOf } from "../looks.mjs";
 import BankBadge from "../ui/BankBadge";
 import CategoryIcon from "../ui/CategoryIcon";
@@ -45,6 +47,8 @@ export default function InboxSheet({ row, editDate = false, onClose, onDone }: {
   const [busy, setBusy] = useState(false);
   const [items, setItems] = useState<any[]>([]);
   const [splitOpen, setSplitOpen] = useState(false);
+  const [nota, setNota] = useState<any>(null);
+  const [notaInfo, setNotaInfo] = useState<any>(null);
   const [error, setError] = useState("");
   const [picker, setPicker] = useState<"" | "kind" | "target" | "category" | "tags">("");
   useEffect(() => {
@@ -57,6 +61,8 @@ export default function InboxSheet({ row, editDate = false, onClose, onDone }: {
     setDropAsk(false);
     setBusy(false);
     setItems([]);
+    setNota(null);
+    setNotaInfo(null);
     setSplitOpen(false);
   }, [row?.id]);
   if (!row || !f) return null;
@@ -80,7 +86,14 @@ export default function InboxSheet({ row, editDate = false, onClose, onDone }: {
       if (sumItems(items) !== cents) { setError("O valor da compra mudou. Abra “Itens da compra” e confira a soma."); return; }
     }
     setBusy(true);
-    const ok = await perform((s: any) => items.length ? importNotificationAsItems(s, row, draft, items) : importNotification(s, row, draft), items.length ? `${items.length} ${items.length === 1 ? "item registrado" : "itens registrados"}` : "Lançamento registrado");
+    const ok = await perform((s: any) => {
+      if (!items.length) return importNotification(s, row, draft);
+      let next = importNotificationAsItems(s, row, draft, items);
+      // Nota lida pelo QR: também entra no histórico de compras (preços por produto), sem duplicar a mesma nota.
+      if (nota && !purchasesOf(next).some((p: any) => p.chave && p.chave === nota.chave))
+        next = recordPurchase(next, nfceToPurchase(nota, notaInfo));
+      return next;
+    }, items.length ? `${items.length} ${items.length === 1 ? "item registrado" : "itens registrados"}` : "Lançamento registrado");
     setBusy(false);
     if (ok) onDone(row.id);
   };
@@ -101,7 +114,7 @@ export default function InboxSheet({ row, editDate = false, onClose, onDone }: {
         headerAction={f.kind === "denied" ? undefined : (
           <RowActions title="Pendência" actions={[
             ...(income ? [] : [{ label: items.length ? `Editar itens (${items.length})` : "Dividir em itens", icon: "list" as any, onPress: () => setSplitOpen(true) }]),
-            ...(items.length ? [{ label: "Voltar a um lançamento só", icon: "rotate-ccw" as any, onPress: () => setItems([]) }] : []),
+            ...(items.length ? [{ label: "Voltar a um lançamento só", icon: "rotate-ccw" as any, onPress: () => { setItems([]); setNota(null); } }] : []),
             { label: "Descartar pendência", icon: "trash-2", danger: true, onPress: () => setDropAsk(true) },
           ]} />
         )}
@@ -226,6 +239,7 @@ export default function InboxSheet({ row, editDate = false, onClose, onDone }: {
           total={(() => { try { return parseMoney(normalizeMoneyText(f.amount)); } catch { return 0; } })()}
           fallback={{ category: f.category || "Outros", subcategory: f.subcategory || "" }}
           items={items}
+          onNota={(n, i) => { setNota(n); setNotaInfo(i); }}
           onSave={(list) => { setItems(list); setSplitOpen(false); }}
           onFixTotal={(cents) => set("amount", (cents / 100).toFixed(2).replace(".", ","))}
           onClose={() => setSplitOpen(false)}

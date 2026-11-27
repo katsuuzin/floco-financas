@@ -1,7 +1,7 @@
 // S2–S6, L14 e H4: personalização, preferências do extrato e boas-vindas.
 import React, { useState } from "react";
 import { View, Image, Pressable } from "react-native";
-import { T, Muted, Box, Section, Button, Toggle, Chips, IconButton, Choice, styles as k } from "../ui/kit";
+import { T, Muted, I, Box, Section, Button, Toggle, Chips, IconButton, Choice, styles as k } from "../ui/kit";
 import { useTheme } from "../ui/theme";
 import { useStore } from "../app/store";
 import { useNav } from "../app/nav";
@@ -154,6 +154,23 @@ export function PreferencesScreen() {
   );
 }
 
+// Dados só para ilustrar a apresentação. Nada daqui é gravado.
+const SAMPLE_BARS: [string, string, number, string][] = [
+  ["Moradia", "R$ 980,00", 0.42, "home"],
+  ["Alimentação", "R$ 650,00", 0.28, "shopping-bag"],
+  ["Transporte", "R$ 420,00", 0.18, "navigation"],
+];
+const SAMPLE_ROWS: [string, string, string, boolean][] = [
+  ["Supermercado Bom Preço", "Alimentação · hoje", "− R$ 214,30", false],
+  ["Salário", "Receita · 05/11", "+ R$ 5.200,00", true],
+  ["Posto Ipiranga", "Transporte · 03/11", "− R$ 180,00", false],
+];
+const FEATURES: [any, string, string][] = [
+  ["bell", "Lê as notificações do seu banco", "Compras e Pix viram pendências para você confirmar em um toque."],
+  ["file-text", "Nota fiscal em itens", "Leia o QR do cupom e acompanhe o preço de cada produto."],
+  ["target", "Orçamentos, metas e faturas", "Planeje o mês, separe caixinhas e veja o que vence."],
+];
+
 export function WelcomeScreen() {
   const { c } = useTheme();
   const { perform } = useStore();
@@ -164,19 +181,96 @@ export function WelcomeScreen() {
       then?.();
     });
   return (
-    <View style={{ alignItems: "center", gap: 18, paddingTop: 24 }}>
-      <Image source={require("../../assets/icon.png")} accessibilityLabel="Mascote Floco" style={{ width: 120, height: 120, borderRadius: 30 }} />
-      <T style={[k.pageTitle, { textAlign: "center" }]}>Suas finanças, sem complicar</T>
-      <Muted style={{ textAlign: "center" }}>
-        Contas, cartões, faturas, metas, orçamentos, contratos e relatórios — tudo livre, sem assinatura, com os dados guardados só neste aparelho.
-      </Muted>
-      <View style={{ alignSelf: "stretch", gap: 10 }}>
+    <View style={{ gap: 22, paddingTop: 4 }}>
+      <View style={[k.row, { gap: 12 }]}>
+        <Image source={require("../../assets/icon.png")} accessibilityLabel="Mascote Floco" style={{ width: 48, height: 48, borderRadius: 14 }} />
+        <T style={{ fontFamily: "SoraBold", fontSize: 18 }}>Floco Finanças</T>
+      </View>
+      <View style={{ gap: 8 }}>
+        <T accessibilityRole="header" style={{ fontFamily: "SoraBold", fontSize: 28, lineHeight: 36 }}>Todo o seu dinheiro em um só lugar</T>
+        <Muted style={{ fontSize: 15, lineHeight: 22 }}>Contas, cartões, faturas, metas e orçamentos. Sem assinatura, sem anúncios e sem cadastro.</Muted>
+      </View>
+
+      <View
+        accessible
+        accessibilityLabel="Exemplo com dados fictícios: saldo total R$ 12.480,90, receitas R$ 5.200,00 e despesas R$ 2.318,40 no mês, com gastos por categoria e últimas transações."
+        style={{ gap: 12 }}
+      >
+        <View style={[k.row, { gap: 8 }]}>
+          <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: c.soft }}>
+            <T style={{ fontSize: 11, fontFamily: "SoraSemi", color: c.muted, letterSpacing: 0.6 }}>EXEMPLO · DADOS FICTÍCIOS</T>
+          </View>
+        </View>
+        <View style={{ backgroundColor: c.accent, borderRadius: 26, padding: 20, gap: 14 }}>
+          <T style={{ color: c.heroText, fontFamily: "SoraSemi", fontSize: 14 }}>Saldo total</T>
+          <T style={{ color: c.heroText, fontFamily: "SoraBold", fontSize: 36, lineHeight: 44 }} {...{ numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.7 }}>R$ 12.480,90</T>
+          <View style={[k.row, { gap: 10 }]}>
+            <View style={{ flex: 1, borderWidth: 1.5, borderColor: c.heroText, borderRadius: 16, padding: 12 }}>
+              <T style={{ color: c.heroText, fontSize: 12 }}>Receitas</T>
+              <T style={{ color: c.heroText, fontFamily: "SoraBold", fontSize: 15 }}>R$ 5.200,00</T>
+            </View>
+            <View style={{ flex: 1, borderWidth: 1.5, borderColor: c.heroText, borderRadius: 16, padding: 12 }}>
+              <T style={{ color: c.heroText, fontSize: 12 }}>Despesas</T>
+              <T style={{ color: c.heroText, fontFamily: "SoraBold", fontSize: 15 }}>R$ 2.318,40</T>
+            </View>
+          </View>
+        </View>
+        <View style={{ backgroundColor: c.surface, borderRadius: 22, padding: 16, gap: 14, borderWidth: 1, borderColor: c.line }}>
+          <T style={{ fontFamily: "SoraSemi", fontSize: 14 }}>Gastos do mês por categoria</T>
+          {SAMPLE_BARS.map(([name, value, ratio, icon]) => (
+            <View key={name} style={{ gap: 6 }}>
+              <View style={[k.row, { justifyContent: "space-between" }]}>
+                <View style={[k.row, { gap: 8 }]}>
+                  <I name={icon as any} size={16} color={c.primary} />
+                  <T style={{ fontSize: 13 }}>{name}</T>
+                </View>
+                <T style={{ fontSize: 13, fontFamily: "SoraSemi" }}>{value}</T>
+              </View>
+              <View style={{ height: 8, borderRadius: 4, backgroundColor: c.soft, overflow: "hidden" }}>
+                <View style={{ width: `${Math.round(ratio * 100 * 1.8)}%`, height: 8, borderRadius: 4, backgroundColor: c.primary }} />
+              </View>
+            </View>
+          ))}
+        </View>
+        <View style={{ backgroundColor: c.surface, borderRadius: 22, borderWidth: 1, borderColor: c.line, overflow: "hidden" }}>
+          {SAMPLE_ROWS.map(([title, sub, value, income], i) => (
+            <View key={title} style={[k.row, { gap: 12, padding: 14 }, i > 0 && { borderTopWidth: 1, borderTopColor: c.line }]}>
+              <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: c.soft, alignItems: "center", justifyContent: "center" }}>
+                <I name={income ? "arrow-down-left" : "arrow-up-right"} size={18} color={income ? c.green : c.red} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <T numberOfLines={1} style={{ fontFamily: "SoraSemi", fontSize: 14 }}>{title}</T>
+                <Muted style={{ fontSize: 12 }}>{sub}</Muted>
+              </View>
+              <T style={{ fontFamily: "SoraSemi", fontSize: 14, color: income ? c.green : c.red }}>{value}</T>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={{ gap: 16 }}>
+        {FEATURES.map(([icon, title, text]) => (
+          <View key={title} style={[k.row, { gap: 14, alignItems: "flex-start" }]}>
+            <View importantForAccessibility="no" style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: c.soft, alignItems: "center", justifyContent: "center" }}>
+              <I name={icon} size={20} color={c.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <T style={{ fontFamily: "SoraSemi", fontSize: 15 }}>{title}</T>
+              <Muted style={{ fontSize: 13, lineHeight: 19 }}>{text}</Muted>
+            </View>
+          </View>
+        ))}
+      </View>
+
+      <View style={[k.row, { gap: 10, padding: 14, borderRadius: 18, backgroundColor: c.soft, alignItems: "flex-start" }]}>
+        <I name="lock" size={18} color={c.primary} />
+        <Muted style={{ flex: 1, fontSize: 13, lineHeight: 19 }}>Seus dados ficam só neste aparelho. O Floco não conecta ao banco e não pede senha nem CPF.</Muted>
+      </View>
+
+      <View style={{ gap: 10 }}>
         <Button title="Criar minha primeira conta" icon="plus" onPress={() => done(() => nav.push({ name: "form", kind: "account" }))} />
         <Button title="Explorar com dados fictícios" secondary onPress={() => perform(demoState(), "Demonstração carregada · valores fictícios").then(() => done())} />
         <Button title="Restaurar um backup" secondary onPress={() => done(() => nav.push({ name: "dataTools" }))} />
-      </View>
-      <View style={[k.row, { gap: 8 }]}>
-        <Muted style={{ fontSize: 12, color: c.muted }}>Sem cadastro, sem anúncios, sem conexão com o banco.</Muted>
       </View>
     </View>
   );
